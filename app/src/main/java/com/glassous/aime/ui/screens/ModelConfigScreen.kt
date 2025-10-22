@@ -210,6 +210,7 @@ fun ModelGroupCard(
 ) {
     val models by viewModel.getModelsByGroupId(group.id).collectAsState(initial = emptyList())
     var expanded by remember { mutableStateOf(false) }
+    var showDeleteGroupConfirm by remember { mutableStateOf(false) }
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -258,7 +259,7 @@ fun ModelGroupCard(
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
-                    IconButton(onClick = onDeleteGroup) {
+                    IconButton(onClick = { showDeleteGroupConfirm = true }) {
                         Icon(
                             imageVector = Icons.Filled.Delete,
                             contentDescription = "删除分组",
@@ -307,6 +308,29 @@ fun ModelGroupCard(
                     }
                 }
             }
+
+            if (showDeleteGroupConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteGroupConfirm = false },
+                    title = { Text("确认删除分组") },
+                    text = { Text("删除后不可恢复，确定要删除该分组吗？") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showDeleteGroupConfirm = false
+                                onDeleteGroup()
+                            }
+                        ) {
+                            Text("删除", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteGroupConfirm = false }) {
+                            Text("取消")
+                        }
+                    }
+                )
+            }
         }
     }
 }
@@ -317,6 +341,7 @@ fun ModelItem(
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
+    var showDeleteModelConfirm by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -345,7 +370,7 @@ fun ModelItem(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
-            IconButton(onClick = onDelete) {
+            IconButton(onClick = { showDeleteModelConfirm = true }) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
                     contentDescription = "删除模型",
@@ -353,5 +378,28 @@ fun ModelItem(
                 )
             }
         }
+    }
+
+    if (showDeleteModelConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteModelConfirm = false },
+            title = { Text("确认删除模型") },
+            text = { Text("删除后不可恢复，确定要删除该模型吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteModelConfirm = false
+                        onDelete()
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteModelConfirm = false }) {
+                    Text("取消")
+                }
+            }
+        )
     }
 }
