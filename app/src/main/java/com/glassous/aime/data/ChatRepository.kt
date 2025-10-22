@@ -185,4 +185,9 @@ class ChatRepository(
             chatDao.deleteConversation(conversation)
         }
     }
+
+    // Added: fetch single message by id
+    suspend fun getMessageById(id: Long): ChatMessage? {
+        return chatDao.getMessageById(id)
+    }
 }

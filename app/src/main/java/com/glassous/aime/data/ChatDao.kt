@@ -40,4 +40,8 @@ interface ChatDao {
 
     @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastMessage(conversationId: Long): ChatMessage?
+
+    // Added: fetch single message by id
+    @Query("SELECT * FROM chat_messages WHERE id = :id LIMIT 1")
+    suspend fun getMessageById(id: Long): ChatMessage?
 }

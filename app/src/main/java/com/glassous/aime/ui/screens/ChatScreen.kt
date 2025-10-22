@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun ChatScreen(
     onNavigateToSettings: () -> Unit,
+    onNavigateToMessageDetail: (Long) -> Unit,
     chatViewModel: ChatViewModel = viewModel(),
     modelSelectionViewModel: ModelSelectionViewModel = viewModel()
 ) {
@@ -166,7 +167,10 @@ fun ChatScreen(
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
                         items(currentMessages) { message ->
-                            MessageBubble(message = message)
+                            MessageBubble(
+                                message = message,
+                                onShowDetails = { onNavigateToMessageDetail(message.id) }
+                            )
                         }
                         
                         // Add extra space at bottom for better UX
