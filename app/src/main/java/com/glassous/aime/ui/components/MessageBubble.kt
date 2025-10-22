@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -25,6 +26,11 @@ import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
 
+// 供全局提供/获取弹窗时的背景模糊状态
+val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
+    mutableStateOf(false)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageBubble(
@@ -35,6 +41,13 @@ fun MessageBubble(
     var showDialog by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val blurState = LocalDialogBlurState.current
+
+    // 弹窗显示时启用背景模糊
+    LaunchedEffect(showDialog) {
+        blurState.value = showDialog
+    }
+
     val markwon = remember(context) { 
         Markwon.builder(context)
             .usePlugin(JLatexMathPlugin.create(44f)) // LaTeX数学公式支持，字体大小44f
@@ -52,6 +65,7 @@ fun MessageBubble(
         Surface(
             modifier = Modifier
                 .widthIn(max = 280.dp)
+                .testTag("bubble-${message.id}")
                 .combinedClickable(
                     onClick = {},
                     onLongClick = { showDialog = true }
@@ -89,9 +103,22 @@ fun MessageBubble(
                             textSize = textSizeSp
                             // 链接颜色与文本一致，保证深色气泡中可读
                             setLinkTextColor(textColor.toArgb())
+                            // 允许但不使用原生文本选择，避免吞掉父级长按
+                            setTextIsSelectable(false)
+                            // 在 TextView 层接管长按，统一触发气泡弹窗
+                            isLongClickable = true
+                            setOnLongClickListener {
+                                showDialog = true
+                                true
+                            }
                         }
                     },
                     update = { tv ->
+                        // 保证重组后仍有最新的长按监听
+                        tv.setOnLongClickListener {
+                            showDialog = true
+                            true
+                        }
                         markwon.setMarkdown(tv, message.content)
                     }
                 )
@@ -101,20 +128,23 @@ fun MessageBubble(
 
     if (showDialog) {
         BasicAlertDialog(
-            onDismissRequest = { showDialog = false }
+            onDismissRequest = {
+                showDialog = false
+            }
         ) {
             Surface(
                 shape = AlertDialogDefaults.shape,
                 color = AlertDialogDefaults.containerColor,
                 tonalElevation = AlertDialogDefaults.TonalElevation
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(20.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     FilledTonalButton(
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = {
                             clipboardManager.setText(AnnotatedString(message.content))
                             showDialog = false
@@ -124,7 +154,9 @@ fun MessageBubble(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("复制全文")
                     }
+
                     TextButton(
+                        modifier = Modifier.fillMaxWidth(),
                         onClick = {
                             showDialog = false
                             onShowDetails(message.id)

@@ -76,6 +76,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // Alibaba Cloud OSS SDK
+    implementation("com.aliyun.dpa:oss-android-sdk:2.9.21")
+
     // Markdown rendering
     // Markwon dependencies
     implementation("io.noties.markwon:core:4.6.2")
