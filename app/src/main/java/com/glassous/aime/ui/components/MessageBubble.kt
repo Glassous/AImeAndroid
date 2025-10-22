@@ -11,11 +11,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.toArgb
 import com.glassous.aime.data.ChatMessage
 import java.text.SimpleDateFormat
 import java.util.Locale
+import android.text.method.LinkMovementMethod
+import android.widget.TextView
+import io.noties.markwon.Markwon
+import io.noties.markwon.ext.latex.JLatexMathPlugin
+import io.noties.markwon.ext.tables.TablePlugin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -26,6 +34,13 @@ fun MessageBubble(
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+    val markwon = remember(context) { 
+        Markwon.builder(context)
+            .usePlugin(JLatexMathPlugin.create(44f)) // LaTeX数学公式支持，字体大小44f
+            .usePlugin(TablePlugin.create(context)) // 表格支持
+            .build() 
+    }
 
     Row(
         modifier = modifier
@@ -57,13 +72,27 @@ fun MessageBubble(
             Column(
                 modifier = Modifier.padding(12.dp)
             ) {
-                Text(
-                    text = message.content,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = when {
-                        message.isError -> MaterialTheme.colorScheme.onErrorContainer
-                        message.isFromUser -> MaterialTheme.colorScheme.onPrimary
-                        else -> MaterialTheme.colorScheme.onSurface
+                val textColor = when {
+                    message.isError -> MaterialTheme.colorScheme.onErrorContainer
+                    message.isFromUser -> MaterialTheme.colorScheme.onPrimary
+                    else -> MaterialTheme.colorScheme.onSurface
+                }
+                val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+
+                AndroidView(
+                    factory = {
+                        TextView(it).apply {
+                            setTextColor(textColor.toArgb())
+                            // 确保链接可点击
+                            movementMethod = LinkMovementMethod.getInstance()
+                            // 与Material主题大致匹配的字号
+                            textSize = textSizeSp
+                            // 链接颜色与文本一致，保证深色气泡中可读
+                            setLinkTextColor(textColor.toArgb())
+                        }
+                    },
+                    update = { tv ->
+                        markwon.setMarkdown(tv, message.content)
                     }
                 )
             }

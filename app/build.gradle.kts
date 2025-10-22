@@ -75,7 +75,13 @@ dependencies {
     
     // DataStore
     implementation(libs.androidx.datastore.preferences)
-    
+
+    // Markdown rendering
+    // Markwon dependencies
+    implementation("io.noties.markwon:core:4.6.2")
+    implementation("io.noties.markwon:ext-latex:4.6.2")
+    implementation("io.noties.markwon:ext-tables:4.6.2")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
