@@ -3,8 +3,12 @@ package com.glassous.aime.ui.components
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Article
+import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
@@ -13,6 +17,7 @@ import com.glassous.aime.data.ChatMessage
 import java.text.SimpleDateFormat
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageBubble(
     message: ChatMessage,
@@ -66,42 +71,42 @@ fun MessageBubble(
     }
 
     if (showDialog) {
-        val roleText = if (message.isFromUser) "用户" else "助手"
-        val timeText = remember(message.timestamp) {
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(message.timestamp)
-        }
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("消息操作") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("类型：$roleText")
-                    Text("时间：$timeText")
-                    Text("长度：${message.content.length} 字符")
-                    Divider()
-                    Text(
-                        text = message.content,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        BasicAlertDialog(
+            onDismissRequest = { showDialog = false }
+        ) {
+            Surface(
+                shape = AlertDialogDefaults.shape,
+                color = AlertDialogDefaults.containerColor,
+                tonalElevation = AlertDialogDefaults.TonalElevation
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(message.content))
+                            showDialog = false
+                        }
+                    ) {
+                        Icon(Icons.Outlined.ContentCopy, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("复制全文")
+                    }
+                    TextButton(
+                        onClick = {
+                            showDialog = false
+                            onShowDetails(message.id)
+                        }
+                    ) {
+                        Icon(Icons.Outlined.Article, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("查看详情")
+                    }
                 }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDialog = false
-                        onShowDetails(message.id)
-                    }
-                ) { Text("查看详情") }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        clipboardManager.setText(AnnotatedString(message.content))
-                        showDialog = false
-                    }
-                ) { Text("复制全文") }
             }
-        )
+        }
     }
 }

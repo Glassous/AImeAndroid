@@ -21,6 +21,7 @@ import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.viewmodel.ChatViewModel
 import com.glassous.aime.viewmodel.ChatViewModelFactory
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +46,18 @@ fun ChatScreen(
     val selectedModelDisplayName = selectedModel?.name ?: "请先选择模型"
     
     val listState = rememberLazyListState()
+    
+    // 当前时段问候语
+    val greeting = remember {
+        val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+        when {
+            hour in 5..10 -> "早上好"
+            hour in 11..12 -> "中午好"
+            hour in 13..17 -> "下午好"
+            hour in 18..22 -> "晚上好"
+            else -> "凌晨好"
+        }
+    }
     
     // Auto scroll to bottom when new messages arrive
     LaunchedEffect(currentMessages.size) {
@@ -134,7 +147,7 @@ fun ChatScreen(
                     .padding(paddingValues)
             ) {
                 if (currentMessages.isEmpty()) {
-                    // Empty state
+                    // Empty state: 仅一行问候语
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
@@ -143,19 +156,8 @@ fun ChatScreen(
                         verticalArrangement = Arrangement.Center
                     ) {
                         Text(
-                            text = "👋",
-                            style = MaterialTheme.typography.displayLarge
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "开始新的对话",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "输入消息开始与AI助手聊天",
-                            style = MaterialTheme.typography.bodyMedium,
+                            text = greeting,
+                            style = MaterialTheme.typography.headlineMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
