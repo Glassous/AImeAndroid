@@ -61,8 +61,8 @@ fun SettingsScreen(
         }
     }
 
-    val ossPreferences = remember { OssPreferences(context) }
-    val autoSyncEnabled by ossPreferences.autoSyncEnabled.collectAsState(initial = false)
+
+
     
     Scaffold(
         topBar = {
@@ -212,45 +212,27 @@ fun SettingsScreen(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            text = "自动同步",
-                            style = MaterialTheme.typography.bodyMedium,
+                        OutlinedButton(
+                            onClick = {
+                                cloudSyncViewModel.uploadBackup { ok, msg ->
+                                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                                }
+                            },
                             modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = autoSyncEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch { ossPreferences.setAutoSyncEnabled(enabled) }
-                            }
-                        )
-                    }
-                    if (!autoSyncEnabled) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    cloudSyncViewModel.uploadBackup { ok, msg ->
-                                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("上传到云端")
-                            }
-                            OutlinedButton(
-                                onClick = {
-                                    cloudSyncViewModel.downloadAndImport { ok, msg ->
-                                        scope.launch { snackbarHostState.showSnackbar(msg) }
-                                    }
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Text("从云端获取")
-                            }
+                            Text("上传到云端")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                cloudSyncViewModel.downloadAndImport { ok, msg ->
+                                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("从云端获取")
                         }
                     }
                 }

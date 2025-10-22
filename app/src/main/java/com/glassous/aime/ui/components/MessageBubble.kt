@@ -43,9 +43,16 @@ fun MessageBubble(
     val context = LocalContext.current
     val blurState = LocalDialogBlurState.current
 
-    // 弹窗显示时启用背景模糊
+    // 弹窗显示时启用背景模糊，关闭时立即禁用
     LaunchedEffect(showDialog) {
         blurState.value = showDialog
+    }
+
+    // 确保组件销毁时重置模糊状态
+    DisposableEffect(Unit) {
+        onDispose {
+            blurState.value = false
+        }
     }
 
     val markwon = remember(context) { 

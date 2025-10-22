@@ -3,7 +3,7 @@ package com.glassous.aime.data.preferences
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.booleanPreferencesKey
+
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -19,7 +19,7 @@ class OssPreferences(private val context: Context) {
         private val BUCKET = stringPreferencesKey("oss_bucket")
         private val ACCESS_KEY_ID = stringPreferencesKey("oss_access_key_id")
         private val ACCESS_KEY_SECRET = stringPreferencesKey("oss_access_key_secret")
-        private val AUTO_SYNC_ENABLED = booleanPreferencesKey("oss_auto_sync_enabled")
+
     }
 
     val regionId: Flow<String?> = context.ossDataStore.data.map { it[REGION_ID] }
@@ -27,7 +27,7 @@ class OssPreferences(private val context: Context) {
     val bucket: Flow<String?> = context.ossDataStore.data.map { it[BUCKET] }
     val accessKeyId: Flow<String?> = context.ossDataStore.data.map { it[ACCESS_KEY_ID] }
     val accessKeySecret: Flow<String?> = context.ossDataStore.data.map { it[ACCESS_KEY_SECRET] }
-    val autoSyncEnabled: Flow<Boolean> = context.ossDataStore.data.map { it[AUTO_SYNC_ENABLED] ?: false }
+
 
     suspend fun setRegionId(value: String?) {
         context.ossDataStore.edit { prefs ->
@@ -59,9 +59,5 @@ class OssPreferences(private val context: Context) {
         }
     }
 
-    suspend fun setAutoSyncEnabled(enabled: Boolean) {
-        context.ossDataStore.edit { prefs ->
-            prefs[AUTO_SYNC_ENABLED] = enabled
-        }
-    }
+
 }

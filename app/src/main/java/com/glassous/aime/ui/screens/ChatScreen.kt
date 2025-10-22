@@ -50,22 +50,21 @@ fun ChatScreen(
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
 
+    // 新消息到达时滚动到底部
+    LaunchedEffect(currentMessages.size) {
+        if (currentMessages.isNotEmpty()) {
+            listState.animateScrollToItem(currentMessages.size - 1)
+        }
+    }
+
+    // 返回键先关闭抽屉
+    BackHandler(enabled = drawerState.isOpen) {
+        scope.launch { drawerState.close() }
+    }
+
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
-        // 新消息到达时滚动到底部
-        LaunchedEffect(currentMessages.size) {
-            if (currentMessages.isNotEmpty()) {
-                listState.animateScrollToItem(currentMessages.size - 1)
-            }
-        }
-
-        // 返回键先关闭抽屉
-        BackHandler(enabled = drawerState.isOpen) {
-            scope.launch { drawerState.close() }
-        }
-
         ModalNavigationDrawer(
             drawerState = drawerState,
-            modifier = if (dialogBlurState.value) Modifier.blur(16.dp) else Modifier,
             drawerContent = {
                 NavigationDrawer(
                     conversations = conversations,

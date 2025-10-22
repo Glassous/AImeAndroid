@@ -1,5 +1,7 @@
 package com.glassous.aime.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollFactory
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,10 +28,11 @@ import com.glassous.aime.ui.components.CreateGroupDialog
 import com.glassous.aime.ui.components.AddModelDialog
 import com.glassous.aime.ui.components.EditGroupDialog
 import com.glassous.aime.ui.components.EditModelDialog
+import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ModelConfigScreen(
     onNavigateBack: () -> Unit
@@ -42,30 +45,36 @@ fun ModelConfigScreen(
     val groups by viewModel.groups.collectAsState()
     val uiState by viewModel.uiState.collectAsState()
     
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("模型配置") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+    // 确保模型配置页面不受聊天页面的模糊效果影响
+    val localDialogBlurState = remember { mutableStateOf(false) }
+    
+    CompositionLocalProvider(LocalDialogBlurState provides localDialogBlurState) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("模型配置") },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
+                            Icon(Icons.Filled.Add, contentDescription = "添加分组")
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
-                        Icon(Icons.Filled.Add, contentDescription = "添加分组")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+                )
+            },
+            contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        ) { paddingValues ->
+            CompositionLocalProvider(LocalOverscrollFactory provides null) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
             if (groups.isEmpty()) {
                 item {
                     EmptyStateCard(
@@ -85,10 +94,12 @@ fun ModelConfigScreen(
                     )
                 }
             }
+            }
         }
     }
+    }
     
-    // 创建分组对话框
+    // 对话框
     if (uiState.showCreateGroupDialog) {
         CreateGroupDialog(
             onDismiss = { viewModel.hideCreateGroupDialog() },
@@ -150,7 +161,7 @@ fun EmptyStateCard(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
@@ -202,7 +213,7 @@ fun ModelGroupCard(
     
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(
             modifier = Modifier
