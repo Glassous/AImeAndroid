@@ -42,4 +42,11 @@ interface ModelConfigDao {
     
     @Query("DELETE FROM models WHERE groupId = :groupId")
     suspend fun deleteModelsByGroupId(groupId: String)
+
+    // Added: delete all data methods for import override mode
+    @Query("DELETE FROM models")
+    suspend fun deleteAllModels()
+
+    @Query("DELETE FROM model_groups")
+    suspend fun deleteAllGroups()
 }

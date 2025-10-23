@@ -14,6 +14,13 @@ import com.glassous.aime.data.dao.ModelConfigDao
 import com.glassous.aime.data.ChatDao
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.model.CompatibleBackupData
+import com.glassous.aime.data.model.BackupDataConverter
+import com.glassous.aime.data.model.BackupFormat
+import com.glassous.aime.data.model.ValidationResult
+import com.glassous.aime.data.model.BackupData
+import com.glassous.aime.data.model.BackupConversation
+import com.glassous.aime.data.model.BackupMessage
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -94,26 +101,60 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /** 从指定Uri导入（SAF OpenDocument返回） */
+    /** 从指定Uri导入（SAF OpenDocument返回） - 支持多种格式 */
     fun importFromUri(context: Context, uri: Uri, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val backup: BackupData = context.contentResolver.openInputStream(uri)?.use { ins ->
+                // 读取文件内容
+                val jsonContent = context.contentResolver.openInputStream(uri)?.use { ins ->
                     InputStreamReader(ins, Charsets.UTF_8).use { reader ->
-                        gson.fromJson(reader, BackupData::class.java)
+                        reader.readText()
                     }
                 } ?: throw IllegalStateException("无法读取导入文件")
 
-                // Upsert 模型分组与模型
+                // 检测文件格式
+                val format = BackupDataConverter.detectBackupFormat(jsonContent)
+                
+                val backup: BackupData = when (format) {
+                    BackupFormat.COMPATIBLE -> {
+                        // 解析兼容格式 (AImeBackup.json)
+                        val compatibleData = gson.fromJson(jsonContent, CompatibleBackupData::class.java)
+                        
+                        // 验证数据完整性
+                        val validationResult = BackupDataConverter.validateCompatibleData(compatibleData)
+                        if (validationResult is ValidationResult.Error) {
+                            throw IllegalArgumentException("数据验证失败: ${validationResult.errors.joinToString(", ")}")
+                        }
+                        
+                        // 清理和修复数据
+                        val sanitizedData = BackupDataConverter.sanitizeCompatibleData(compatibleData)
+                        BackupDataConverter.convertToInternalFormat(sanitizedData)
+                    }
+                    BackupFormat.INTERNAL -> {
+                        // 解析内部格式
+                        gson.fromJson(jsonContent, BackupData::class.java)
+                    }
+                    BackupFormat.UNKNOWN -> {
+                        throw IllegalArgumentException("不支持的备份文件格式")
+                    }
+                }
+
+                // 清空现有数据（覆盖模式）
+                chatDao.deleteAllMessages()
+                chatDao.deleteAllConversations()
+                modelDao.deleteAllModels()
+                modelDao.deleteAllGroups()
+
+                // 导入模型分组与模型
                 backup.modelGroups.forEach { modelDao.insertGroup(it) }
                 backup.models.forEach { modelDao.insertModel(it) }
 
-                // 可选：恢复选中模型
+                // 恢复选中模型
                 if (backup.selectedModelId != null) {
                     modelPreferences.setSelectedModelId(backup.selectedModelId)
                 }
 
-                // 导入会话与消息（作为新会话）
+                // 导入会话与消息（覆盖模式）
                 backup.conversations.forEach { bc ->
                     val newConversationId = chatDao.insertConversation(
                         Conversation(
@@ -137,38 +178,18 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
 
-                onResult(true, "导入成功")
+                val formatName = when (format) {
+                    BackupFormat.COMPATIBLE -> "兼容格式"
+                    BackupFormat.INTERNAL -> "标准格式"
+                    BackupFormat.UNKNOWN -> "未知格式"
+                }
+                onResult(true, "导入成功 ($formatName)")
             } catch (e: Exception) {
                 onResult(false, "导入失败：${e.message}")
             }
         }
     }
 }
-
-// 备份数据结构（使用Long表示时间戳，避免Date的序列化差异）
-data class BackupData(
-    val version: Int,
-    val exportedAt: Long,
-    val modelGroups: List<ModelGroup>,
-    val models: List<Model>,
-    val selectedModelId: String?,
-    val conversations: List<BackupConversation>
-)
-
-data class BackupConversation(
-    val title: String,
-    val lastMessage: String,
-    val lastMessageTime: Long,
-    val messageCount: Int,
-    val messages: List<BackupMessage>
-)
-
-data class BackupMessage(
-    val content: String,
-    val isFromUser: Boolean,
-    val timestamp: Long,
-    val isError: Boolean
-)
 
 class DataSyncViewModelFactory(private val application: Application) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {

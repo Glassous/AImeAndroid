@@ -44,4 +44,11 @@ interface ChatDao {
     // Added: fetch single message by id
     @Query("SELECT * FROM chat_messages WHERE id = :id LIMIT 1")
     suspend fun getMessageById(id: Long): ChatMessage?
+
+    // Added: delete all data methods for import override mode
+    @Query("DELETE FROM chat_messages")
+    suspend fun deleteAllMessages()
+
+    @Query("DELETE FROM conversations")
+    suspend fun deleteAllConversations()
 }

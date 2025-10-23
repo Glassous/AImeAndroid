@@ -12,6 +12,13 @@ import com.glassous.aime.data.ChatDao
 import com.glassous.aime.data.dao.ModelConfigDao
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.model.CompatibleBackupData
+import com.glassous.aime.data.model.BackupDataConverter
+import com.glassous.aime.data.model.BackupFormat
+import com.glassous.aime.data.model.ValidationResult
+import com.glassous.aime.data.model.BackupData
+import com.glassous.aime.data.model.BackupConversation
+import com.glassous.aime.data.model.BackupMessage
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.OssPreferences
 import com.google.gson.Gson
@@ -110,7 +117,7 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    /** 从OSS下载并导入（固定对象名：AImeBackup.json） */
+    /** 从OSS下载并导入（固定对象名：AImeBackup.json） - 支持多种格式 */
     fun downloadAndImport(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -125,21 +132,52 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                 val get = GetObjectRequest(bucket, "AImeBackup.json")
                 val result = oss.getObject(get)
                 val reader = BufferedReader(InputStreamReader(result.objectContent, StandardCharsets.UTF_8))
-                val json = reader.readText()
+                val jsonContent = reader.readText()
                 reader.close()
 
-                val backup = gson.fromJson(json, BackupData::class.java)
+                // 检测文件格式
+                val format = BackupDataConverter.detectBackupFormat(jsonContent)
+                
+                val backup: BackupData = when (format) {
+                    BackupFormat.COMPATIBLE -> {
+                        // 解析兼容格式 (AImeBackup.json)
+                        val compatibleData = gson.fromJson(jsonContent, CompatibleBackupData::class.java)
+                        
+                        // 验证数据完整性
+                        val validationResult = BackupDataConverter.validateCompatibleData(compatibleData)
+                        if (validationResult is ValidationResult.Error) {
+                            throw IllegalArgumentException("数据验证失败: ${validationResult.errors.joinToString(", ")}")
+                        }
+                        
+                        // 清理和修复数据
+                        val sanitizedData = BackupDataConverter.sanitizeCompatibleData(compatibleData)
+                        BackupDataConverter.convertToInternalFormat(sanitizedData)
+                    }
+                    BackupFormat.INTERNAL -> {
+                        // 解析内部格式
+                        gson.fromJson(jsonContent, BackupData::class.java)
+                    }
+                    BackupFormat.UNKNOWN -> {
+                        throw IllegalArgumentException("不支持的备份文件格式")
+                    }
+                }
 
-                // Upsert 模型分组与模型
+                // 清空现有数据（覆盖模式）
+                chatDao.deleteAllMessages()
+                chatDao.deleteAllConversations()
+                modelDao.deleteAllModels()
+                modelDao.deleteAllGroups()
+
+                // 导入模型分组与模型
                 backup.modelGroups.forEach { modelDao.insertGroup(it) }
                 backup.models.forEach { modelDao.insertModel(it) }
 
-                // 恢复选中模型（可选）
+                // 恢复选中模型
                 if (backup.selectedModelId != null) {
                     modelPreferences.setSelectedModelId(backup.selectedModelId)
                 }
 
-                // 导入会话与消息（作为新会话）
+                // 导入会话与消息（覆盖模式）
                 backup.conversations.forEach { bc ->
                     val newConversationId = chatDao.insertConversation(
                         Conversation(
@@ -162,7 +200,12 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                 }
 
-                onResult(true, "从云端导入成功")
+                val formatName = when (format) {
+                    BackupFormat.COMPATIBLE -> "兼容格式"
+                    BackupFormat.INTERNAL -> "标准格式"
+                    BackupFormat.UNKNOWN -> "未知格式"
+                }
+                onResult(true, "从云端导入成功 ($formatName)")
             } catch (e: Exception) {
                 onResult(false, "从云端导入失败：${e.message}")
             }
