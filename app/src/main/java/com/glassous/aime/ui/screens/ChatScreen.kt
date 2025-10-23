@@ -8,22 +8,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.components.ChatInput
 import com.glassous.aime.ui.components.MessageBubble
 import com.glassous.aime.ui.components.ModelSelectionBottomSheet
 import com.glassous.aime.ui.components.NavigationDrawer
 import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
+import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
+import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
 import com.glassous.aime.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.util.Calendar
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -34,6 +41,10 @@ fun ChatScreen(
     modelSelectionViewModel: ModelSelectionViewModel
 ) {
     val chatViewModel: ChatViewModel = viewModel()
+    val context = LocalContext.current
+    val cloudSyncViewModel: CloudSyncViewModel = viewModel(
+        factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application)
+    )
 
     val conversations by chatViewModel.conversations.collectAsState()
     val currentMessages by chatViewModel.currentMessages.collectAsState()
@@ -48,6 +59,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
@@ -62,40 +74,34 @@ fun ChatScreen(
             if (totalItemsCount == 0 || visibleItems.isEmpty()) {
                 false
             } else {
-                // 检查最后一个可见项是否是Spacer项（索引为currentMessages.size）
-                val lastVisibleItem = visibleItems.lastOrNull()
-                val isLastItemVisible = lastVisibleItem?.index == totalItemsCount - 1
-                
-                // 如果最后一项（Spacer）可见，检查它是否完全可见
-                if (isLastItemVisible) {
-                    val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
-                    val listBottom = layoutInfo.viewportEndOffset
-                    // 如果Spacer项没有完全显示，仍然显示按钮
-                    lastItemBottom > listBottom
-                } else {
-                    // 如果最后一项不可见，显示按钮
-                    true
-                }
+                val lastVisibleItemIndex = visibleItems.last().index
+                // 如果最后一个可见项不是列表的最后一项（包括Spacer），则显示按钮
+                lastVisibleItemIndex < totalItemsCount - 1
             }
         }
     }
 
-    // 新消息到达时滚动到底部 - 添加防抖机制
-    LaunchedEffect(currentMessages.size) {
-        if (currentMessages.isNotEmpty()) {
-            // 使用防抖延迟，避免频繁滚动
-            kotlinx.coroutines.delay(50)
-            // 滚动到列表的最底部，包括底部的Spacer
-            listState.animateScrollToItem(
-                index = currentMessages.size, // 滚动到Spacer项
-                scrollOffset = 0 // 确保完全滚动到底部
-            )
+    // 云端获取按钮显示状态
+    var showCloudSyncButton by remember { mutableStateOf(false) }
+    
+    // 监听消息列表变化，控制云端获取按钮显示
+    LaunchedEffect(currentMessages.isEmpty()) {
+        if (currentMessages.isEmpty()) {
+            showCloudSyncButton = true
+            // 10秒后自动隐藏
+            delay(10000)
+            showCloudSyncButton = false
+        } else {
+            // 有消息时立即隐藏
+            showCloudSyncButton = false
         }
     }
 
-    // 返回键先关闭抽屉
-    BackHandler(enabled = drawerState.isOpen) {
-        scope.launch { drawerState.close() }
+    // 监听输入文本变化，发送消息时隐藏按钮
+    LaunchedEffect(inputText) {
+        if (inputText.isNotBlank() && showCloudSyncButton) {
+            showCloudSyncButton = false
+        }
     }
 
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
@@ -119,14 +125,21 @@ fun ChatScreen(
                     onEditConversationTitle = { conversationId, newTitle ->
                         chatViewModel.updateConversationTitle(conversationId, newTitle)
                     },
-                    onNavigateToSettings = {
-                        onNavigateToSettings()
-                        scope.launch { drawerState.close() }
-                    }
+                    onNavigateToSettings = onNavigateToSettings
                 )
             }
         ) {
             Scaffold(
+                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (dialogBlurState.value) {
+                            Modifier.blur(8.dp)
+                        } else {
+                            Modifier
+                        }
+                    ),
                 topBar = {
                     TopAppBar(
                         title = { 
@@ -176,19 +189,57 @@ fun ChatScreen(
                             else -> "凌晨好"
                         }
                     }
-                    Column(
+                    
+                    // 使用Box来叠加云端获取按钮
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .padding(paddingValues)
-                            .padding(32.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
                     ) {
-                        Text(
-                            text = greeting,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = greeting,
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        
+                        // 云端获取按钮
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showCloudSyncButton,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    cloudSyncViewModel.downloadAndImport { success, message ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(message)
+                                            if (success) {
+                                                showCloudSyncButton = false
+                                            }
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .alpha(0.7f), // 降低不透明度
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.CloudDownload,
+                                    contentDescription = "从云端获取数据",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
                     }
                 } else {
                     // 消息列表容器，使用Box来叠加回到底部按钮
@@ -214,6 +265,37 @@ fun ChatScreen(
                             }
                             // 底部额外间距
                             item { Spacer(modifier = Modifier.height(16.dp)) }
+                        }
+                        
+                        // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = currentMessages.isNotEmpty(),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(
+                                    end = 16.dp,
+                                    bottom = if (showScrollToBottomButton) 80.dp else 16.dp
+                                )
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    cloudSyncViewModel.uploadBackup { success, message ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(message)
+                                        }
+                                    }
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .alpha(0.7f), // 降低不透明度
+                                containerColor = MaterialTheme.colorScheme.tertiary
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.CloudUpload,
+                                    contentDescription = "上传数据到云端",
+                                    tint = MaterialTheme.colorScheme.onTertiary
+                                )
+                            }
                         }
                         
                         // 回到底部按钮
