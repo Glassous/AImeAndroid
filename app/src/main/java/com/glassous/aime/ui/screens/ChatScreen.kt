@@ -12,6 +12,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -54,7 +55,28 @@ fun ChatScreen(
     // 检查是否需要显示回到底部按钮
     val showScrollToBottomButton by remember {
         derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            val totalItemsCount = layoutInfo.totalItemsCount
+            
+            if (totalItemsCount == 0 || visibleItems.isEmpty()) {
+                false
+            } else {
+                // 检查最后一个可见项是否是Spacer项（索引为currentMessages.size）
+                val lastVisibleItem = visibleItems.lastOrNull()
+                val isLastItemVisible = lastVisibleItem?.index == totalItemsCount - 1
+                
+                // 如果最后一项（Spacer）可见，检查它是否完全可见
+                if (isLastItemVisible) {
+                    val lastItemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                    val listBottom = layoutInfo.viewportEndOffset
+                    // 如果Spacer项没有完全显示，仍然显示按钮
+                    lastItemBottom > listBottom
+                } else {
+                    // 如果最后一项不可见，显示按钮
+                    true
+                }
+            }
         }
     }
 
@@ -63,7 +85,11 @@ fun ChatScreen(
         if (currentMessages.isNotEmpty()) {
             // 使用防抖延迟，避免频繁滚动
             kotlinx.coroutines.delay(50)
-            listState.animateScrollToItem(currentMessages.size - 1)
+            // 滚动到列表的最底部，包括底部的Spacer
+            listState.animateScrollToItem(
+                index = currentMessages.size, // 滚动到Spacer项
+                scrollOffset = 0 // 确保完全滚动到底部
+            )
         }
     }
 
@@ -209,7 +235,9 @@ fun ChatScreen(
                                         }
                                     }
                                 },
-                                modifier = Modifier.size(48.dp),
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .alpha(0.7f), // 降低不透明度
                                 containerColor = MaterialTheme.colorScheme.primary
                             ) {
                                 Icon(

@@ -73,7 +73,7 @@ fun MessageBubble(
         // Message bubble
         Surface(
             modifier = Modifier
-                .widthIn(max = 320.dp)
+                .widthIn(max = 300.dp)
                 .testTag("bubble-${message.id}")
                 .combinedClickable(
                     onClick = {},
