@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -49,6 +50,13 @@ fun ChatScreen(
 
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
+    
+    // 检查是否需要显示回到底部按钮
+    val showScrollToBottomButton by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
 
     // 新消息到达时滚动到底部 - 添加防抖机制
     LaunchedEffect(currentMessages.size) {
@@ -157,25 +165,60 @@ fun ChatScreen(
                         )
                     }
                 } else {
-                    // 消息列表
-                    LazyColumn(
-                        state = listState,
+                    // 消息列表容器，使用Box来叠加回到底部按钮
+                    Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues),
-                        contentPadding = PaddingValues(vertical = 8.dp)
+                            .padding(paddingValues)
                     ) {
-                        items(
-                            items = currentMessages,
-                            key = { message -> message.id } // 添加稳定的key以优化重组性能
-                        ) { message ->
-                            MessageBubble(
-                                message = message,
-                                onShowDetails = { onNavigateToMessageDetail(message.id) }
-                            )
+                        // 消息列表
+                        LazyColumn(
+                            state = listState,
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(vertical = 8.dp)
+                        ) {
+                            items(
+                                items = currentMessages,
+                                key = { message -> message.id } // 添加稳定的key以优化重组性能
+                            ) { message ->
+                                MessageBubble(
+                                    message = message,
+                                    onShowDetails = { onNavigateToMessageDetail(message.id) }
+                                )
+                            }
+                            // 底部额外间距
+                            item { Spacer(modifier = Modifier.height(16.dp)) }
                         }
-                        // 底部额外间距
-                        item { Spacer(modifier = Modifier.height(16.dp)) }
+                        
+                        // 回到底部按钮
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = showScrollToBottomButton,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            FloatingActionButton(
+                                onClick = {
+                                    scope.launch {
+                                        if (currentMessages.isNotEmpty()) {
+                                            // 滚动到列表的最底部，包括底部的Spacer
+                                            listState.animateScrollToItem(
+                                                index = currentMessages.size, // 滚动到Spacer项
+                                                scrollOffset = 0 // 确保完全滚动到底部
+                                            )
+                                        }
+                                    }
+                                },
+                                modifier = Modifier.size(48.dp),
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.KeyboardArrowDown,
+                                    contentDescription = "回到底部",
+                                    tint = MaterialTheme.colorScheme.onPrimary
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -15,3 +15,14 @@
 
 # Kotlin compiler temporary cache
 .kotlin/
+
+# Release related folders
+/app/release/
+/release/
+**/release/
+*.apk
+*.aab
+*.keystore
+*.jks
+/app/src/release/
+/app/src/main/res/values/release/
