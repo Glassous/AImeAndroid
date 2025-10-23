@@ -56,6 +56,7 @@ fun MessageBubble(
         }
     }
 
+    // 使用remember缓存Markwon实例，避免重复创建
     val markwon = remember(context) { 
         Markwon.builder(context)
             .usePlugin(JLatexMathPlugin.create(44f)) // LaTeX数学公式支持，字体大小44f

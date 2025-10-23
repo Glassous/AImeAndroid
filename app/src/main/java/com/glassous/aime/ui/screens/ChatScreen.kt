@@ -50,9 +50,11 @@ fun ChatScreen(
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
 
-    // 新消息到达时滚动到底部
+    // 新消息到达时滚动到底部 - 添加防抖机制
     LaunchedEffect(currentMessages.size) {
         if (currentMessages.isNotEmpty()) {
+            // 使用防抖延迟，避免频繁滚动
+            kotlinx.coroutines.delay(50)
             listState.animateScrollToItem(currentMessages.size - 1)
         }
     }
@@ -163,7 +165,10 @@ fun ChatScreen(
                             .padding(paddingValues),
                         contentPadding = PaddingValues(vertical = 8.dp)
                     ) {
-                        items(currentMessages) { message ->
+                        items(
+                            items = currentMessages,
+                            key = { message -> message.id } // 添加稳定的key以优化重组性能
+                        ) { message ->
                             MessageBubble(
                                 message = message,
                                 onShowDetails = { onNavigateToMessageDetail(message.id) }

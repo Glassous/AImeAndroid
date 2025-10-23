@@ -98,6 +98,9 @@ class ChatRepository(
             assistantMessage = assistantMessage.copy(id = assistantId)
 
             val aggregated = StringBuilder()
+            var lastUpdateTime = 0L
+            val updateInterval = 100L // 限制更新频率为每100ms一次
+            
             try {
                 // Switch blocking network streaming to IO dispatcher to avoid main-thread networking
                 val finalText = withContext(Dispatchers.IO) {
@@ -108,9 +111,15 @@ class ChatRepository(
                         messages = messages
                     ) { delta ->
                         aggregated.append(delta)
-                        val updated = assistantMessage.copy(content = aggregated.toString())
-                        chatDao.updateMessage(updated)
-                        updateConversationAfterMessage(conversationId, updated.content)
+                        val currentTime = System.currentTimeMillis()
+                        
+                        // 节流更新：只有当距离上次更新超过指定间隔时才更新数据库
+                        if (currentTime - lastUpdateTime >= updateInterval) {
+                            val updated = assistantMessage.copy(content = aggregated.toString())
+                            chatDao.updateMessage(updated)
+                            updateConversationAfterMessage(conversationId, updated.content)
+                            lastUpdateTime = currentTime
+                        }
                     }
                 }
 
