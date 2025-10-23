@@ -20,8 +20,6 @@ fun ChatInput(
     onInputChange: (String) -> Unit,
     onSendMessage: () -> Unit,
     isLoading: Boolean,
-    selectedModelName: String = "选择模型",
-    onModelSelectClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -36,18 +34,6 @@ fun ChatInput(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Model Selection Icon Button (square 1:1) - match input corner radius
-            FilledTonalIconButton(
-                onClick = onModelSelectClick,
-                modifier = Modifier.size(56.dp),
-                shape = RoundedCornerShape(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.MoreVert,
-                    contentDescription = "选择模型"
-                )
-            }
-            
             OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputChange,

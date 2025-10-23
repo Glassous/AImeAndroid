@@ -94,10 +94,18 @@ fun ChatScreen(
                 topBar = {
                     TopAppBar(
                         title = { 
-                            Text(
-                                text = selectedModelDisplayName,
-                                style = MaterialTheme.typography.titleLarge
-                            ) 
+                            // 将模型名称改为可点击的按钮
+                            TextButton(
+                                onClick = { modelSelectionViewModel.showBottomSheet() },
+                                colors = ButtonDefaults.textButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.onSurface
+                                )
+                            ) {
+                                Text(
+                                    text = selectedModelDisplayName,
+                                    style = MaterialTheme.typography.titleLarge
+                                )
+                            }
                         },
                         navigationIcon = {
                             IconButton(onClick = { scope.launch { drawerState.open() } }) {
@@ -116,11 +124,7 @@ fun ChatScreen(
                         onSendMessage = {
                             chatViewModel.sendMessage(inputText.trim())
                         },
-                        isLoading = isLoading,
-                        selectedModelName = selectedModelDisplayName,
-                        onModelSelectClick = {
-                            modelSelectionViewModel.showBottomSheet()
-                        }
+                        isLoading = isLoading
                     )
                 }
             ) { paddingValues ->
