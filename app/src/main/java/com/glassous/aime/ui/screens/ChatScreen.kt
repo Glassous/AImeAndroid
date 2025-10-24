@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -69,7 +70,10 @@ fun ChatScreen(
     val isOssConfigured = !endpoint.isNullOrBlank() && !bucket.isNullOrBlank() && !ak.isNullOrBlank() && !sk.isNullOrBlank()
 
     val autoSyncPreferences = remember { AutoSyncPreferences(context) }
-    val autoSyncEnabled by autoSyncPreferences.autoSyncEnabled.collectAsState(initial = false)
+    var autoSyncEnabled by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        autoSyncPreferences.autoSyncEnabled.collect { autoSyncEnabled = it }
+    }
 
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
@@ -89,28 +93,28 @@ fun ChatScreen(
             syncSuccessType = null
         }
     }
-    
+
     LaunchedEffect(syncErrorType) {
         if (syncErrorType != null) {
             delay(3000)
             syncErrorType = null
         }
     }
-    
+
     // 当抽屉打开时，拦截系统返回键，优先关闭抽屉而不是退出到桌面
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
     }
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
-    
+
     // 检查是否需要显示回到底部按钮
     val showScrollToBottomButton by remember {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val visibleItems = layoutInfo.visibleItemsInfo
             val totalItemsCount = layoutInfo.totalItemsCount
-            
+
             if (totalItemsCount == 0 || visibleItems.isEmpty()) {
                 false
             } else {
@@ -130,7 +134,7 @@ fun ChatScreen(
 
     // 云端获取按钮显示状态
     var showCloudSyncButton by remember { mutableStateOf(false) }
-    
+
     // 监听消息列表变化，控制云端获取按钮显示
     LaunchedEffect(currentMessages.isEmpty()) {
         if (currentMessages.isEmpty()) {
@@ -152,9 +156,9 @@ fun ChatScreen(
     }
 
     // 应用启动时（进入主页）自动从云端获取一次（仅当开启自动同步且配置完整）
-    var initialAutoDownloadDone by remember { mutableStateOf(false) }
+    var initialAutoDownloadDone by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(autoSyncEnabled, isOssConfigured) {
-        if (autoSyncEnabled && isOssConfigured && !initialAutoDownloadDone) {
+        if (autoSyncEnabled == true && isOssConfigured && !initialAutoDownloadDone) {
             cloudSyncViewModel.downloadAndImport { success, message ->
                 scope.launch {
                     if (success) {
@@ -178,7 +182,7 @@ fun ChatScreen(
             didStartGeneration = true
         } else if (didStartGeneration) {
             didStartGeneration = false
-            if (autoSyncEnabled && isOssConfigured && currentMessages.isNotEmpty()) {
+            if (autoSyncEnabled == true && isOssConfigured && currentMessages.isNotEmpty()) {
                 cloudSyncViewModel.uploadBackup { success, message ->
                     scope.launch {
                         if (success) {
@@ -233,7 +237,7 @@ fun ChatScreen(
                     ),
                 topBar = {
                     TopAppBar(
-                        title = { 
+                        title = {
                             // 将模型名称改为可点击的按钮
                             TextButton(
                                 onClick = { modelSelectionViewModel.showBottomSheet() },
@@ -278,7 +282,7 @@ fun ChatScreen(
                                 }
                                 else -> {}
                             }
-                            
+
                             // 显示同步失败图标
                             when (syncErrorType) {
                                 "download", "upload" -> {
@@ -311,15 +315,94 @@ fun ChatScreen(
                     // 空态：问候语
                     val greeting = remember {
                         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-                        when {
-                            hour in 5..10 -> "早上好"
-                            hour in 11..12 -> "中午好"
-                            hour in 13..17 -> "下午好"
-                            hour in 18..22 -> "晚上好"
-                            else -> "凌晨好"
+
+                        // =========== 开始替换新的文案 ============
+                        val greetings = when {
+                            // 清晨 (05:00 - 07:59)
+                            hour in 5..7 -> listOf(
+                                "早安，又是元气满满的一天",
+                                "清晨的第一缕阳光，你好呀",
+                                "新的一天，从此刻开始",
+                                "早～ 记得吃早餐哦",
+                                "黎明破晓，万物复苏"
+                            )
+
+                            // 上午 (08:00 - 10:59)
+                            hour in 8..10 -> listOf(
+                                "上午好，今天也要加油",
+                                "精神百倍，投入战斗吧",
+                                "愿你灵感涌现，万事顺遂",
+                                "今日份的努力已上线",
+                                "泡杯咖啡，开始专注时刻"
+                            )
+
+                            // 正午 (11:00 - 12:59)
+                            hour in 11..12 -> listOf(
+                                "午安～ 准备好迎接午餐了吗",
+                                "中午好，休息一下大脑",
+                                "快到饭点啦，想想吃什么",
+                                "日光正盛，稍作小憩",
+                                "辛苦了一上午，充个电吧"
+                            )
+
+                            // 午后 (13:00 - 15:59)
+                            hour in 13..15 -> listOf(
+                                "下午好，继续奋斗",
+                                "午后的时光，愿你轻松度过",
+                                "来点下午茶，提提神",
+                                "春困秋乏夏打盹，顶住",
+                                "愿你效率up up"
+                            )
+
+                            // 傍晚 (16:00 - 17:59)
+                            hour in 16..17 -> listOf(
+                                "傍晚时分，日落很美",
+                                "快下班/放学啦，坚持一下",
+                                "今天的任务都完成了吗",
+                                "晚霞满天，一天即将落幕",
+                                "收拾心情，准备迎接夜晚"
+                            )
+
+                            // 黄昏/入夜 (18:00 - 20:59)
+                            hour in 18..20 -> listOf(
+                                "晚上好！",
+                                "夜幕降临，回家路上请注意安全",
+                                "晚餐愉快，好好犒劳自己",
+                                "华灯初上，享受片刻安宁",
+                                "忙碌结束，现在是你的时间"
+                            )
+
+                            // 深夜 (21:00 - 22:59)
+                            hour in 21..22 -> listOf(
+                                "夜深了，早点休息",
+                                "月色真美，晚安",
+                                "是时候放下手机，进入梦乡了",
+                                "愿你今夜好梦",
+                                "今天辛苦了，明天再见"
+                            )
+
+                            // 子夜/午夜 (23:00 - 01:59)
+                            hour == 23 || hour in 0..1 -> listOf(
+                                "夜猫子，还在呀",
+                                "已经跨过零点咯",
+                                "别熬太晚，身体是革命的本钱",
+                                "夜阑人静，万物皆眠",
+                                "晚安，好梦香甜"
+                            )
+
+                            // 凌晨 (02:00 - 04:59)
+                            else -> listOf(
+                                "凌晨时分，夜色正浓",
+                                "还在忙吗？也太拼了",
+                                "嘘... 整个城市都在休息",
+                                "黎明前的黑暗，请注意休息",
+                                "早睡早起... 好像已经晚了"
+                            )
                         }
+                        // =========== 结束替换 ============
+                        greetings.random()
                     }
-                    
+
                     // 使用Box来叠加云端获取按钮
                     Box(
                         modifier = Modifier
@@ -341,10 +424,10 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        
+
                         // 云端获取按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && showCloudSyncButton && isOssConfigured && !autoSyncEnabled,
+                            visible = !minimalMode && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)
@@ -411,10 +494,10 @@ fun ChatScreen(
                             // 底部额外间距
                             item { Spacer(modifier = Modifier.height(16.dp)) }
                         }
-                        
+
                         // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured && !autoSyncEnabled,
+                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(
@@ -455,7 +538,7 @@ fun ChatScreen(
                                 )
                             }
                         }
-                        
+
                         // 回到底部按钮
                         androidx.compose.animation.AnimatedVisibility(
                             visible = !minimalMode && showScrollToBottomButton,

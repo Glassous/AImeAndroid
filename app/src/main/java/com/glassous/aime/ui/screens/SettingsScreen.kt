@@ -49,7 +49,10 @@ fun SettingsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val autoSyncPreferences = remember { AutoSyncPreferences(context) }
-    val autoSyncEnabled by autoSyncPreferences.autoSyncEnabled.collectAsState(initial = false)
+    var autoSyncEnabled by remember { mutableStateOf<Boolean?>(null) }
+    LaunchedEffect(Unit) {
+        autoSyncPreferences.autoSyncEnabled.collect { autoSyncEnabled = it }
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -182,7 +185,6 @@ fun SettingsScreen(
                     }
                 }
             }
-            
             // 模型配置卡片（移到下方）
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -237,18 +239,21 @@ fun SettingsScreen(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("自动同步")
-                        Switch(
-                            checked = autoSyncEnabled,
-                            onCheckedChange = { enabled ->
-                                scope.launch { autoSyncPreferences.setAutoSyncEnabled(enabled) }
-                            }
-                        )
+                    if (autoSyncEnabled != null) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("自动同步")
+                            Switch(
+                                checked = autoSyncEnabled == true,
+                                onCheckedChange = { enabled ->
+                                    autoSyncEnabled = enabled
+                                    scope.launch { autoSyncPreferences.setAutoSyncEnabled(enabled) }
+                                }
+                            )
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(8.dp))
