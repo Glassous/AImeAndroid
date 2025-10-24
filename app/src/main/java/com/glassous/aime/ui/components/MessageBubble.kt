@@ -14,21 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.animation.animateContentSize
 import com.glassous.aime.data.ChatMessage
-import java.text.SimpleDateFormat
-import java.util.Locale
-import android.text.method.LinkMovementMethod
-import android.widget.TextView
-import io.noties.markwon.Markwon
-import io.noties.markwon.ext.latex.JLatexMathPlugin
-import io.noties.markwon.ext.tables.TablePlugin
 
 // 供全局提供/获取弹窗时的背景模糊状态
 val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
@@ -48,7 +38,6 @@ fun MessageBubble(
     var showEditDialog by remember { mutableStateOf(false) }
     var editText by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
     val blurState = LocalDialogBlurState.current
 
     // 弹窗显示时启用背景模糊（任一弹窗打开都模糊），关闭时立即禁用
@@ -63,14 +52,6 @@ fun MessageBubble(
         }
     }
 
-    // 使用remember缓存Markwon实例，避免重复创建
-    val markwon = remember(context) { 
-        Markwon.builder(context)
-            .usePlugin(JLatexMathPlugin.create(44f)) // LaTeX数学公式支持，字体大小44f
-            .usePlugin(TablePlugin.create(context)) // 表格支持
-            .build() 
-    }
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -82,11 +63,7 @@ fun MessageBubble(
             modifier = Modifier
                 .widthIn(max = 300.dp)
                 .animateContentSize() // 平滑高度变化，减少内容增长导致的跳动
-                .testTag("bubble-${message.id}")
-                .combinedClickable(
-                    onClick = {},
-                    onLongClick = { showDialog = true }
-                ),
+                .testTag("bubble-${message.id}"),
             shape = RoundedCornerShape(
                 topStart = 16.dp,
                 topEnd = 16.dp,
@@ -110,34 +87,11 @@ fun MessageBubble(
                 }
                 val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
 
-                AndroidView(
-                    factory = {
-                        TextView(it).apply {
-                            setTextColor(textColor.toArgb())
-                            // 确保链接可点击
-                            movementMethod = LinkMovementMethod.getInstance()
-                            // 与Material主题大致匹配的字号
-                            textSize = textSizeSp
-                            // 链接颜色与文本一致，保证深色气泡中可读
-                            setLinkTextColor(textColor.toArgb())
-                            // 允许但不使用原生文本选择，避免吞掉父级长按
-                            setTextIsSelectable(false)
-                            // 在 TextView 层接管长按，统一触发气泡弹窗
-                            isLongClickable = true
-                            setOnLongClickListener {
-                                showDialog = true
-                                true
-                            }
-                        }
-                    },
-                    update = { tv ->
-                        // 保证重组后仍有最新的长按监听
-                        tv.setOnLongClickListener {
-                            showDialog = true
-                            true
-                        }
-                        markwon.setMarkdown(tv, message.content)
-                    }
+                MarkdownRenderer(
+                    markdown = message.content,
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = { showDialog = true }
                 )
             }
         }
