@@ -81,6 +81,13 @@ fun ChatScreen(
         }
     }
 
+    // 当生成进行、且当前视图已在底部时，保持锚定到底部以避免因内容增长产生跳动
+    LaunchedEffect(isLoading, currentMessages, showScrollToBottomButton) {
+        if (isLoading && !showScrollToBottomButton && currentMessages.isNotEmpty()) {
+            listState.scrollToItem(index = currentMessages.size, scrollOffset = 0)
+        }
+    }
+
     // 云端获取按钮显示状态
     var showCloudSyncButton by remember { mutableStateOf(false) }
     
@@ -172,6 +179,8 @@ fun ChatScreen(
                         onInputChange = chatViewModel::updateInputText,
                         onSendMessage = {
                             chatViewModel.sendMessage(inputText.trim())
+                            // 清空输入框
+                            chatViewModel.updateInputText("")
                         },
                         isLoading = isLoading
                     )

@@ -99,7 +99,7 @@ class ChatRepository(
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
-            val updateInterval = 100L // 限制更新频率为每100ms一次
+            val updateInterval = 300L // 限制更新频率为每300ms一次，减少频繁重组引发的抖动
             
             try {
                 // Switch blocking network streaming to IO dispatcher to avoid main-thread networking

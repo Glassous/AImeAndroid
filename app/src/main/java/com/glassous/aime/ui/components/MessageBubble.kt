@@ -18,6 +18,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.animation.animateContentSize
 import com.glassous.aime.data.ChatMessage
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -74,6 +75,7 @@ fun MessageBubble(
         Surface(
             modifier = Modifier
                 .widthIn(max = 300.dp)
+                .animateContentSize() // 平滑高度变化，减少内容增长导致的跳动
                 .testTag("bubble-${message.id}")
                 .combinedClickable(
                     onClick = {},

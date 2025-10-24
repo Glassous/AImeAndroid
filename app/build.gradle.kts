@@ -60,6 +60,9 @@ dependencies {
     
     // Material3 Window Size Class
     implementation(libs.androidx.material3.window.size)
+
+    // Material3 Expressive (for LoadingIndicator and related components)
+    implementation("androidx.compose.material3:material3-android:1.5.0-alpha07")
     
     // Network
     implementation(libs.retrofit)
