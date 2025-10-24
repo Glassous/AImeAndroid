@@ -118,20 +118,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
     
     fun createNewConversation() {
-        viewModelScope.launch {
-            // Check if there's already an empty conversation
-            val currentConversations = conversations.value
-            val emptyConversation = currentConversations.find { it.messageCount == 0 }
-            
-            if (emptyConversation != null) {
-                // Use existing empty conversation
-                _currentConversationId.value = emptyConversation.id
-            } else {
-                // Create new conversation only if no empty one exists
-                val newConversation = repository.createNewConversation()
-                _currentConversationId.value = newConversation.id
-            }
-        }
+        // 初始化页面状态，类似重新进入应用
+        // 清除当前对话选择，回到初始状态
+        _currentConversationId.value = null
+        // 清空输入框
+        _inputText.value = ""
     }
     
     fun deleteConversation(conversationId: Long) {
