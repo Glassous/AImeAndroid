@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -80,11 +81,19 @@ fun ChatScreen(
     val snackbarHostState = remember { SnackbarHostState() }
 
     var syncSuccessType by remember { mutableStateOf<String?>(null) }
+    var syncErrorType by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(syncSuccessType) {
         if (syncSuccessType != null) {
             delay(3000)
             syncSuccessType = null
+        }
+    }
+    
+    LaunchedEffect(syncErrorType) {
+        if (syncErrorType != null) {
+            delay(3000)
+            syncErrorType = null
         }
     }
     
@@ -150,7 +159,10 @@ fun ChatScreen(
                 scope.launch {
                     if (success) {
                         syncSuccessType = "download"
+                        syncErrorType = null
                     } else {
+                        syncErrorType = "download"
+                        syncSuccessType = null
                         snackbarHostState.showSnackbar(message)
                     }
                 }
@@ -171,7 +183,10 @@ fun ChatScreen(
                     scope.launch {
                         if (success) {
                             syncSuccessType = "upload"
+                            syncErrorType = null
                         } else {
+                            syncErrorType = "upload"
+                            syncSuccessType = null
                             snackbarHostState.showSnackbar(message)
                         }
                     }
@@ -243,6 +258,7 @@ fun ChatScreen(
                             }
                         },
                         actions = {
+                            // 显示同步成功图标
                             when (syncSuccessType) {
                                 "download" -> {
                                     Icon(
@@ -257,6 +273,19 @@ fun ChatScreen(
                                         imageVector = Icons.Filled.CloudUpload,
                                         contentDescription = "上传成功",
                                         tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                                else -> {}
+                            }
+                            
+                            // 显示同步失败图标
+                            when (syncErrorType) {
+                                "download", "upload" -> {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "同步失败",
+                                        tint = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.padding(end = 8.dp)
                                     )
                                 }
@@ -326,8 +355,11 @@ fun ChatScreen(
                                         scope.launch {
                                             if (success) {
                                                 syncSuccessType = "download"
+                                                syncErrorType = null
                                                 showCloudSyncButton = false
                                             } else {
+                                                syncErrorType = "download"
+                                                syncSuccessType = null
                                                 snackbarHostState.showSnackbar(message)
                                             }
                                         }
@@ -396,7 +428,10 @@ fun ChatScreen(
                                         scope.launch {
                                             if (success) {
                                                 syncSuccessType = "upload"
+                                                syncErrorType = null
                                             } else {
+                                                syncErrorType = "upload"
+                                                syncSuccessType = null
                                                 snackbarHostState.showSnackbar(message)
                                             }
                                         }
