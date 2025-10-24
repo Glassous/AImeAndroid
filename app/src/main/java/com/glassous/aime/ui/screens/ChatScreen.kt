@@ -372,7 +372,8 @@ fun ChatScreen(
                                 MessageBubble(
                                     message = message,
                                     onShowDetails = { onNavigateToMessageDetail(message.id) },
-                                    onRegenerate = { chatViewModel.regenerateFromAssistant(it) }
+                                    onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
+                                    onEditUserMessage = { id, text -> chatViewModel.editUserMessageAndResend(id, text) }
                                 )
                             }
                             // 底部额外间距

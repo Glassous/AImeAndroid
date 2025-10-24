@@ -299,4 +299,111 @@ class ChatRepository(
     suspend fun getMessageById(id: Long): ChatMessage? {
         return chatDao.getMessageById(id)
     }
+
+    // Added: edit user message and resend from original position
+    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String): Result<Unit> {
+        return try {
+            // 获取完整历史
+            val history = chatDao.getMessagesForConversation(conversationId).first()
+            val targetIndex = history.indexOfFirst { it.id == userMessageId }
+            if (targetIndex == -1) return Result.failure(IllegalArgumentException("Message not found"))
+            val target = history[targetIndex]
+            if (!target.isFromUser) return Result.failure(IllegalArgumentException("Only user message can be edited"))
+
+            val trimmed = newContent.trim()
+            val updatedUser = target.copy(content = trimmed)
+            chatDao.updateMessage(updatedUser)
+
+            // 删除其后的所有消息（保证重新生成上下文正确）
+            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+
+            // 解析模型配置
+            val selectedModelId = modelPreferences.selectedModelId.first()
+            if (selectedModelId.isNullOrBlank()) {
+                val errorMessage = ChatMessage(
+                    conversationId = conversationId,
+                    content = "请先选择模型（设置→模型配置）",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    isError = true
+                )
+                chatDao.insertMessage(errorMessage)
+                return Result.failure(IllegalStateException("No selected model"))
+            }
+            val model = modelConfigRepository.getModelById(selectedModelId)
+                ?: run {
+                    val errorMessage = ChatMessage(
+                        conversationId = conversationId,
+                        content = "所选模型不存在或已删除，请重新选择。",
+                        isFromUser = false,
+                        timestamp = Date(),
+                        isError = true
+                    )
+                    chatDao.insertMessage(errorMessage)
+                    return Result.failure(IllegalStateException("Selected model not found"))
+                }
+            val group = modelConfigRepository.getGroupById(model.groupId)
+                ?: run {
+                    val errorMessage = ChatMessage(
+                        conversationId = conversationId,
+                        content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。",
+                        isFromUser = false,
+                        timestamp = Date(),
+                        isError = true
+                    )
+                    chatDao.insertMessage(errorMessage)
+                    return Result.failure(IllegalStateException("Model group not found"))
+                }
+
+            // 构造到该用户消息为止的上下文（包含编辑后的用户消息）
+            val contextMessages = history.take(targetIndex) // 不含旧用户消息
+                .filter { !it.isError }
+                .map {
+                    OpenAiChatMessage(
+                        role = if (it.isFromUser) "user" else "assistant",
+                        content = it.content
+                    )
+                }
+                .toMutableList()
+            contextMessages.add(OpenAiChatMessage(role = "user", content = trimmed))
+
+            // 插入新的助手消息占位以进行流式写入
+            var assistantMessage = ChatMessage(
+                conversationId = conversationId,
+                content = "",
+                isFromUser = false,
+                timestamp = Date()
+            )
+            val assistantId = chatDao.insertMessage(assistantMessage)
+            assistantMessage = assistantMessage.copy(id = assistantId)
+
+            val aggregated = StringBuilder()
+            var lastUpdateTime = 0L
+            val updateInterval = 300L
+
+            withContext(Dispatchers.IO) {
+                openAiService.streamChatCompletions(
+                    baseUrl = group.baseUrl,
+                    apiKey = group.apiKey,
+                    model = model.modelName,
+                    messages = contextMessages
+                ) { delta ->
+                    aggregated.append(delta)
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastUpdateTime >= updateInterval) {
+                        val updated = assistantMessage.copy(content = aggregated.toString())
+                        chatDao.updateMessage(updated)
+                        lastUpdateTime = currentTime
+                    }
+                }
+            }
+
+            // 最终写入完整文本并刷新会话元数据
+            chatDao.updateMessage(assistantMessage.copy(content = aggregated.toString()))
+            refreshConversationMetadata(conversationId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }

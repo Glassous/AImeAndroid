@@ -1,17 +1,13 @@
 package com.glassous.aime.viewmodel
 
 import android.app.Application
-import androidx.lifecycle.AndroidViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.*
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.ChatMessage
-import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.Conversation
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -47,7 +43,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
-    
+
     fun updateInputText(text: String) {
         _inputText.value = text
     }
@@ -100,7 +96,23 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
-    
+
+    fun editUserMessageAndResend(messageId: Long, newContent: String) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val msg = repository.getMessageById(messageId)
+                if (msg != null && msg.isFromUser) {
+                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent)
+                }
+            } catch (_: Exception) {
+                // swallow for now; UI可通过错误消息提示
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     fun selectConversation(conversationId: Long) {
         _currentConversationId.value = conversationId
     }

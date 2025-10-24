@@ -7,6 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,16 +41,19 @@ fun MessageBubble(
     message: ChatMessage,
     onShowDetails: (Long) -> Unit,
     onRegenerate: ((Long) -> Unit)? = null,
+    onEditUserMessage: ((Long, String) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDialog by remember { mutableStateOf(false) }
+    var showEditDialog by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val blurState = LocalDialogBlurState.current
 
-    // 弹窗显示时启用背景模糊，关闭时立即禁用
-    LaunchedEffect(showDialog) {
-        blurState.value = showDialog
+    // 弹窗显示时启用背景模糊（任一弹窗打开都模糊），关闭时立即禁用
+    LaunchedEffect(showDialog, showEditDialog) {
+        blurState.value = showDialog || showEditDialog
     }
 
     // 确保组件销毁时重置模糊状态
@@ -182,6 +186,22 @@ fun MessageBubble(
                         }
                     }
 
+                    if (message.isFromUser) {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                // 关闭长按弹窗并打开编辑弹窗
+                                showDialog = false
+                                editText = message.content
+                                showEditDialog = true
+                            }
+                        ) {
+                            Icon(Icons.Filled.Edit, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("编辑消息")
+                        }
+                    }
+
                     TextButton(
                         modifier = Modifier.fillMaxWidth(),
                         onClick = {
@@ -192,6 +212,52 @@ fun MessageBubble(
                         Icon(Icons.Outlined.Article, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("查看详情")
+                    }
+                }
+            }
+        }
+    }
+
+    if (showEditDialog) {
+        BasicAlertDialog(
+            onDismissRequest = { showEditDialog = false }
+        ) {
+            Surface(
+                shape = AlertDialogDefaults.shape,
+                color = AlertDialogDefaults.containerColor,
+                tonalElevation = AlertDialogDefaults.TonalElevation
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { editText = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text("编辑消息") }
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showEditDialog = false }) {
+                            Text("取消")
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Button(
+                            onClick = {
+                                val newText = editText.trim()
+                                if (newText.isNotBlank()) {
+                                    onEditUserMessage?.invoke(message.id, newText)
+                                    showEditDialog = false
+                                }
+                            }
+                        ) {
+                            Text("更新")
+                        }
                     }
                 }
             }
