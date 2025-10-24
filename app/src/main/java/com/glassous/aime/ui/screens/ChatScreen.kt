@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
 import com.glassous.aime.data.preferences.OssPreferences
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.data.preferences.AutoSyncPreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,6 +67,9 @@ fun ChatScreen(
     val sk by ossPreferences.accessKeySecret.collectAsState(initial = null)
     val isOssConfigured = !endpoint.isNullOrBlank() && !bucket.isNullOrBlank() && !ak.isNullOrBlank() && !sk.isNullOrBlank()
 
+    val autoSyncPreferences = remember { AutoSyncPreferences(context) }
+    val autoSyncEnabled by autoSyncPreferences.autoSyncEnabled.collectAsState(initial = false)
+
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
     val minimalMode by themePreferences.minimalMode.collectAsState(initial = false)
@@ -75,6 +79,15 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    var syncSuccessType by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(syncSuccessType) {
+        if (syncSuccessType != null) {
+            delay(3000)
+            syncSuccessType = null
+        }
+    }
+    
     // 当抽屉打开时，拦截系统返回键，优先关闭抽屉而不是退出到桌面
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
@@ -126,6 +139,44 @@ fun ChatScreen(
     LaunchedEffect(inputText) {
         if (inputText.isNotBlank() && showCloudSyncButton) {
             showCloudSyncButton = false
+        }
+    }
+
+    // 应用启动时（进入主页）自动从云端获取一次（仅当开启自动同步且配置完整）
+    var initialAutoDownloadDone by remember { mutableStateOf(false) }
+    LaunchedEffect(autoSyncEnabled, isOssConfigured) {
+        if (autoSyncEnabled && isOssConfigured && !initialAutoDownloadDone) {
+            cloudSyncViewModel.downloadAndImport { success, message ->
+                scope.launch {
+                    if (success) {
+                        syncSuccessType = "download"
+                    } else {
+                        snackbarHostState.showSnackbar(message)
+                    }
+                }
+            }
+            initialAutoDownloadDone = true
+        }
+    }
+
+    // 在AI生成结束时自动上传一次（仅在自动同步开启且配置完整时）
+    var didStartGeneration by remember { mutableStateOf(false) }
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            didStartGeneration = true
+        } else if (didStartGeneration) {
+            didStartGeneration = false
+            if (autoSyncEnabled && isOssConfigured && currentMessages.isNotEmpty()) {
+                cloudSyncViewModel.uploadBackup { success, message ->
+                    scope.launch {
+                        if (success) {
+                            syncSuccessType = "upload"
+                        } else {
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -190,6 +241,27 @@ fun ChatScreen(
                                     )
                                 }
                             }
+                        },
+                        actions = {
+                            when (syncSuccessType) {
+                                "download" -> {
+                                    Icon(
+                                        imageVector = Icons.Filled.CloudDownload,
+                                        contentDescription = "获取成功",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                                "upload" -> {
+                                    Icon(
+                                        imageVector = Icons.Filled.CloudUpload,
+                                        contentDescription = "上传成功",
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    )
+                                }
+                                else -> {}
+                            }
                         }
                     )
                 },
@@ -243,7 +315,7 @@ fun ChatScreen(
                         
                         // 云端获取按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && showCloudSyncButton && isOssConfigured,
+                            visible = !minimalMode && showCloudSyncButton && isOssConfigured && !autoSyncEnabled,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)
@@ -252,16 +324,18 @@ fun ChatScreen(
                                 onClick = {
                                     cloudSyncViewModel.downloadAndImport { success, message ->
                                         scope.launch {
-                                            snackbarHostState.showSnackbar(message)
                                             if (success) {
+                                                syncSuccessType = "download"
                                                 showCloudSyncButton = false
+                                            } else {
+                                                snackbarHostState.showSnackbar(message)
                                             }
                                         }
                                     }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .alpha(0.7f), // 降低不透明度
+                                    .alpha(0.7f),
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 elevation = FloatingActionButtonDefaults.elevation(
                                     defaultElevation = 0.dp,
@@ -297,7 +371,8 @@ fun ChatScreen(
                             ) { message ->
                                 MessageBubble(
                                     message = message,
-                                    onShowDetails = { onNavigateToMessageDetail(message.id) }
+                                    onShowDetails = { onNavigateToMessageDetail(message.id) },
+                                    onRegenerate = { chatViewModel.regenerateFromAssistant(it) }
                                 )
                             }
                             // 底部额外间距
@@ -306,7 +381,7 @@ fun ChatScreen(
                         
                         // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured,
+                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured && !autoSyncEnabled,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(
@@ -318,13 +393,17 @@ fun ChatScreen(
                                 onClick = {
                                     cloudSyncViewModel.uploadBackup { success, message ->
                                         scope.launch {
-                                            snackbarHostState.showSnackbar(message)
+                                            if (success) {
+                                                syncSuccessType = "upload"
+                                            } else {
+                                                snackbarHostState.showSnackbar(message)
+                                            }
                                         }
                                     }
                                 },
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .alpha(0.7f), // 降低不透明度
+                                    .alpha(0.7f),
                                 containerColor = MaterialTheme.colorScheme.tertiary,
                                 elevation = FloatingActionButtonDefaults.elevation(
                                     defaultElevation = 0.dp,

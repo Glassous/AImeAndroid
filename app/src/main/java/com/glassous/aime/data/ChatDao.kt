@@ -2,6 +2,7 @@ package com.glassous.aime.data
 
 import androidx.room.*
 import kotlinx.coroutines.flow.Flow
+import java.util.Date
 
 @Dao
 interface ChatDao {
@@ -51,4 +52,8 @@ interface ChatDao {
 
     @Query("DELETE FROM conversations")
     suspend fun deleteAllConversations()
+
+    // Added: delete subsequent messages after a timestamp in the same conversation
+    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND timestamp > :timestamp")
+    suspend fun deleteMessagesAfter(conversationId: Long, timestamp: Date)
 }

@@ -28,6 +28,7 @@ import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
 import com.glassous.aime.data.preferences.OssPreferences
 import kotlinx.coroutines.launch
+import com.glassous.aime.data.preferences.AutoSyncPreferences
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -47,6 +48,8 @@ fun SettingsScreen(
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val autoSyncPreferences = remember { AutoSyncPreferences(context) }
+    val autoSyncEnabled by autoSyncPreferences.autoSyncEnabled.collectAsState(initial = false)
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -233,6 +236,22 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("自动同步")
+                        Switch(
+                            checked = autoSyncEnabled,
+                            onCheckedChange = { enabled ->
+                                scope.launch { autoSyncPreferences.setAutoSyncEnabled(enabled) }
+                            }
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // 阿里云OSS配置独占一行
                     Button(

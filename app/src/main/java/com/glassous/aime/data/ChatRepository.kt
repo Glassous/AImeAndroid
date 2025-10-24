@@ -117,33 +117,121 @@ class ChatRepository(
                         if (currentTime - lastUpdateTime >= updateInterval) {
                             val updated = assistantMessage.copy(content = aggregated.toString())
                             chatDao.updateMessage(updated)
-                            updateConversationAfterMessage(conversationId, updated.content)
                             lastUpdateTime = currentTime
                         }
                     }
                 }
 
-                val finalMsg = assistantMessage.copy(content = finalText)
-                chatDao.updateMessage(finalMsg)
-                updateConversationAfterMessage(conversationId, finalMsg.content)
-                Result.success(finalMsg)
+                // 最终一次写入完整文本
+                val finalUpdated = assistantMessage.copy(content = aggregated.toString())
+                chatDao.updateMessage(finalUpdated)
+
+                // Update conversation (assistant side)
+                updateConversationAfterMessage(conversationId, message)
+
+                Result.success(finalUpdated)
             } catch (e: Exception) {
-                val errorMsg = assistantMessage.copy(
-                    content = "生成失败：${e.message ?: "未知错误"}",
+                // On error, update assistant message with error content
+                val errorUpdated = assistantMessage.copy(
+                    content = "生成失败：${e.message}",
                     isError = true
                 )
-                chatDao.updateMessage(errorMsg)
+                chatDao.updateMessage(errorUpdated)
                 Result.failure(e)
             }
         } catch (e: Exception) {
-            val errorMessage = ChatMessage(
-                conversationId = conversationId,
-                content = "网络连接失败，请检查网络设置后重试。",
-                isFromUser = false,
-                timestamp = Date(),
-                isError = true
-            )
-            chatDao.insertMessage(errorMessage)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun regenerateFromAssistant(conversationId: Long, assistantMessageId: Long): Result<Unit> {
+        return try {
+            val history = chatDao.getMessagesForConversation(conversationId).first()
+            val targetIndex = history.indexOfFirst { it.id == assistantMessageId }
+            if (targetIndex == -1) return Result.failure(IllegalArgumentException("Message not found"))
+            val target = history[targetIndex]
+            if (target.isFromUser) return Result.failure(IllegalArgumentException("Cannot regenerate user message"))
+
+            // find previous user message
+            var prevUserIndex = -1
+            for (i in targetIndex - 1 downTo 0) {
+                if (history[i].isFromUser && !history[i].isError) {
+                    prevUserIndex = i
+                    break
+                }
+            }
+            if (prevUserIndex == -1) {
+                // 更新目标消息为错误提示
+                chatDao.updateMessage(
+                    target.copy(
+                        content = "无法重新生成：缺少前置用户消息。",
+                        isError = true
+                    )
+                )
+                return Result.failure(IllegalStateException("No preceding user message"))
+            }
+
+            // 删除目标消息后的所有消息
+            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+
+            // 清空目标消息，作为新的流式输出占位
+            chatDao.updateMessage(target.copy(content = ""))
+
+            // 解析模型配置
+            val selectedModelId = modelPreferences.selectedModelId.first()
+            if (selectedModelId.isNullOrBlank()) {
+                chatDao.updateMessage(
+                    target.copy(content = "请先选择模型（设置→模型配置）", isError = true)
+                )
+                return Result.failure(IllegalStateException("No selected model"))
+            }
+            val model = modelConfigRepository.getModelById(selectedModelId)
+                ?: run {
+                    chatDao.updateMessage(target.copy(content = "所选模型不存在或已删除，请重新选择。", isError = true))
+                    return Result.failure(IllegalStateException("Selected model not found"))
+                }
+            val group = modelConfigRepository.getGroupById(model.groupId)
+                ?: run {
+                    chatDao.updateMessage(target.copy(content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。", isError = true))
+                    return Result.failure(IllegalStateException("Model group not found"))
+                }
+
+            // 构造到前置用户消息为止的上下文
+            val contextMessages = history.take(prevUserIndex + 1)
+                .filter { !it.isError }
+                .map {
+                    OpenAiChatMessage(
+                        role = if (it.isFromUser) "user" else "assistant",
+                        content = it.content
+                    )
+                }
+
+            val aggregated = StringBuilder()
+            var lastUpdateTime = 0L
+            val updateInterval = 300L
+
+            withContext(Dispatchers.IO) {
+                openAiService.streamChatCompletions(
+                    baseUrl = group.baseUrl,
+                    apiKey = group.apiKey,
+                    model = model.modelName,
+                    messages = contextMessages
+                ) { delta ->
+                    aggregated.append(delta)
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastUpdateTime >= updateInterval) {
+                        val updated = target.copy(content = aggregated.toString())
+                        chatDao.updateMessage(updated)
+                        lastUpdateTime = currentTime
+                    }
+                }
+            }
+
+            // 最终写入完整文本
+            chatDao.updateMessage(target.copy(content = aggregated.toString()))
+            refreshConversationMetadata(conversationId)
+            Result.success(Unit)
+        } catch (e: Exception) {
             Result.failure(e)
         }
     }
@@ -181,6 +269,18 @@ class ChatRepository(
             )
             chatDao.updateConversation(updatedConversation)
         }
+    }
+
+    private suspend fun refreshConversationMetadata(conversationId: Long) {
+        val conversation = chatDao.getConversation(conversationId) ?: return
+        val messageCount = chatDao.getMessageCount(conversationId)
+        val lastMsg = chatDao.getLastMessage(conversationId)
+        val updated = conversation.copy(
+            lastMessage = lastMsg?.content ?: "",
+            lastMessageTime = Date(),
+            messageCount = messageCount
+        )
+        chatDao.updateConversation(updated)
     }
 
     suspend fun hasValidMessages(conversationId: Long): Boolean {

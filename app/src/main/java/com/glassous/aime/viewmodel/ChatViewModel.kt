@@ -84,6 +84,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun regenerateFromAssistant(messageId: Long) {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                val msg = repository.getMessageById(messageId)
+                if (msg != null && !msg.isFromUser) {
+                    repository.regenerateFromAssistant(msg.conversationId, msg.id)
+                }
+            } catch (_: Exception) {
+                // swallow for now; UI can display error via message insertion
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
     
     fun selectConversation(conversationId: Long) {
         _currentConversationId.value = conversationId

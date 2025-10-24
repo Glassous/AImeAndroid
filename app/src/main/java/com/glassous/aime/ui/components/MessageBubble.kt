@@ -6,6 +6,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +39,7 @@ val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
 fun MessageBubble(
     message: ChatMessage,
     onShowDetails: (Long) -> Unit,
+    onRegenerate: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     var showDialog by remember { mutableStateOf(false) }
@@ -164,6 +166,20 @@ fun MessageBubble(
                         Icon(Icons.Outlined.ContentCopy, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("复制全文")
+                    }
+
+                    if (!message.isFromUser) {
+                        TextButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                showDialog = false
+                                onRegenerate?.invoke(message.id)
+                            }
+                        ) {
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("重新生成")
+                        }
                     }
 
                     TextButton(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -65,8 +66,9 @@ fun ModelSelectionBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = bottomSheetState,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
-    ) {
+        dragHandle = { BottomSheetDefaults.DragHandle() },
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
+     ) {
         // 处理返回键：在模型列表页面时返回到分组列表，在分组列表页面时关闭Bottom Sheet
         BackHandler(enabled = uiState.selectedGroup != null) {
             viewModel.backToGroups()
