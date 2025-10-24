@@ -1,6 +1,7 @@
 package com.glassous.aime.ui.viewmodel
 
 import android.app.Application
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -208,6 +209,36 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                 onResult(true, "从云端导入成功 ($formatName)")
             } catch (e: Exception) {
                 onResult(false, "从云端导入失败：${e.message}")
+            }
+        }
+    }
+
+    /** 从OSS下载到指定Uri（固定对象名：AImeBackup.json） */
+    fun downloadToUri(uri: Uri, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val endpoint = ossPreferences.endpoint.first() ?: throw IllegalStateException("请先配置Endpoint")
+                val bucket = ossPreferences.bucket.first() ?: throw IllegalStateException("请先配置Bucket名称")
+                val ak = ossPreferences.accessKeyId.first() ?: throw IllegalStateException("请先配置AccessKey ID")
+                val sk = ossPreferences.accessKeySecret.first() ?: throw IllegalStateException("请先配置AccessKey Secret")
+
+                val credentialProvider: OSSCredentialProvider = OSSPlainTextAKSKCredentialProvider(ak, sk)
+                val oss: OSS = OSSClient(getApplication(), endpoint, credentialProvider)
+
+                val get = GetObjectRequest(bucket, "AImeBackup.json")
+                val result = oss.getObject(get)
+                val reader = BufferedReader(InputStreamReader(result.objectContent, StandardCharsets.UTF_8))
+                val jsonContent = reader.readText()
+                reader.close()
+
+                val resolver = getApplication<Application>().contentResolver
+                resolver.openOutputStream(uri)?.use { os ->
+                    os.write(jsonContent.toByteArray(StandardCharsets.UTF_8))
+                } ?: throw IllegalStateException("无法打开目标文件")
+
+                onResult(true, "从云端下载成功")
+            } catch (e: Exception) {
+                onResult(false, "从云端下载失败：${e.message}")
             }
         }
     }

@@ -17,6 +17,11 @@ import androidx.compose.ui.unit.dp
 import com.glassous.aime.data.Conversation
 import java.text.SimpleDateFormat
 import java.util.Locale
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -197,34 +202,9 @@ private fun ConversationItem(
                             overflow = TextOverflow.Ellipsis
                         )
                     }
-                    
-                    if (!isEditing) {
-                        if (conversation.lastMessage.isNotEmpty()) {
-                            Text(
-                                text = conversation.lastMessage,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.padding(top = 2.dp)
-                            )
-                        }
-                        
-                        Text(
-                            text = dateFormat.format(conversation.lastMessageTime),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
-                            },
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
-                    }
+                    // 删除回答与时间戳展示，仅保留标题
+                    // (移除原先的 lastMessage 与 lastMessageTime 文本块)
+
                 }
 
                 if (isEditing) {
@@ -267,8 +247,8 @@ private fun ConversationItem(
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "编辑选项",
+                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                            contentDescription = if (isExpanded) "折叠" else "展开",
                             tint = if (isSelected) {
                                 MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
                             } else {
@@ -280,8 +260,12 @@ private fun ConversationItem(
                 }
             }
             
-            // 展开的编辑和删除选项
-            if (isExpanded && !isEditing) {
+            // 展开的编辑和删除选项（加入平滑动画）
+            AnimatedVisibility(
+                visible = isExpanded && !isEditing,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -309,7 +293,6 @@ private fun ConversationItem(
                     
                     OutlinedButton(
                         onClick = {
-                            // 触发删除确认弹窗
                             showDeleteConfirm = true
                             isExpanded = false
                         },

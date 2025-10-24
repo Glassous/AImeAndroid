@@ -64,6 +64,14 @@ fun SettingsScreen(
         }
     }
 
+    val cloudDownloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            cloudSyncViewModel.downloadToUri(uri) { ok, msg ->
+                scope.launch { snackbarHostState.showSnackbar(msg) }
+            }
+        }
+    }
+
 
 
     
@@ -84,8 +92,7 @@ fun SettingsScreen(
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-        containerColor = Color.Transparent,
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        containerColor = Color.Transparent
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -205,7 +212,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 数据同步卡片
+            // 云端同步卡片
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -216,12 +223,73 @@ fun SettingsScreen(
                         .padding(16.dp)
                 ) {
                     Text(
-                        text = "数据备份与同步",
+                        text = "云端同步",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "备份和恢复数据到本地或云端",
+                        text = "阿里云 OSS 配置与云端上传/下载",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    // 阿里云OSS配置独占一行
+                    Button(
+                        onClick = onNavigateToOssConfig,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("配置阿里云 OSS")
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // 从云端下载和上传到云端两个按钮占一行
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                cloudSyncViewModel.downloadAndImport { ok, msg ->
+                                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("从云端导入")
+                        }
+                        Button(
+                            onClick = {
+                                cloudSyncViewModel.uploadBackup { ok, msg ->
+                                    scope.launch { snackbarHostState.showSnackbar(msg) }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("上传到云端")
+                        }
+                    }
+                }
+            }
+
+            // 本地同步卡片
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "本地同步",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "导入/导出到本地文件",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(bottom = 16.dp)
@@ -247,31 +315,6 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("从本地导入")
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Button(
-                            onClick = {
-                                cloudSyncViewModel.uploadBackup { ok, msg ->
-                                    scope.launch { snackbarHostState.showSnackbar(msg) }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("上传到云端")
-                        }
-
-                        Button(
-                            onClick = onNavigateToOssConfig,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("配置阿里云 OSS")
                         }
                     }
                 }

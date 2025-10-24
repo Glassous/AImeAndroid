@@ -216,11 +216,6 @@ private fun GroupItem(
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Medium
                 )
-                Text(
-                    text = group.baseUrl,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
             Icon(
                 imageVector = Icons.Default.ChevronRight,
