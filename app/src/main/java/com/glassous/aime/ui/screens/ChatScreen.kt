@@ -231,7 +231,13 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .alpha(0.7f), // 降低不透明度
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                elevation = FloatingActionButtonDefaults.elevation(
+                                    defaultElevation = 0.dp,
+                                    pressedElevation = 0.dp,
+                                    focusedElevation = 0.dp,
+                                    hoveredElevation = 0.dp
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.CloudDownload,
@@ -288,7 +294,13 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .alpha(0.7f), // 降低不透明度
-                                containerColor = MaterialTheme.colorScheme.tertiary
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                                elevation = FloatingActionButtonDefaults.elevation(
+                                    defaultElevation = 0.dp,
+                                    pressedElevation = 0.dp,
+                                    focusedElevation = 0.dp,
+                                    hoveredElevation = 0.dp
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.CloudUpload,
@@ -320,7 +332,13 @@ fun ChatScreen(
                                 modifier = Modifier
                                     .size(48.dp)
                                     .alpha(0.7f), // 降低不透明度
-                                containerColor = MaterialTheme.colorScheme.primary
+                                containerColor = MaterialTheme.colorScheme.primary,
+                                elevation = FloatingActionButtonDefaults.elevation(
+                                    defaultElevation = 0.dp,
+                                    pressedElevation = 0.dp,
+                                    focusedElevation = 0.dp,
+                                    hoveredElevation = 0.dp
+                                )
                             ) {
                                 Icon(
                                     imageVector = Icons.Filled.KeyboardArrowDown,
