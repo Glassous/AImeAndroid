@@ -39,6 +39,7 @@ fun SettingsScreen(
     themeViewModel: ThemeViewModel
 ) {
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+    val minimalMode by themeViewModel.minimalMode.collectAsState()
     val context = LocalContext.current
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
@@ -146,6 +147,29 @@ fun SettingsScreen(
                                 )
                             )
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "极简模式",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "隐藏主页右下角按钮、汉堡图标和问候语",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = minimalMode,
+                            onCheckedChange = { themeViewModel.setMinimalMode(it) }
+                        )
                     }
                 }
             }

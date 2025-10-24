@@ -32,6 +32,8 @@ import com.glassous.aime.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Calendar
+import com.glassous.aime.data.preferences.OssPreferences
+import com.glassous.aime.data.preferences.ThemePreferences
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -55,6 +57,18 @@ fun ChatScreen(
     val modelSelectionUiState by modelSelectionViewModel.uiState.collectAsState()
     val selectedModel by modelSelectionViewModel.selectedModel.collectAsState()
     val selectedModelDisplayName = selectedModel?.name ?: "请先选择模型"
+
+    // 读取 OSS 配置以控制云端上传/下载按钮显示
+    val ossPreferences = remember { OssPreferences(context) }
+    val endpoint by ossPreferences.endpoint.collectAsState(initial = null)
+    val bucket by ossPreferences.bucket.collectAsState(initial = null)
+    val ak by ossPreferences.accessKeyId.collectAsState(initial = null)
+    val sk by ossPreferences.accessKeySecret.collectAsState(initial = null)
+    val isOssConfigured = !endpoint.isNullOrBlank() && !bucket.isNullOrBlank() && !ak.isNullOrBlank() && !sk.isNullOrBlank()
+
+    // 读取极简模式以控制 UI 可见性
+    val themePreferences = remember { ThemePreferences(context) }
+    val minimalMode by themePreferences.minimalMode.collectAsState(initial = false)
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -168,11 +182,13 @@ fun ChatScreen(
                             }
                         },
                         navigationIcon = {
-                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                Icon(
-                                    imageVector = Icons.Filled.Menu,
-                                    contentDescription = "打开导航菜单"
-                                )
+                            if (!minimalMode) {
+                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Menu,
+                                        contentDescription = "打开导航菜单"
+                                    )
+                                }
                             }
                         }
                     )
@@ -209,23 +225,25 @@ fun ChatScreen(
                             .fillMaxSize()
                             .padding(paddingValues)
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(32.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Text(
-                                text = greeting,
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        if (!minimalMode) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = greeting,
+                                    style = MaterialTheme.typography.headlineMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                         
                         // 云端获取按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = showCloudSyncButton,
+                            visible = !minimalMode && showCloudSyncButton && isOssConfigured,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)
@@ -288,7 +306,7 @@ fun ChatScreen(
                         
                         // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = currentMessages.isNotEmpty(),
+                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(
@@ -325,7 +343,7 @@ fun ChatScreen(
                         
                         // 回到底部按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = showScrollToBottomButton,
+                            visible = !minimalMode && showScrollToBottomButton,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)
