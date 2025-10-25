@@ -13,8 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.animation.AnimatedVisibility
@@ -37,8 +35,8 @@ fun ChatInput(
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
-    val density = LocalDensity.current
-    var buttonSize by remember { mutableStateOf(56.dp) }
+    // 固定发送按钮高度为输入框初始高度（硬编码）
+    val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
     
     Surface(
@@ -58,10 +56,8 @@ fun ChatInput(
                 onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
-                    .animateContentSize()
-                    .onSizeChanged { size ->
-                        buttonSize = with(density) { size.height.toDp() }
-                    },
+                    .heightIn(max = 120.dp)
+                    .animateContentSize(),
                 placeholder = {
                     Text(
                         text = "输入消息...",

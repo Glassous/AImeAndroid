@@ -6,6 +6,8 @@ import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.OssPreferences
+import com.glassous.aime.data.preferences.AutoSyncPreferences
+import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 
 
 class AIMeApplication : Application() {
@@ -24,14 +26,20 @@ class AIMeApplication : Application() {
     // OSS preferences instance
     val ossPreferences by lazy { OssPreferences(this) }
 
+    // Auto sync preferences instance
+    val autoSyncPreferences by lazy { AutoSyncPreferences(this) }
 
+    // Cloud sync view model instance
+    val cloudSyncViewModel by lazy { CloudSyncViewModel(this) }
 
     // Repository instance
     val repository by lazy { 
         ChatRepository(
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
-            modelPreferences = modelPreferences
+            modelPreferences = modelPreferences,
+            autoSyncPreferences = autoSyncPreferences,
+            cloudSyncViewModel = cloudSyncViewModel
         )
     }
 

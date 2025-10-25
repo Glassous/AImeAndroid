@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.AutoSyncPreferences
+import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,6 +14,8 @@ class ChatRepository(
     private val chatDao: ChatDao,
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
+    private val autoSyncPreferences: AutoSyncPreferences,
+    private val cloudSyncViewModel: CloudSyncViewModel,
     private val openAiService: OpenAiService = OpenAiService()
 ) {
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>> {
@@ -292,6 +296,13 @@ class ChatRepository(
         if (conversation != null) {
             chatDao.deleteMessagesForConversation(conversationId)
             chatDao.deleteConversation(conversation)
+            
+            // 如果启用了自动同步，则自动上传
+        if (autoSyncPreferences.autoSyncEnabled.first()) {
+            cloudSyncViewModel.uploadBackup { success, message ->
+                // 静默处理结果，不显示UI反馈
+            }
+        }
         }
     }
 
@@ -401,6 +412,14 @@ class ChatRepository(
             // 最终写入完整文本并刷新会话元数据
             chatDao.updateMessage(assistantMessage.copy(content = aggregated.toString()))
             refreshConversationMetadata(conversationId)
+            
+            // 如果启用了自动同步，则自动上传
+            if (autoSyncPreferences.autoSyncEnabled.first()) {
+                cloudSyncViewModel.uploadBackup { success, message ->
+                    // 静默处理结果，不显示UI反馈
+                }
+            }
+            
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)

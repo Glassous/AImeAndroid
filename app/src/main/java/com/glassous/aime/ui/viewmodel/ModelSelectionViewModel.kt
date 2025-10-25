@@ -7,11 +7,14 @@ import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.AutoSyncPreferences
+import com.glassous.aime.data.preferences.OssPreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -20,7 +23,10 @@ import kotlinx.coroutines.launch
  */
 class ModelSelectionViewModel(
     private val repository: ModelConfigRepository,
-    private val modelPreferences: ModelPreferences
+    private val modelPreferences: ModelPreferences,
+    private val autoSyncPreferences: AutoSyncPreferences,
+    private val ossPreferences: OssPreferences,
+    private val cloudSyncViewModel: CloudSyncViewModel
 ) : ViewModel() {
     
     // 所有分组
@@ -81,7 +87,16 @@ class ModelSelectionViewModel(
     // 选择模型
     fun selectModel(model: Model) {
         _selectedModel.value = model
-        viewModelScope.launch { modelPreferences.setSelectedModelId(model.id) }
+        viewModelScope.launch { 
+            modelPreferences.setSelectedModelId(model.id)
+            
+            // 如果启用了自动同步，则自动上传
+            if (autoSyncPreferences.autoSyncEnabled.first()) {
+                cloudSyncViewModel.uploadBackup { success, message ->
+                    // 静默处理结果，不显示UI反馈
+                }
+            }
+        }
         hideBottomSheet()
     }
     
@@ -105,12 +120,15 @@ data class ModelSelectionUiState(
 // ViewModelFactory
 class ModelSelectionViewModelFactory(
     private val repository: ModelConfigRepository,
-    private val modelPreferences: ModelPreferences
+    private val modelPreferences: ModelPreferences,
+    private val autoSyncPreferences: AutoSyncPreferences,
+    private val ossPreferences: OssPreferences,
+    private val cloudSyncViewModel: CloudSyncViewModel
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ModelSelectionViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ModelSelectionViewModel(repository, modelPreferences) as T
+            return ModelSelectionViewModel(repository, modelPreferences, autoSyncPreferences, ossPreferences, cloudSyncViewModel) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

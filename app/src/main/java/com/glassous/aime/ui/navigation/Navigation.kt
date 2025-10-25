@@ -38,7 +38,10 @@ fun AppNavigation() {
     val modelSelectionViewModel: ModelSelectionViewModel = viewModel(
         factory = ModelSelectionViewModelFactory(
             application.modelConfigRepository,
-            application.modelPreferences
+            application.modelPreferences,
+            application.autoSyncPreferences,
+            application.ossPreferences,
+            application.cloudSyncViewModel
         )
     )
     val ossPreferences = OssPreferences(context)
