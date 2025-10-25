@@ -24,7 +24,8 @@ import kotlinx.coroutines.delay
 fun CodeBlockWithCopy(
     code: String,
     language: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    textSizeSp: Float = 14f
 ) {
     val clipboardManager = LocalClipboardManager.current
     var showCopiedFeedback by remember { mutableStateOf(false) }
@@ -51,7 +52,7 @@ fun CodeBlockWithCopy(
                 .padding(12.dp)
                 .padding(top = 8.dp, end = 32.dp), // 为右上角按钮留出空间
             fontFamily = FontFamily.Monospace,
-            fontSize = 14.sp,
+            fontSize = textSizeSp.sp,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 20.sp
         )

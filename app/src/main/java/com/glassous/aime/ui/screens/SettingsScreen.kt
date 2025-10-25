@@ -32,6 +32,8 @@ import com.glassous.aime.data.preferences.AutoSyncPreferences
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import com.glassous.aime.ui.components.FontSizeSettingDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,6 +47,9 @@ fun SettingsScreen(
     val minimalMode by themeViewModel.minimalMode.collectAsState()
     // 新增：回复气泡开关状态
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
+    val chatFontSize by themeViewModel.chatFontSize.collectAsState()
+    
+    var showFontSizeDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
@@ -203,6 +208,27 @@ fun SettingsScreen(
                             checked = replyBubbleEnabled,
                             onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
                         )
+                    }
+                    
+                    // 新增：聊天字体大小设置
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showFontSizeDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "修改聊天字体大小",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "${chatFontSize.toInt()}sp",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -365,5 +391,16 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+    
+    // 字体大小设置弹窗
+    if (showFontSizeDialog) {
+        FontSizeSettingDialog(
+            currentFontSize = chatFontSize,
+            onDismiss = { showFontSizeDialog = false },
+            onConfirm = { newSize ->
+                themeViewModel.setChatFontSize(newSize)
+            }
+        )
     }
 }

@@ -67,6 +67,9 @@ fun MarkdownRenderer(
                                 }
                             },
                             update = { tv ->
+                                tv.setTextColor(textColor.toArgb())
+                                tv.textSize = textSizeSp
+                                tv.setLinkTextColor(textColor.toArgb())
                                 tv.setOnLongClickListener {
                                     onLongClick()
                                     true
@@ -81,6 +84,7 @@ fun MarkdownRenderer(
                     CodeBlockWithCopy(
                         code = block.content,
                         language = block.language,
+                        textSizeSp = textSizeSp,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(vertical = 4.dp)

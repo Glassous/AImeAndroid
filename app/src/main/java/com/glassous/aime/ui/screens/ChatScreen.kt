@@ -80,6 +80,8 @@ fun ChatScreen(
     val minimalMode by themePreferences.minimalMode.collectAsState(initial = false)
     // 新增：读取回复气泡开关
     val replyBubbleEnabled by themePreferences.replyBubbleEnabled.collectAsState(initial = true)
+    // 新增：读取聊天字体大小
+    val chatFontSize by themePreferences.chatFontSize.collectAsState(initial = 16f)
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -491,7 +493,8 @@ fun ChatScreen(
                                     onShowDetails = { onNavigateToMessageDetail(message.id) },
                                     onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
                                     onEditUserMessage = { id, text -> chatViewModel.editUserMessageAndResend(id, text) },
-                                    replyBubbleEnabled = replyBubbleEnabled
+                                    replyBubbleEnabled = replyBubbleEnabled,
+                                    chatFontSize = chatFontSize
                                 )
                             }
                             // 底部额外间距

@@ -22,6 +22,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     // 新增：回复气泡是否启用
     private val _replyBubbleEnabled = MutableStateFlow(true)
     val replyBubbleEnabled: StateFlow<Boolean> = _replyBubbleEnabled.asStateFlow()
+
+    // 新增：聊天字体大小
+    private val _chatFontSize = MutableStateFlow(16f)
+    val chatFontSize: StateFlow<Float> = _chatFontSize.asStateFlow()
     
     init {
         viewModelScope.launch {
@@ -38,6 +42,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.replyBubbleEnabled.collect { enabled ->
                 _replyBubbleEnabled.value = enabled
+            }
+        }
+        // 收集聊天字体大小
+        viewModelScope.launch {
+            themePreferences.chatFontSize.collect { size ->
+                _chatFontSize.value = size
             }
         }
     }
@@ -58,6 +68,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setReplyBubbleEnabled(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setReplyBubbleEnabled(enabled)
+        }
+    }
+
+    // 新增：设置聊天字体大小
+    fun setChatFontSize(size: Float) {
+        viewModelScope.launch {
+            themePreferences.setChatFontSize(size)
         }
     }
 }

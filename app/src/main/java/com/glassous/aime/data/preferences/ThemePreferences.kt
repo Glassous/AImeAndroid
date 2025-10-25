@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -22,6 +23,8 @@ class ThemePreferences(private val context: Context) {
         private val MINIMAL_MODE = booleanPreferencesKey("minimal_mode")
         // 新增：控制是否启用回复气泡（AI 消息气泡）
         private val REPLY_BUBBLE_ENABLED = booleanPreferencesKey("reply_bubble_enabled")
+        // 新增：聊天字体大小设置
+        private val CHAT_FONT_SIZE = floatPreferencesKey("chat_font_size")
     }
     
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -38,6 +41,12 @@ class ThemePreferences(private val context: Context) {
     val replyBubbleEnabled: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[REPLY_BUBBLE_ENABLED] ?: true
+        }
+
+    // 新增：聊天字体大小（默认16sp）
+    val chatFontSize: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[CHAT_FONT_SIZE] ?: 16f
         }
     
     suspend fun setTheme(theme: String) {
@@ -56,6 +65,13 @@ class ThemePreferences(private val context: Context) {
     suspend fun setReplyBubbleEnabled(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[REPLY_BUBBLE_ENABLED] = enabled
+        }
+    }
+
+    // 新增：设置聊天字体大小
+    suspend fun setChatFontSize(size: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAT_FONT_SIZE] = size
         }
     }
 }

@@ -34,7 +34,9 @@ fun MessageBubble(
     onEditUserMessage: ((Long, String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     // 新增：控制 AI 回复是否以气泡展示
-    replyBubbleEnabled: Boolean = true
+    replyBubbleEnabled: Boolean = true,
+    // 新增：聊天字体大小
+    chatFontSize: Float = 16f
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -90,7 +92,7 @@ fun MessageBubble(
                         message.isFromUser -> MaterialTheme.colorScheme.onPrimary
                         else -> MaterialTheme.colorScheme.onSurface
                     }
-                    val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+                    val textSizeSp = chatFontSize
 
                     MarkdownRenderer(
                         markdown = message.content,
@@ -108,7 +110,7 @@ fun MessageBubble(
                     .testTag("bubble-${message.id}")
             ) {
                 val textColor = MaterialTheme.colorScheme.onSurface
-                val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+                val textSizeSp = chatFontSize
                 // 为了与截图风格更接近，增加左右留白与分段
                 Box(modifier = Modifier
                     .fillMaxWidth()
