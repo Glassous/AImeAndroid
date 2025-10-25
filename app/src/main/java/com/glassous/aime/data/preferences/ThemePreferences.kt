@@ -20,6 +20,8 @@ class ThemePreferences(private val context: Context) {
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         private val MINIMAL_MODE = booleanPreferencesKey("minimal_mode")
+        // 新增：控制是否启用回复气泡（AI 消息气泡）
+        private val REPLY_BUBBLE_ENABLED = booleanPreferencesKey("reply_bubble_enabled")
     }
     
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -31,6 +33,12 @@ class ThemePreferences(private val context: Context) {
         .map { preferences ->
             preferences[MINIMAL_MODE] ?: false
         }
+
+    // 新增：回复气泡是否启用（默认启用，以保持现有风格）
+    val replyBubbleEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[REPLY_BUBBLE_ENABLED] ?: true
+        }
     
     suspend fun setTheme(theme: String) {
         context.dataStore.edit { preferences ->
@@ -41,6 +49,13 @@ class ThemePreferences(private val context: Context) {
     suspend fun setMinimalMode(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[MINIMAL_MODE] = enabled
+        }
+    }
+
+    // 新增：设置回复气泡开关
+    suspend fun setReplyBubbleEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[REPLY_BUBBLE_ENABLED] = enabled
         }
     }
 }

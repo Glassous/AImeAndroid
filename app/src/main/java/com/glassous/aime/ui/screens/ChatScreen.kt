@@ -78,6 +78,8 @@ fun ChatScreen(
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
     val minimalMode by themePreferences.minimalMode.collectAsState(initial = false)
+    // 新增：读取回复气泡开关
+    val replyBubbleEnabled by themePreferences.replyBubbleEnabled.collectAsState(initial = true)
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -488,7 +490,8 @@ fun ChatScreen(
                                     message = message,
                                     onShowDetails = { onNavigateToMessageDetail(message.id) },
                                     onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
-                                    onEditUserMessage = { id, text -> chatViewModel.editUserMessageAndResend(id, text) }
+                                    onEditUserMessage = { id, text -> chatViewModel.editUserMessageAndResend(id, text) },
+                                    replyBubbleEnabled = replyBubbleEnabled
                                 )
                             }
                             // 底部额外间距

@@ -18,6 +18,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _minimalMode = MutableStateFlow(false)
     val minimalMode: StateFlow<Boolean> = _minimalMode.asStateFlow()
+
+    // 新增：回复气泡是否启用
+    private val _replyBubbleEnabled = MutableStateFlow(true)
+    val replyBubbleEnabled: StateFlow<Boolean> = _replyBubbleEnabled.asStateFlow()
     
     init {
         viewModelScope.launch {
@@ -28,6 +32,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.minimalMode.collect { enabled ->
                 _minimalMode.value = enabled
+            }
+        }
+        // 收集回复气泡开关
+        viewModelScope.launch {
+            themePreferences.replyBubbleEnabled.collect { enabled ->
+                _replyBubbleEnabled.value = enabled
             }
         }
     }
@@ -41,6 +51,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setMinimalMode(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setMinimalMode(enabled)
+        }
+    }
+
+    // 新增：设置回复气泡开关
+    fun setReplyBubbleEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setReplyBubbleEnabled(enabled)
         }
     }
 }

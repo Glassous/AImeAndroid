@@ -43,6 +43,8 @@ fun SettingsScreen(
 ) {
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
     val minimalMode by themeViewModel.minimalMode.collectAsState()
+    // 新增：回复气泡开关状态
+    val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val context = LocalContext.current
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
@@ -181,6 +183,25 @@ fun SettingsScreen(
                         Switch(
                             checked = minimalMode,
                             onCheckedChange = { themeViewModel.setMinimalMode(it) }
+                        )
+                    }
+
+                    // 新增：启用回复气泡开关
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "启用回复气泡",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        Switch(
+                            checked = replyBubbleEnabled,
+                            onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
                         )
                     }
                 }

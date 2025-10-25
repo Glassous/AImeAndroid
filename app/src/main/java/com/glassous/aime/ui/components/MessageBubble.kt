@@ -32,7 +32,9 @@ fun MessageBubble(
     onShowDetails: (Long) -> Unit,
     onRegenerate: ((Long) -> Unit)? = null,
     onEditUserMessage: ((Long, String) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // 新增：控制 AI 回复是否以气泡展示
+    replyBubbleEnabled: Boolean = true
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -52,47 +54,73 @@ fun MessageBubble(
         }
     }
 
+    val useBubble = message.isFromUser || replyBubbleEnabled
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         horizontalArrangement = if (message.isFromUser) Arrangement.End else Arrangement.Start
     ) {
-        // Message bubble
-        Surface(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .animateContentSize() // 平滑高度变化，减少内容增长导致的跳动
-                .testTag("bubble-${message.id}"),
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isFromUser) 16.dp else 4.dp,
-                bottomEnd = if (message.isFromUser) 4.dp else 16.dp
-            ),
-            color = when {
-                message.isError -> MaterialTheme.colorScheme.errorContainer
-                message.isFromUser -> MaterialTheme.colorScheme.primary
-                else -> MaterialTheme.colorScheme.surfaceContainer
-            },
-            tonalElevation = 1.dp
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp)
+        if (useBubble) {
+            // 维持原有气泡样式
+            Surface(
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .animateContentSize()
+                    .testTag("bubble-${message.id}"),
+                shape = RoundedCornerShape(
+                    topStart = 16.dp,
+                    topEnd = 16.dp,
+                    bottomStart = if (message.isFromUser) 16.dp else 4.dp,
+                    bottomEnd = if (message.isFromUser) 4.dp else 16.dp
+                ),
+                color = when {
+                    message.isError -> MaterialTheme.colorScheme.errorContainer
+                    message.isFromUser -> MaterialTheme.colorScheme.primary
+                    else -> MaterialTheme.colorScheme.surfaceContainer
+                },
+                tonalElevation = 1.dp
             ) {
-                val textColor = when {
-                    message.isError -> MaterialTheme.colorScheme.onErrorContainer
-                    message.isFromUser -> MaterialTheme.colorScheme.onPrimary
-                    else -> MaterialTheme.colorScheme.onSurface
-                }
-                val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+                Column(
+                    modifier = Modifier.padding(12.dp)
+                ) {
+                    val textColor = when {
+                        message.isError -> MaterialTheme.colorScheme.onErrorContainer
+                        message.isFromUser -> MaterialTheme.colorScheme.onPrimary
+                        else -> MaterialTheme.colorScheme.onSurface
+                    }
+                    val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
 
-                MarkdownRenderer(
-                    markdown = message.content,
-                    textColor = textColor,
-                    textSizeSp = textSizeSp,
-                    onLongClick = { showDialog = true }
-                )
+                    MarkdownRenderer(
+                        markdown = message.content,
+                        textColor = textColor,
+                        textSizeSp = textSizeSp,
+                        onLongClick = { showDialog = true }
+                    )
+                }
+            }
+        } else {
+            // 新增：AI 回复直接在页面背景渲染（无气泡）
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 500.dp)
+                    .testTag("bubble-${message.id}")
+            ) {
+                val textColor = MaterialTheme.colorScheme.onSurface
+                val textSizeSp = MaterialTheme.typography.bodyMedium.fontSize.value
+                // 为了与截图风格更接近，增加左右留白与分段
+                Box(modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 0.dp)
+                ) {
+                    MarkdownRenderer(
+                        markdown = message.content,
+                        textColor = textColor,
+                        textSizeSp = textSizeSp,
+                        onLongClick = { showDialog = true }
+                    )
+                }
             }
         }
     }
