@@ -291,7 +291,7 @@ class ChatRepository(
         return chatDao.getMessageCount(conversationId) > 0
     }
 
-    suspend fun deleteConversation(conversationId: Long) {
+    suspend fun deleteConversation(conversationId: Long, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
             chatDao.deleteMessagesForConversation(conversationId)
@@ -300,7 +300,8 @@ class ChatRepository(
             // 如果启用了自动同步，则自动上传
         if (autoSyncPreferences.autoSyncEnabled.first()) {
             cloudSyncViewModel.uploadBackup { success, message ->
-                // 静默处理结果，不显示UI反馈
+                // 通知UI更新同步状态
+                onSyncResult?.invoke(success, message)
             }
         }
         }
@@ -312,7 +313,7 @@ class ChatRepository(
     }
 
     // Added: edit user message and resend from original position
-    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String): Result<Unit> {
+    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String, onSyncResult: ((Boolean, String) -> Unit)? = null): Result<Unit> {
         return try {
             // 获取完整历史
             val history = chatDao.getMessagesForConversation(conversationId).first()
@@ -416,7 +417,8 @@ class ChatRepository(
             // 如果启用了自动同步，则自动上传
             if (autoSyncPreferences.autoSyncEnabled.first()) {
                 cloudSyncViewModel.uploadBackup { success, message ->
-                    // 静默处理结果，不显示UI反馈
+                    // 通知UI更新同步状态
+                    onSyncResult?.invoke(success, message)
                 }
             }
             

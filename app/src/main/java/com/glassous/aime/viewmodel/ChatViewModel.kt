@@ -97,13 +97,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun editUserMessageAndResend(messageId: Long, newContent: String) {
+    fun editUserMessageAndResend(messageId: Long, newContent: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && msg.isFromUser) {
-                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent)
+                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent, onSyncResult)
                 }
             } catch (_: Exception) {
                 // swallow for now; UI可通过错误消息提示
@@ -125,9 +125,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = ""
     }
     
-    fun deleteConversation(conversationId: Long) {
+    fun deleteConversation(conversationId: Long, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
-            repository.deleteConversation(conversationId)
+            repository.deleteConversation(conversationId, onSyncResult)
             // If we deleted the current conversation, clear the selection
             if (_currentConversationId.value == conversationId) {
                 _currentConversationId.value = null

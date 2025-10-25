@@ -85,7 +85,7 @@ class ModelSelectionViewModel(
     }
     
     // 选择模型
-    fun selectModel(model: Model) {
+    fun selectModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         _selectedModel.value = model
         viewModelScope.launch { 
             modelPreferences.setSelectedModelId(model.id)
@@ -93,7 +93,8 @@ class ModelSelectionViewModel(
             // 如果启用了自动同步，则自动上传
             if (autoSyncPreferences.autoSyncEnabled.first()) {
                 cloudSyncViewModel.uploadBackup { success, message ->
-                    // 静默处理结果，不显示UI反馈
+                    // 通知UI更新同步状态
+                    onSyncResult?.invoke(success, message)
                 }
             }
         }

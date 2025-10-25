@@ -55,7 +55,8 @@ import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 @Composable
 fun ModelSelectionBottomSheet(
     viewModel: ModelSelectionViewModel,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onSyncResult: ((Boolean, String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -155,7 +156,7 @@ fun ModelSelectionBottomSheet(
                             viewModel = viewModel,
                             group = selectedGroup,
                             onModelClick = { model ->
-                                viewModel.selectModel(model)
+                                viewModel.selectModel(model, onSyncResult)
                             }
                         )
                     }

@@ -219,7 +219,19 @@ fun ChatScreen(
                         scope.launch { drawerState.close() }
                     },
                     onDeleteConversation = { conversationId ->
-                        chatViewModel.deleteConversation(conversationId)
+                        chatViewModel.deleteConversation(conversationId) { success, message ->
+                            if (success) {
+                                syncSuccessType = "upload"
+                            } else {
+                                syncErrorType = "upload"
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "同步失败: $message",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
                     },
                     onEditConversationTitle = { conversationId, newTitle ->
                         chatViewModel.updateConversationTitle(conversationId, newTitle)
@@ -492,7 +504,21 @@ fun ChatScreen(
                                     message = message,
                                     onShowDetails = { onNavigateToMessageDetail(message.id) },
                                     onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
-                                    onEditUserMessage = { id, text -> chatViewModel.editUserMessageAndResend(id, text) },
+                                    onEditUserMessage = { id, text -> 
+                                        chatViewModel.editUserMessageAndResend(id, text) { success, message ->
+                                            if (success) {
+                                                syncSuccessType = "upload"
+                                            } else {
+                                                syncErrorType = "upload"
+                                                scope.launch {
+                                                    snackbarHostState.showSnackbar(
+                                                        message = "同步失败: $message",
+                                                        duration = SnackbarDuration.Short
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    },
                                     replyBubbleEnabled = replyBubbleEnabled,
                                     chatFontSize = chatFontSize
                                 )
@@ -591,7 +617,19 @@ fun ChatScreen(
         if (modelSelectionUiState.showBottomSheet) {
             ModelSelectionBottomSheet(
                 viewModel = modelSelectionViewModel,
-                onDismiss = { modelSelectionViewModel.hideBottomSheet() }
+                onDismiss = { modelSelectionViewModel.hideBottomSheet() },
+                onSyncResult = { success, message ->
+                    scope.launch {
+                        if (success) {
+                            syncSuccessType = "upload"
+                            syncErrorType = null
+                        } else {
+                            syncErrorType = "upload"
+                            syncSuccessType = null
+                            snackbarHostState.showSnackbar(message)
+                        }
+                    }
+                }
             )
         }
     }
