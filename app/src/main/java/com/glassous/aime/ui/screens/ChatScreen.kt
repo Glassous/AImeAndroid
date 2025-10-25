@@ -38,6 +38,10 @@ import com.glassous.aime.data.preferences.OssPreferences
 import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.data.preferences.AutoSyncPreferences
 
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
@@ -297,7 +301,7 @@ fun ChatScreen(
                                         imageVector = Icons.Filled.CloudDownload,
                                         contentDescription = "获取成功",
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        modifier = Modifier.padding(end = 12.dp)
                                     )
                                 }
                                 "upload" -> {
@@ -305,7 +309,7 @@ fun ChatScreen(
                                         imageVector = Icons.Filled.CloudUpload,
                                         contentDescription = "上传成功",
                                         tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        modifier = Modifier.padding(end = 12.dp)
                                     )
                                 }
                                 else -> {}
@@ -318,7 +322,7 @@ fun ChatScreen(
                                         imageVector = Icons.Filled.Close,
                                         contentDescription = "同步失败",
                                         tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.padding(end = 8.dp)
+                                        modifier = Modifier.padding(end = 12.dp)
                                     )
                                 }
                                 else -> {}
@@ -343,8 +347,6 @@ fun ChatScreen(
                     // 空态：问候语
                     val greeting = remember {
                         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
-
-                        // =========== 开始替换新的文案 ============
                         val greetings = when {
                             // 清晨 (05:00 - 07:59)
                             hour in 5..7 -> listOf(
@@ -427,7 +429,6 @@ fun ChatScreen(
                                 "早睡早起... 好像已经晚了"
                             )
                         }
-                        // =========== 结束替换 ============
                         greetings.random()
                     }
 
@@ -506,7 +507,10 @@ fun ChatScreen(
                         LazyColumn(
                             state = listState,
                             modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(vertical = 8.dp)
+                            contentPadding = PaddingValues(
+                                top = 8.dp,
+                                bottom = 6.dp
+                            )
                         ) {
                             items(
                                 items = currentMessages,
@@ -535,8 +539,6 @@ fun ChatScreen(
                                     chatFontSize = chatFontSize
                                 )
                             }
-                            // 底部额外间距
-                            item { Spacer(modifier = Modifier.height(16.dp)) }
                         }
 
                         // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方

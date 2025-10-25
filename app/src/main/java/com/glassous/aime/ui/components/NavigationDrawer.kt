@@ -49,7 +49,7 @@ fun NavigationDrawer(
             // Header
             Text(
                 text = "AIme",
-                style = MaterialTheme.typography.headlineSmall.copy(
+                style = MaterialTheme.typography.headlineLarge.copy(
                     fontFamily = FontFamily.Cursive
                 ),
                 color = MaterialTheme.colorScheme.onSurface,

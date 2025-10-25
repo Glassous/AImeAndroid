@@ -1,10 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.AIme" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.AIme" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
     
     <style name="Theme.AIme.SplashScreen" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">@android:color/system_accent1_100</item>
+        <item name="windowSplashScreenBackground">@android:color/system_neutral1_100</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground_dark</item>
         <item name="windowSplashScreenAnimationDuration">100</item>
         <item name="postSplashScreenTheme">@style/Theme.AIme</item>
