@@ -29,10 +29,10 @@ class ModelConfigViewModel(
     val uiState = _uiState.asStateFlow()
     
     // 创建新分组
-    fun createGroup(name: String, baseUrl: String, apiKey: String) {
+    fun createGroup(name: String, baseUrl: String, apiKey: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
-                repository.createGroup(name, baseUrl, apiKey)
+                repository.createGroup(name, baseUrl, apiKey, onSyncResult)
                 _uiState.value = _uiState.value.copy(
                     showCreateGroupDialog = false,
                     isLoading = false
@@ -47,7 +47,7 @@ class ModelConfigViewModel(
     }
     
     // 更新分组
-    fun updateGroup(groupId: String, name: String, baseUrl: String, apiKey: String) {
+    fun updateGroup(groupId: String, name: String, baseUrl: String, apiKey: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
                 val updatedGroup = ModelGroup(
@@ -56,7 +56,7 @@ class ModelConfigViewModel(
                     baseUrl = baseUrl,
                     apiKey = apiKey
                 )
-                repository.updateGroup(updatedGroup)
+                repository.updateGroup(updatedGroup, onSyncResult)
                 _uiState.value = _uiState.value.copy(
                     showEditGroupDialog = false,
                     selectedGroup = null
@@ -68,7 +68,7 @@ class ModelConfigViewModel(
     }
     
     // 更新模型
-    fun updateModel(modelId: String, groupId: String, name: String, modelName: String) {
+    fun updateModel(modelId: String, groupId: String, name: String, modelName: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
                 val updatedModel = Model(
@@ -77,7 +77,7 @@ class ModelConfigViewModel(
                     name = name,
                     modelName = modelName
                 )
-                repository.updateModel(updatedModel)
+                repository.updateModel(updatedModel, onSyncResult)
                 _uiState.value = _uiState.value.copy(
                     showEditModelDialog = false,
                     selectedModel = null
@@ -89,10 +89,10 @@ class ModelConfigViewModel(
     }
     
     // 删除分组
-    fun deleteGroup(group: ModelGroup) {
+    fun deleteGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
-                repository.deleteGroup(group)
+                repository.deleteGroup(group, onSyncResult)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
@@ -100,10 +100,10 @@ class ModelConfigViewModel(
     }
     
     // 添加模型到分组
-    fun addModelToGroup(groupId: String, name: String, modelName: String) {
+    fun addModelToGroup(groupId: String, name: String, modelName: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
-                repository.addModelToGroup(groupId, name, modelName)
+                repository.addModelToGroup(groupId, name, modelName, onSyncResult)
                 _uiState.value = _uiState.value.copy(
                     showAddModelDialog = false,
                     selectedGroupId = null
@@ -115,10 +115,10 @@ class ModelConfigViewModel(
     }
     
     // 删除模型
-    fun deleteModel(model: Model) {
+    fun deleteModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             try {
-                repository.deleteModel(model)
+                repository.deleteModel(model, onSyncResult)
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
             }

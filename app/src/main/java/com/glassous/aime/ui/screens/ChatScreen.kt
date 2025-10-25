@@ -234,7 +234,19 @@ fun ChatScreen(
                         }
                     },
                     onEditConversationTitle = { conversationId, newTitle ->
-                        chatViewModel.updateConversationTitle(conversationId, newTitle)
+                        chatViewModel.updateConversationTitle(conversationId, newTitle) { success, message ->
+                            if (success) {
+                                syncSuccessType = "upload"
+                            } else {
+                                syncErrorType = "upload"
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "同步失败: $message",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
                     },
                     onNavigateToSettings = onNavigateToSettings
                 )

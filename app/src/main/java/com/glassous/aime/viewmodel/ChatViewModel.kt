@@ -135,9 +135,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateConversationTitle(conversationId: Long, newTitle: String) {
+    fun updateConversationTitle(conversationId: Long, newTitle: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
-            repository.updateConversationTitle(conversationId, newTitle)
+            repository.updateConversationTitle(conversationId, newTitle, onSyncResult)
         }
     }
 }

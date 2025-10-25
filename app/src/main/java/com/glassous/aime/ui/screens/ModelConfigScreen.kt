@@ -30,6 +30,7 @@ import com.glassous.aime.ui.components.EditModelDialog
 import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -41,8 +42,19 @@ fun ModelConfigScreen(
     val viewModel: ModelConfigViewModel = viewModel(
         factory = ModelConfigViewModelFactory(application.modelConfigRepository)
     )
-    val groups by viewModel.groups.collectAsState()
+    
     val uiState by viewModel.uiState.collectAsState()
+    val groups by viewModel.groups.collectAsState()
+    
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    
+    // 云端同步结果回调
+    val onSyncResult: (Boolean, String) -> Unit = { success, message ->
+        scope.launch {
+            snackbarHostState.showSnackbar(message)
+        }
+    }
     
     // 确保模型配置页面不受聊天页面的模糊效果影响
     val localDialogBlurState = remember { mutableStateOf(false) }
@@ -64,6 +76,7 @@ fun ModelConfigScreen(
                     }
                 )
             },
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { paddingValues ->
             Box {
@@ -85,8 +98,8 @@ fun ModelConfigScreen(
                     ModelGroupCard(
                         group = group,
                         onAddModel = { viewModel.showAddModelDialog(group.id) },
-                        onDeleteGroup = { viewModel.deleteGroup(group) },
-                        onDeleteModel = { viewModel.deleteModel(it) },
+                        onDeleteGroup = { viewModel.deleteGroup(group, onSyncResult) },
+                        onDeleteModel = { viewModel.deleteModel(it, onSyncResult) },
                         onEditGroup = { viewModel.showEditGroupDialog(it) },
                         onEditModel = { viewModel.showEditModelDialog(it) },
                         viewModel = viewModel
@@ -103,7 +116,7 @@ fun ModelConfigScreen(
         CreateGroupDialog(
             onDismiss = { viewModel.hideCreateGroupDialog() },
             onConfirm = { name, baseUrl, apiKey ->
-                viewModel.createGroup(name, baseUrl, apiKey)
+                viewModel.createGroup(name, baseUrl, apiKey, onSyncResult)
             }
         )
     }
@@ -113,7 +126,7 @@ fun ModelConfigScreen(
         AddModelDialog(
             onDismiss = { viewModel.hideAddModelDialog() },
             onConfirm = { name, modelName ->
-                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName)
+                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName, onSyncResult)
             }
         )
     }
@@ -124,7 +137,7 @@ fun ModelConfigScreen(
             group = uiState.selectedGroup!!,
             onDismiss = { viewModel.hideEditGroupDialog() },
             onConfirm = { name, baseUrl, apiKey ->
-                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey)
+                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey, onSyncResult)
             }
         )
     }
@@ -139,7 +152,8 @@ fun ModelConfigScreen(
                     uiState.selectedModel!!.id,
                     uiState.selectedModel!!.groupId,
                     name,
-                    modelName
+                    modelName,
+                    onSyncResult
                 )
             }
         )

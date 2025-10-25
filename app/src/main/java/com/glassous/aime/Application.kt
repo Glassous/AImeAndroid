@@ -17,7 +17,11 @@ class AIMeApplication : Application() {
     
     // Model config repository instance
     val modelConfigRepository by lazy {
-        ModelConfigRepository(database.modelConfigDao())
+        ModelConfigRepository(
+            modelConfigDao = database.modelConfigDao(),
+            autoSyncPreferences = autoSyncPreferences,
+            cloudSyncViewModel = cloudSyncViewModel
+        )
     }
 
     // Model preferences instance

@@ -251,11 +251,19 @@ class ChatRepository(
         return conversation.copy(id = conversationId)
     }
 
-    suspend fun updateConversationTitle(conversationId: Long, newTitle: String) {
+    suspend fun updateConversationTitle(conversationId: Long, newTitle: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
             val updatedConversation = conversation.copy(title = newTitle)
             chatDao.updateConversation(updatedConversation)
+            
+            // 如果启用了自动同步，则自动上传
+            if (autoSyncPreferences.autoSyncEnabled.first()) {
+                cloudSyncViewModel.uploadBackup { success, message ->
+                    // 通知UI更新同步状态
+                    onSyncResult?.invoke(success, message)
+                }
+            }
         }
     }
 
