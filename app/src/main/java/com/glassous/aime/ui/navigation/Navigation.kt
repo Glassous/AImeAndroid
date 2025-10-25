@@ -99,7 +99,8 @@ fun AppNavigation() {
             val messageId = backStackEntry.arguments?.getLong("messageId") ?: 0L
             MessageDetailScreen(
                 messageId = messageId,
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                cloudSyncViewModel = application.cloudSyncViewModel
             )
         }
     }

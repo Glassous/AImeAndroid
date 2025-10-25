@@ -320,6 +320,11 @@ class ChatRepository(
         return chatDao.getMessageById(id)
     }
 
+    // Added: update message content
+    suspend fun updateMessage(message: ChatMessage) {
+        chatDao.updateMessage(message)
+    }
+
     // Added: edit user message and resend from original position
     suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String, onSyncResult: ((Boolean, String) -> Unit)? = null): Result<Unit> {
         return try {

@@ -32,6 +32,7 @@ fun ChatInput(
     onInputChange: (String) -> Unit,
     onSendMessage: () -> Unit,
     isLoading: Boolean = false,
+    minimalMode: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -72,8 +73,8 @@ fun ChatInput(
                 enabled = true,
                 shape = inputShape,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+                    focusedBorderColor = if (minimalMode) Color.Transparent else MaterialTheme.colorScheme.primary,
+                    unfocusedBorderColor = if (minimalMode) Color.Transparent else MaterialTheme.colorScheme.outline,
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 )
@@ -84,28 +85,56 @@ fun ChatInput(
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
             ) {
-                FilledIconButton(
-                    onClick = {
-                        if (inputText.isNotBlank()) {
-                            onSendMessage()
-                            focusManager.clearFocus()
+                if (minimalMode) {
+                    // 极简模式：只显示图标，无背景
+                    IconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                onSendMessage()
+                                focusManager.clearFocus()
+                            }
+                        },
+                        enabled = inputText.isNotBlank() && !isLoading,
+                        modifier = Modifier.size(buttonSize)
+                    ) {
+                        if (isLoading) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
                         }
-                    },
-                    enabled = inputText.isNotBlank() && !isLoading,
-                    modifier = Modifier.size(buttonSize),
-                    shape = inputShape,
-                    colors = IconButtonDefaults.filledIconButtonColors()
-                ) {
-                    if (isLoading) {
-                        LoadingIndicator(
-                            modifier = Modifier.size(24.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "发送"
-                        )
+                    }
+                } else {
+                    // 正常模式：带背景的按钮
+                    FilledIconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                onSendMessage()
+                                focusManager.clearFocus()
+                            }
+                        },
+                        enabled = inputText.isNotBlank() && !isLoading,
+                        modifier = Modifier.size(buttonSize),
+                        shape = inputShape,
+                        colors = IconButtonDefaults.filledIconButtonColors()
+                    ) {
+                        if (isLoading) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送"
+                            )
+                        }
                     }
                 }
             }

@@ -76,7 +76,7 @@ fun MarkdownRenderer(
                                 }
                                 markwon.setMarkdown(tv, block.content)
                             },
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.wrapContentWidth()
                         )
                     }
                 }
@@ -86,7 +86,7 @@ fun MarkdownRenderer(
                         language = block.language,
                         textSizeSp = textSizeSp,
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .wrapContentWidth()
                             .padding(vertical = 4.dp)
                     )
                 }

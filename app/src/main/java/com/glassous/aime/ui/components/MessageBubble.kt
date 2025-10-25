@@ -65,9 +65,10 @@ fun MessageBubble(
         horizontalArrangement = if (message.isFromUser) Arrangement.End else Arrangement.Start
     ) {
         if (useBubble) {
-            // 维持原有气泡样式
+            // 维持原有气泡样式，实现自适应宽度
             Surface(
                 modifier = Modifier
+                    .wrapContentWidth()
                     .widthIn(max = 300.dp)
                     .animateContentSize()
                     .testTag("bubble-${message.id}"),
@@ -114,7 +115,7 @@ fun MessageBubble(
                 // 为了与截图风格更接近，增加左右留白与分段
                 Box(modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 0.dp)
+                    .padding(horizontal = 8.dp)
                 ) {
                     MarkdownRenderer(
                         markdown = message.content,

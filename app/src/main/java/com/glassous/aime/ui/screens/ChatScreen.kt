@@ -339,7 +339,8 @@ fun ChatScreen(
                             // 清空输入框
                             chatViewModel.updateInputText("")
                         },
-                        isLoading = isLoading
+                        isLoading = isLoading,
+                        minimalMode = minimalMode
                     )
                 }
             ) { paddingValues ->
