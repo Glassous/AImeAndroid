@@ -2,6 +2,9 @@ package com.glassous.aime.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -109,7 +112,7 @@ fun ModelConfigScreen(
                         start = 16.dp,
                         end = 16.dp,
                         top = 16.dp,
-                        bottom = 6.dp
+                        bottom = 6.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                     ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
