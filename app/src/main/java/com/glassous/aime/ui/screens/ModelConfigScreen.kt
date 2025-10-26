@@ -2,8 +2,6 @@ package com.glassous.aime.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -22,6 +20,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.app.Activity
+import android.os.Build
+import android.view.View
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
@@ -29,7 +33,6 @@ import com.glassous.aime.ui.components.CreateGroupDialog
 import com.glassous.aime.ui.components.AddModelDialog
 import com.glassous.aime.ui.components.EditGroupDialog
 import com.glassous.aime.ui.components.EditModelDialog
-import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
 import kotlinx.coroutines.launch
@@ -51,6 +54,25 @@ fun ModelConfigScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     
+    // 沉浸式UI设置
+    val view = LocalView.current
+    LaunchedEffect(Unit) {
+        val activity = context as? Activity
+        activity?.let {
+            // 设置导航栏透明和沉浸式标志
+            it.window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
+            val decorView = it.window.decorView
+            decorView.systemUiVisibility = decorView.systemUiVisibility or
+                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                it.window.isNavigationBarContrastEnforced = false
+            }
+            it.window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        }
+    }
+    
     // 云端同步结果回调
     val onSyncResult: (Boolean, String) -> Unit = { success, message ->
         scope.launch {
@@ -58,11 +80,7 @@ fun ModelConfigScreen(
         }
     }
     
-    // 确保模型配置页面不受聊天页面的模糊效果影响
-    val localDialogBlurState = remember { mutableStateOf(false) }
-    
-    CompositionLocalProvider(LocalDialogBlurState provides localDialogBlurState) {
-        Scaffold(
+    Scaffold(
             topBar = {
                 TopAppBar(
                     title = { Text("模型配置") },
@@ -79,19 +97,20 @@ fun ModelConfigScreen(
                 )
             },
             snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = androidx.compose.ui.graphics.Color.Transparent,
             contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { paddingValues ->
             Box {
                 LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues)
-                        .padding(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 16.dp,
-                            bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                        ),
+                        .padding(paddingValues),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = 6.dp
+                    ),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
             if (groups.isEmpty()) {
@@ -112,7 +131,6 @@ fun ModelConfigScreen(
                         viewModel = viewModel
                     )
                 }
-            }
             }
         }
     }
