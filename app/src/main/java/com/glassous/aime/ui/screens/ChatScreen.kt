@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.components.ChatInput
@@ -135,9 +136,15 @@ fun ChatScreen(
             if (totalItemsCount == 0 || visibleItems.isEmpty()) {
                 false
             } else {
-                val lastVisibleItemIndex = visibleItems.last().index
-                // 如果最后一个可见项不是列表的最后一项（包括Spacer），则显示按钮
-                lastVisibleItemIndex < totalItemsCount - 1
+                // 检查是否在底部：最后一个可见项是否是列表的最后一项，且完全可见
+                val lastVisibleItem = visibleItems.lastOrNull()
+                if (lastVisibleItem == null) {
+                    false
+                } else {
+                    val isLastItem = lastVisibleItem.index == totalItemsCount - 1
+                    val isFullyVisible = lastVisibleItem.offset + lastVisibleItem.size <= layoutInfo.viewportEndOffset
+                    !(isLastItem && isFullyVisible)
+                }
             }
         }
     }
@@ -389,7 +396,51 @@ fun ChatScreen(
                         isLoading = isLoading,
                         minimalMode = minimalMode,
                         hideInputBorder = minimalModeConfig.hideInputBorder,
-                        hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground
+                        hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
+                        // 内嵌按钮配置
+                        showUploadButton = !(minimalMode && minimalModeConfig.hideCloudUploadButton) && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
+                        showDownloadButton = !(minimalMode && minimalModeConfig.hideCloudDownloadButton) && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
+                        showScrollToBottomButton = !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
+                        onUploadClick = {
+                            cloudSyncViewModel.uploadBackup { success, message ->
+                                scope.launch {
+                                    if (success) {
+                                        syncSuccessType = "upload"
+                                        syncErrorType = null
+                                    } else {
+                                        syncErrorType = "upload"
+                                        syncSuccessType = null
+                                        snackbarHostState.showSnackbar(message)
+                                    }
+                                }
+                            }
+                        },
+                        onDownloadClick = {
+                            cloudSyncViewModel.downloadAndImport { success, message ->
+                                scope.launch {
+                                    if (success) {
+                                        syncSuccessType = "download"
+                                        syncErrorType = null
+                                        showCloudSyncButton = false
+                                    } else {
+                                        syncErrorType = "download"
+                                        syncSuccessType = null
+                                        snackbarHostState.showSnackbar(message)
+                                    }
+                                }
+                            }
+                        },
+                        onScrollToBottomClick = {
+                            scope.launch {
+                                if (currentMessages.isNotEmpty()) {
+                                    // 滚动到列表的最底部，包括底部的Spacer
+                                    listState.animateScrollToItem(
+                                        index = currentMessages.size, // 滚动到Spacer项
+                                        scrollOffset = 0 // 确保完全滚动到底部
+                                    )
+                                }
+                            }
+                        }
                     )
                 }
             ) { paddingValues ->
@@ -498,179 +549,50 @@ fun ChatScreen(
                             ) {
                                 Text(
                                     text = greeting,
-                                    style = MaterialTheme.typography.headlineMedium,
+                                    style = MaterialTheme.typography.headlineMedium.copy(fontSize = 18.sp),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        // 云端获取按钮
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = !(minimalMode && minimalModeConfig.hideCloudDownloadButton) && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp)
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    cloudSyncViewModel.downloadAndImport { success, message ->
-                                        scope.launch {
-                                            if (success) {
-                                                syncSuccessType = "download"
-                                                syncErrorType = null
-                                                showCloudSyncButton = false
-                                            } else {
-                                                syncErrorType = "download"
-                                                syncSuccessType = null
-                                                snackbarHostState.showSnackbar(message)
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .alpha(0.7f),
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                elevation = FloatingActionButtonDefaults.elevation(
-                                    defaultElevation = 0.dp,
-                                    pressedElevation = 0.dp,
-                                    focusedElevation = 0.dp,
-                                    hoveredElevation = 0.dp
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CloudDownload,
-                                    contentDescription = "从云端获取数据",
-                                    tint = MaterialTheme.colorScheme.onPrimary
                                 )
                             }
                         }
                     }
                 } else {
-                    // 消息列表容器，使用Box来叠加回到底部按钮
-                    Box(
+                    // 消息列表
+                    LazyColumn(
+                        state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues)
+                            .padding(paddingValues),
+                        contentPadding = PaddingValues(
+                            top = 8.dp,
+                            bottom = 6.dp
+                        )
                     ) {
-                        // 消息列表
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(
-                                top = 8.dp,
-                                bottom = 6.dp
+                        items(
+                            items = currentMessages,
+                            key = { message -> message.id } // 添加稳定的key以优化重组性能
+                        ) { message ->
+                            MessageBubble(
+                                message = message,
+                                onShowDetails = { onNavigateToMessageDetail(message.id) },
+                                onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
+                                onEditUserMessage = { id, text -> 
+                                    chatViewModel.editUserMessageAndResend(id, text) { success, message ->
+                                        if (success) {
+                                            syncSuccessType = "upload"
+                                        } else {
+                                            syncErrorType = "upload"
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(
+                                                    message = "同步失败: $message",
+                                                    duration = SnackbarDuration.Short
+                                                )
+                                            }
+                                        }
+                                    }
+                                },
+                                replyBubbleEnabled = replyBubbleEnabled,
+                                chatFontSize = chatFontSize
                             )
-                        ) {
-                            items(
-                                items = currentMessages,
-                                key = { message -> message.id } // 添加稳定的key以优化重组性能
-                            ) { message ->
-                                MessageBubble(
-                                    message = message,
-                                    onShowDetails = { onNavigateToMessageDetail(message.id) },
-                                    onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
-                                    onEditUserMessage = { id, text -> 
-                                        chatViewModel.editUserMessageAndResend(id, text) { success, message ->
-                                            if (success) {
-                                                syncSuccessType = "upload"
-                                            } else {
-                                                syncErrorType = "upload"
-                                                scope.launch {
-                                                    snackbarHostState.showSnackbar(
-                                                        message = "同步失败: $message",
-                                                        duration = SnackbarDuration.Short
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    },
-                                    replyBubbleEnabled = replyBubbleEnabled,
-                                    chatFontSize = chatFontSize
-                                )
-                            }
-                        }
-
-                        // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = !(minimalMode && minimalModeConfig.hideCloudUploadButton) && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(
-                                    end = 16.dp,
-                                    bottom = if (showScrollToBottomButton) 80.dp else 16.dp
-                                )
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    cloudSyncViewModel.uploadBackup { success, message ->
-                                        scope.launch {
-                                            if (success) {
-                                                syncSuccessType = "upload"
-                                                syncErrorType = null
-                                            } else {
-                                                syncErrorType = "upload"
-                                                syncSuccessType = null
-                                                snackbarHostState.showSnackbar(message)
-                                            }
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .alpha(0.7f),
-                                containerColor = MaterialTheme.colorScheme.tertiary,
-                                elevation = FloatingActionButtonDefaults.elevation(
-                                    defaultElevation = 0.dp,
-                                    pressedElevation = 0.dp,
-                                    focusedElevation = 0.dp,
-                                    hoveredElevation = 0.dp
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CloudUpload,
-                                    contentDescription = "上传数据到云端",
-                                    tint = MaterialTheme.colorScheme.onTertiary
-                                )
-                            }
-                        }
-
-                        // 回到底部按钮
-                        androidx.compose.animation.AnimatedVisibility(
-                            visible = !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp)
-                        ) {
-                            FloatingActionButton(
-                                onClick = {
-                                    scope.launch {
-                                        if (currentMessages.isNotEmpty()) {
-                                            // 滚动到列表的最底部，包括底部的Spacer
-                                            listState.animateScrollToItem(
-                                                index = currentMessages.size, // 滚动到Spacer项
-                                                scrollOffset = 0 // 确保完全滚动到底部
-                                            )
-                                        }
-                                    }
-                                },
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .alpha(0.7f), // 降低不透明度
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                elevation = FloatingActionButtonDefaults.elevation(
-                                    defaultElevation = 0.dp,
-                                    pressedElevation = 0.dp,
-                                    focusedElevation = 0.dp,
-                                    hoveredElevation = 0.dp
-                                )
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.KeyboardArrowDown,
-                                    contentDescription = "回到底部",
-                                    tint = MaterialTheme.colorScheme.onPrimary
-                                )
-                            }
                         }
                     }
                 }
