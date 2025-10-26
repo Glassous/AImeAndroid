@@ -82,6 +82,8 @@ fun ChatScreen(
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
     val minimalMode by themePreferences.minimalMode.collectAsState(initial = false)
+    // 新增：读取极简模式详细配置
+    val minimalModeConfig by themePreferences.minimalModeConfig.collectAsState(initial = com.glassous.aime.data.model.MinimalModeConfig())
     // 新增：读取回复气泡开关
     val replyBubbleEnabled by themePreferences.replyBubbleEnabled.collectAsState(initial = true)
     // 新增：读取聊天字体大小
@@ -284,7 +286,7 @@ fun ChatScreen(
                             }
                         },
                         navigationIcon = {
-                            if (!minimalMode) {
+                            if (!(minimalMode && minimalModeConfig.hideNavigationMenu)) {
                                 IconButton(onClick = { scope.launch { drawerState.open() } }) {
                                     Icon(
                                         imageVector = Icons.Filled.Menu,
@@ -340,7 +342,9 @@ fun ChatScreen(
                             chatViewModel.updateInputText("")
                         },
                         isLoading = isLoading,
-                        minimalMode = minimalMode
+                        minimalMode = minimalMode,
+                        hideInputBorder = minimalModeConfig.hideInputBorder,
+                        hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground
                     )
                 }
             ) { paddingValues ->
@@ -439,7 +443,7 @@ fun ChatScreen(
                             .fillMaxSize()
                             .padding(paddingValues)
                     ) {
-                        if (!minimalMode) {
+                        if (!(minimalMode && minimalModeConfig.hideWelcomeText)) {
                             Column(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -457,7 +461,7 @@ fun ChatScreen(
 
                         // 云端获取按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
+                            visible = !(minimalMode && minimalModeConfig.hideCloudDownloadButton) && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)
@@ -544,7 +548,7 @@ fun ChatScreen(
 
                         // 云端上传按钮 - 仅在消息列表不为空时显示，位置在回到底部按钮上方
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
+                            visible = !(minimalMode && minimalModeConfig.hideCloudUploadButton) && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(
@@ -588,7 +592,7 @@ fun ChatScreen(
 
                         // 回到底部按钮
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = !minimalMode && showScrollToBottomButton,
+                            visible = !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp)

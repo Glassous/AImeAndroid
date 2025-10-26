@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.data.model.MinimalModeConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,6 +27,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     // 新增：聊天字体大小
     private val _chatFontSize = MutableStateFlow(16f)
     val chatFontSize: StateFlow<Float> = _chatFontSize.asStateFlow()
+
+    // 新增：极简模式配置
+    private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
+    val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
     
     init {
         viewModelScope.launch {
@@ -48,6 +53,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.chatFontSize.collect { size ->
                 _chatFontSize.value = size
+            }
+        }
+        // 收集极简模式配置
+        viewModelScope.launch {
+            themePreferences.minimalModeConfig.collect { config ->
+                _minimalModeConfig.value = config
             }
         }
     }
@@ -75,6 +86,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setChatFontSize(size: Float) {
         viewModelScope.launch {
             themePreferences.setChatFontSize(size)
+        }
+    }
+
+    // 新增：设置极简模式配置
+    fun setMinimalModeConfig(config: MinimalModeConfig) {
+        viewModelScope.launch {
+            themePreferences.setMinimalModeConfig(config)
         }
     }
 }

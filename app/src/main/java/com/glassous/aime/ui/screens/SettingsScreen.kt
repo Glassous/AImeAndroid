@@ -37,6 +37,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import com.glassous.aime.ui.components.FontSizeSettingDialog
+import com.glassous.aime.ui.components.MinimalModeConfigDialog
+import com.glassous.aime.data.model.MinimalModeConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +55,7 @@ fun SettingsScreen(
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
+    var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
@@ -184,7 +187,9 @@ fun SettingsScreen(
 
                     Spacer(modifier = Modifier.height(12.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showMinimalModeConfigDialog = true },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -192,6 +197,11 @@ fun SettingsScreen(
                             Text(
                                 text = "极简模式",
                                 style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "点击配置隐藏的界面元素",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                         Switch(
@@ -418,6 +428,18 @@ fun SettingsScreen(
             onDismiss = { showFontSizeDialog = false },
             onConfirm = { newSize ->
                 themeViewModel.setChatFontSize(newSize)
+            }
+        )
+    }
+    
+    // 极简模式配置弹窗
+    if (showMinimalModeConfigDialog) {
+        val minimalModeConfig by themeViewModel.minimalModeConfig.collectAsState()
+        MinimalModeConfigDialog(
+            config = minimalModeConfig,
+            onDismiss = { showMinimalModeConfigDialog = false },
+            onConfigChange = { newConfig ->
+                themeViewModel.setMinimalModeConfig(newConfig)
             }
         )
     }

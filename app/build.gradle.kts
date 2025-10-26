@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    kotlin("plugin.serialization") version "1.9.10"
 }
 
 android {
@@ -78,6 +79,9 @@ dependencies {
     
     // DataStore
     implementation(libs.androidx.datastore.preferences)
+    
+    // Kotlinx Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
     
     // SplashScreen
     implementation("androidx.core:core-splashscreen:1.0.1")

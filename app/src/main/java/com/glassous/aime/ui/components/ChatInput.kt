@@ -21,6 +21,9 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
 
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LoadingIndicator
@@ -33,6 +36,8 @@ fun ChatInput(
     onSendMessage: () -> Unit,
     isLoading: Boolean = false,
     minimalMode: Boolean = false,
+    hideInputBorder: Boolean = false,
+    hideSendButtonBackground: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
@@ -73,8 +78,8 @@ fun ChatInput(
                 enabled = true,
                 shape = inputShape,
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = if (minimalMode) Color.Transparent else MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = if (minimalMode) Color.Transparent else MaterialTheme.colorScheme.outline,
+                    focusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.outline,
                     focusedContainerColor = MaterialTheme.colorScheme.surface,
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface
                 )
@@ -85,8 +90,8 @@ fun ChatInput(
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
             ) {
-                if (minimalMode) {
-                    // 极简模式：只显示图标，无背景
+                if (minimalMode && hideSendButtonBackground) {
+                    // 极简模式或隐藏发送按钮背景：只显示图标，无背景
                     IconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {

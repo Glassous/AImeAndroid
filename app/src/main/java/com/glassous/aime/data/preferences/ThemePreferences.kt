@@ -10,6 +10,10 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.glassous.aime.data.model.MinimalModeConfig
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "theme_preferences")
 
@@ -21,6 +25,8 @@ class ThemePreferences(private val context: Context) {
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
         private val MINIMAL_MODE = booleanPreferencesKey("minimal_mode")
+        // 新增：极简模式详细配置
+        private val MINIMAL_MODE_CONFIG = stringPreferencesKey("minimal_mode_config")
         // 新增：控制是否启用回复气泡（AI 消息气泡）
         private val REPLY_BUBBLE_ENABLED = booleanPreferencesKey("reply_bubble_enabled")
         // 新增：聊天字体大小设置
@@ -48,6 +54,21 @@ class ThemePreferences(private val context: Context) {
         .map { preferences ->
             preferences[CHAT_FONT_SIZE] ?: 16f
         }
+
+    // 新增：极简模式详细配置
+    val minimalModeConfig: Flow<MinimalModeConfig> = context.dataStore.data
+        .map { preferences ->
+            val configJson = preferences[MINIMAL_MODE_CONFIG]
+            if (configJson != null) {
+                try {
+                    Json.decodeFromString<MinimalModeConfig>(configJson)
+                } catch (e: Exception) {
+                    MinimalModeConfig() // 默认配置
+                }
+            } else {
+                MinimalModeConfig() // 默认配置
+            }
+        }
     
     suspend fun setTheme(theme: String) {
         context.dataStore.edit { preferences ->
@@ -72,6 +93,13 @@ class ThemePreferences(private val context: Context) {
     suspend fun setChatFontSize(size: Float) {
         context.dataStore.edit { preferences ->
             preferences[CHAT_FONT_SIZE] = size
+        }
+    }
+
+    // 新增：设置极简模式详细配置
+    suspend fun setMinimalModeConfig(config: MinimalModeConfig) {
+        context.dataStore.edit { preferences ->
+            preferences[MINIMAL_MODE_CONFIG] = Json.encodeToString(config)
         }
     }
 }
