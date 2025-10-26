@@ -5,6 +5,7 @@ import androidx.lifecycle.*
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.Conversation
+import com.glassous.aime.data.model.Tool
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -48,7 +49,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = text
     }
     
-    fun sendMessage(content: String) {
+    fun sendMessage(content: String, selectedTool: Tool? = null) {
         // Prevent sending empty messages
         if (content.isBlank()) return
         
@@ -71,7 +72,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
-                repository.sendMessage(conversationId, content)
+                repository.sendMessage(conversationId, content, selectedTool)
                 _inputText.value = ""
             } catch (e: Exception) {
                 // Handle error - could show a snackbar or error message

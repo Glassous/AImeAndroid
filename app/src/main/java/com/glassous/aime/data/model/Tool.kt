@@ -1,0 +1,39 @@
+package com.glassous.aime.data.model
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.graphics.vector.ImageVector
+
+/**
+ * 工具类型枚举
+ */
+enum class ToolType(
+    val displayName: String,
+    val icon: ImageVector,
+    val description: String
+) {
+    WEB_SEARCH(
+        displayName = "联网搜索",
+        icon = Icons.Default.Search,
+        description = "通过互联网搜索获取实时信息"
+    );
+    
+    companion object {
+        /**
+         * 获取所有可用的工具
+         */
+        fun getAllTools(): List<ToolType> = values().toList()
+    }
+}
+
+/**
+ * 工具数据类
+ */
+data class Tool(
+    val type: ToolType,
+    val isEnabled: Boolean = true
+) {
+    val displayName: String get() = type.displayName
+    val icon: ImageVector get() = type.icon
+    val description: String get() = type.description
+}

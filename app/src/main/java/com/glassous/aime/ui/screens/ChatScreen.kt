@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,9 +26,11 @@ import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.components.ChatInput
 import com.glassous.aime.ui.components.MessageBubble
 import com.glassous.aime.ui.components.ModelSelectionBottomSheet
+import com.glassous.aime.ui.components.ToolSelectionBottomSheet
 import com.glassous.aime.ui.components.NavigationDrawer
 import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
+import com.glassous.aime.ui.viewmodel.ToolSelectionViewModel
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
 import com.glassous.aime.viewmodel.ChatViewModel
@@ -50,6 +53,7 @@ fun ChatScreen(
     modelSelectionViewModel: ModelSelectionViewModel
 ) {
     val chatViewModel: ChatViewModel = viewModel()
+    val toolSelectionViewModel: ToolSelectionViewModel = viewModel()
     val context = LocalContext.current
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(
         factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application)
@@ -64,6 +68,9 @@ fun ChatScreen(
     val modelSelectionUiState by modelSelectionViewModel.uiState.collectAsState()
     val selectedModel by modelSelectionViewModel.selectedModel.collectAsState()
     val selectedModelDisplayName = selectedModel?.name ?: "请先选择模型"
+
+    val toolSelectionUiState by toolSelectionViewModel.uiState.collectAsState()
+    val selectedTool by toolSelectionViewModel.selectedTool.collectAsState()
 
     // 读取 OSS 配置以控制云端上传/下载按钮显示
     val ossPreferences = remember { OssPreferences(context) }
@@ -135,10 +142,32 @@ fun ChatScreen(
         }
     }
 
-    // 当生成进行、且当前视图已在底部时，保持锚定到底部以避免因内容增长产生跳动
-    LaunchedEffect(isLoading, currentMessages, showScrollToBottomButton) {
-        if (isLoading && !showScrollToBottomButton && currentMessages.isNotEmpty()) {
-            listState.scrollToItem(index = currentMessages.size, scrollOffset = 0)
+    // 记录AI生成开始时的滚动状态
+    var wasAtBottomWhenGenerationStarted by remember { mutableStateOf(false) }
+    
+    // 监听AI生成状态变化
+    LaunchedEffect(isLoading) {
+        if (isLoading) {
+            // AI生成开始时，记录当前是否在底部
+            wasAtBottomWhenGenerationStarted = !showScrollToBottomButton
+        } else {
+            // AI生成结束时，重置状态
+            wasAtBottomWhenGenerationStarted = false
+        }
+    }
+    
+    // 当AI生成进行中且用户原本在底部时，保持在底部
+    LaunchedEffect(currentMessages.size) {
+        if (isLoading && wasAtBottomWhenGenerationStarted && currentMessages.isNotEmpty()) {
+            // 使用协程延迟一小段时间，避免频繁滚动
+            kotlinx.coroutines.delay(50)
+            // 检查是否仍在生成中且用户没有手动滚动
+            if (isLoading && wasAtBottomWhenGenerationStarted) {
+                listState.animateScrollToItem(
+                    index = currentMessages.size,
+                    scrollOffset = 0
+                )
+            }
         }
     }
 
@@ -272,17 +301,33 @@ fun ChatScreen(
                 topBar = {
                     TopAppBar(
                         title = {
-                            // 将模型名称改为可点击的按钮
-                            TextButton(
-                                onClick = { modelSelectionViewModel.showBottomSheet() },
-                                colors = ButtonDefaults.textButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.onSurface
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text(
-                                    text = selectedModelDisplayName,
-                                    style = MaterialTheme.typography.titleLarge
-                                )
+                                // 工具图标
+                                selectedTool?.let { tool ->
+                                    Icon(
+                                        imageVector = tool.icon,
+                                        contentDescription = tool.displayName,
+                                        tint = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .padding(end = 8.dp)
+                                    )
+                                }
+                                
+                                // 将模型名称改为可点击的按钮
+                                TextButton(
+                                    onClick = { modelSelectionViewModel.showBottomSheet() },
+                                    colors = ButtonDefaults.textButtonColors(
+                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                    )
+                                ) {
+                                    Text(
+                                        text = selectedModelDisplayName,
+                                        style = MaterialTheme.typography.titleLarge
+                                    )
+                                }
                             }
                         },
                         navigationIcon = {
@@ -337,7 +382,7 @@ fun ChatScreen(
                         inputText = inputText,
                         onInputChange = chatViewModel::updateInputText,
                         onSendMessage = {
-                            chatViewModel.sendMessage(inputText.trim())
+                            chatViewModel.sendMessage(inputText.trim(), selectedTool)
                             // 清空输入框
                             chatViewModel.updateInputText("")
                         },
@@ -648,7 +693,18 @@ fun ChatScreen(
                             snackbarHostState.showSnackbar(message)
                         }
                     }
+                },
+                onToolSelectionClick = {
+                    toolSelectionViewModel.showBottomSheet()
                 }
+            )
+        }
+
+        // 工具选择Bottom Sheet
+        if (toolSelectionUiState.showBottomSheet) {
+            ToolSelectionBottomSheet(
+                viewModel = toolSelectionViewModel,
+                onDismiss = { toolSelectionViewModel.hideBottomSheet() }
             )
         }
     }

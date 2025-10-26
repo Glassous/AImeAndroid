@@ -15,17 +15,59 @@ data class OpenAiChatMessage(
     val content: String
 )
 
+// Tool function parameter definition
+data class ToolFunctionParameter(
+    val type: String,
+    val description: String? = null,
+    val enum: List<String>? = null
+)
+
+// Tool function parameters schema
+data class ToolFunctionParameters(
+    val type: String = "object",
+    val properties: Map<String, ToolFunctionParameter>,
+    val required: List<String>? = null
+)
+
+// Tool function definition
+data class ToolFunction(
+    val name: String,
+    val description: String,
+    val parameters: ToolFunctionParameters
+)
+
+// Tool definition
+data class Tool(
+    val type: String = "function",
+    val function: ToolFunction
+)
+
 // Request body for chat.completions
 data class ChatCompletionsRequest(
     val model: String,
     val messages: List<OpenAiChatMessage>,
-    val stream: Boolean = true
+    val stream: Boolean = true,
+    val tools: List<Tool>? = null,
+    @SerializedName("tool_choice") val toolChoice: String? = null
 )
 
 // Streaming chunk models (delta)
 data class ChatCompletionsChunkChoiceDelta(
     @SerializedName("content") val content: String?,
-    @SerializedName("role") val role: String? = null
+    @SerializedName("role") val role: String? = null,
+    @SerializedName("tool_calls") val toolCalls: List<ToolCall>? = null
+)
+
+// Tool call definition for streaming responses
+data class ToolCall(
+    val id: String?,
+    val type: String?,
+    val function: ToolCallFunction?
+)
+
+data class ToolCallFunction(
+    val name: String?,
+    val arguments: String?
 )
 
 data class ChatCompletionsChunkChoice(
@@ -57,13 +99,22 @@ class OpenAiService(
         apiKey: String,
         model: String,
         messages: List<OpenAiChatMessage>,
-        onDelta: suspend (String) -> Unit
+        tools: List<Tool>? = null,
+        toolChoice: String? = null,
+        onDelta: suspend (String) -> Unit,
+        onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
         val gson = Gson()
         val normalized = baseUrl.trimEnd('/')
         val withV1 = if ("/v1" in normalized) normalized else normalized + "/v1"
         val endpoint = withV1 + "/chat/completions"
-        val json = gson.toJson(ChatCompletionsRequest(model = model, messages = messages, stream = true))
+        val json = gson.toJson(ChatCompletionsRequest(
+            model = model, 
+            messages = messages, 
+            stream = true,
+            tools = tools,
+            toolChoice = toolChoice
+        ))
         val body = json.toRequestBody("application/json".toMediaType())
 
         val request = Request.Builder()
@@ -112,10 +163,21 @@ class OpenAiService(
                     if (payload == "[DONE]") break
                     try {
                         val chunk = gson.fromJson(payload, ChatCompletionsChunk::class.java)
-                        val delta = chunk?.choices?.firstOrNull()?.delta?.content
-                        if (delta != null) {
-                            finalText.append(delta)
-                            onDelta(delta)
+                        val delta = chunk?.choices?.firstOrNull()?.delta
+                        
+                        // Handle content delta
+                        val content = delta?.content
+                        if (content != null) {
+                            finalText.append(content)
+                            onDelta(content)
+                        }
+                        
+                        // Handle tool calls
+                        val toolCalls = delta?.toolCalls
+                        if (!toolCalls.isNullOrEmpty()) {
+                            toolCalls.forEach { toolCall ->
+                                onToolCall(toolCall)
+                            }
                         }
                     } catch (_: Exception) {
                         // ignore per-chunk parse errors to keep stream resilient

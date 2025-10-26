@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
@@ -56,7 +57,8 @@ import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 fun ModelSelectionBottomSheet(
     viewModel: ModelSelectionViewModel,
     onDismiss: () -> Unit,
-    onSyncResult: ((Boolean, String) -> Unit)? = null
+    onSyncResult: ((Boolean, String) -> Unit)? = null,
+    onToolSelectionClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -148,6 +150,10 @@ fun ModelSelectionBottomSheet(
                             groups = groups,
                             onGroupClick = { group ->
                                 viewModel.selectGroup(group)
+                            },
+                            onToolSelectionClick = {
+                                // 打开工具选择弹窗
+                                onToolSelectionClick()
                             }
                         )
                     } else {
@@ -170,18 +176,76 @@ fun ModelSelectionBottomSheet(
 }
 
 /**
+ * 工具选择项
+ */
+@Composable
+private fun ToolSelectionItem(
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 工具图标
+            Icon(
+                imageVector = Icons.Filled.Build,
+                contentDescription = "工具调用",
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // 工具名称
+            Text(
+                text = "工具调用",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            
+            // 右箭头
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = "选择",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
  * 分组列表
  */
 @Composable
 private fun GroupList(
     groups: List<ModelGroup>,
-    onGroupClick: (ModelGroup) -> Unit
+    onGroupClick: (ModelGroup) -> Unit,
+    onToolSelectionClick: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
+        // 工具调用模块
+        item {
+            ToolSelectionItem(
+                onClick = onToolSelectionClick
+            )
+        }
+        
         items(groups) { group ->
             GroupItem(
                 group = group,

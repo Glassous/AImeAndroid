@@ -72,6 +72,9 @@ dependencies {
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
     
+    // HTML parsing for web search
+    implementation("org.jsoup:jsoup:1.17.2")
+    
     // Database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
