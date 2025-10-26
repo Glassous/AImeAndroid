@@ -8,6 +8,7 @@ import com.glassous.aime.data.preferences.AutoSyncPreferences
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
+import com.google.gson.Gson
 import java.util.Date
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -121,7 +122,7 @@ class ChatRepository(
             // Insert assistant placeholder for streaming
             var assistantMessage = ChatMessage(
                 conversationId = conversationId,
-                content = "",
+                content = "正在思考...",
                 isFromUser = false,
                 timestamp = Date()
             )
@@ -155,6 +156,8 @@ class ChatRepository(
                         },
                         onToolCall = { toolCall ->
                             // 处理工具调用
+                            // 显示工具调用中的占位提示
+                            chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
                             if (toolCall.function?.name == "web_search") {
                                 try {
                                     val arguments = toolCall.function.arguments
@@ -171,7 +174,7 @@ class ChatRepository(
                                             val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
                                                 "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
                                             }
-                                            "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答，并在适当的地方引用相关信息。"
+                                            "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
                                         } else {
                                             "搜索未找到相关结果，请基于你的知识回答用户的问题。"
                                         }
@@ -269,7 +272,7 @@ class ChatRepository(
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
 
             // 清空目标消息，作为新的流式输出占位
-            chatDao.updateMessage(target.copy(content = ""))
+            chatDao.updateMessage(target.copy(content = "正在思考..."))
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -300,6 +303,27 @@ class ChatRepository(
                     )
                 }
 
+            // 构建工具定义（支持网络搜索）
+            val tools = listOf(
+                com.glassous.aime.data.Tool(
+                    type = "function",
+                    function = com.glassous.aime.data.ToolFunction(
+                        name = "web_search",
+                        description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
+                        parameters = com.glassous.aime.data.ToolFunctionParameters(
+                            type = "object",
+                            properties = mapOf(
+                                "query" to com.glassous.aime.data.ToolFunctionParameter(
+                                    type = "string",
+                                    description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                                )
+                            ),
+                            required = listOf("query")
+                        )
+                    )
+                )
+            )
+
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
             val updateInterval = 300L
@@ -310,6 +334,8 @@ class ChatRepository(
                     apiKey = group.apiKey,
                     model = model.modelName,
                     messages = contextMessages,
+                    tools = tools,
+                    toolChoice = "auto",
                     onDelta = { delta ->
                         aggregated.append(delta)
                         val currentTime = System.currentTimeMillis()
@@ -317,6 +343,58 @@ class ChatRepository(
                             val updated = target.copy(content = aggregated.toString())
                             chatDao.updateMessage(updated)
                             lastUpdateTime = currentTime
+                        }
+                    },
+                    onToolCall = { toolCall ->
+                        // 处理工具调用
+                        // 显示工具调用中的占位提示
+                        chatDao.updateMessage(target.copy(content = "正在调用工具..."))
+                        if (toolCall.function?.name == "web_search") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                val gson = com.google.gson.Gson()
+                                val searchArgs = gson.fromJson(arguments, Map::class.java) as Map<String, Any>
+                                val query = searchArgs["query"] as? String ?: ""
+                                
+                                if (query.isNotEmpty()) {
+                                    val searchResponse = webSearchService.search(query)
+                                    
+                                    // 将搜索结果作为系统消息传递给AI进行总结
+                                    val messagesWithSearch = contextMessages.toMutableList()
+                                    messagesWithSearch.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = if (searchResponse.results.isNotEmpty()) {
+                                                val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
+                                                    "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
+                                                }
+                                                "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
+                                            } else {
+                                                "搜索未找到相关结果，请基于你的知识回答用户的问题。"
+                                            }
+                                        )
+                                    )
+                                    
+                                    // 重新调用AI进行总结（不传递tools避免无限循环）
+                                    openAiService.streamChatCompletions(
+                                        baseUrl = group.baseUrl,
+                                        apiKey = group.apiKey,
+                                        model = model.modelName,
+                                        messages = messagesWithSearch,
+                                        onDelta = { delta ->
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = target.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n搜索功能暂时不可用：${e.message}")
+                            }
                         }
                     }
                 )
@@ -486,7 +564,7 @@ class ChatRepository(
             // 插入新的助手消息占位以进行流式写入
             var assistantMessage = ChatMessage(
                 conversationId = conversationId,
-                content = "",
+                content = "正在思考...",
                 isFromUser = false,
                 timestamp = Date()
             )
@@ -497,12 +575,35 @@ class ChatRepository(
             var lastUpdateTime = 0L
             val updateInterval = 300L
 
+            // 定义工具
+            val tools = listOf(
+                com.glassous.aime.data.Tool(
+                    type = "function",
+                    function = com.glassous.aime.data.ToolFunction(
+                        name = "web_search",
+                        description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
+                        parameters = com.glassous.aime.data.ToolFunctionParameters(
+                            type = "object",
+                            properties = mapOf(
+                                "query" to com.glassous.aime.data.ToolFunctionParameter(
+                                    type = "string",
+                                    description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                                )
+                            ),
+                            required = listOf("query")
+                        )
+                    )
+                )
+            )
+
             withContext(Dispatchers.IO) {
                 openAiService.streamChatCompletions(
                     baseUrl = group.baseUrl,
                     apiKey = group.apiKey,
                     model = model.modelName,
                     messages = contextMessages,
+                    tools = tools,
+                    toolChoice = "auto",
                     onDelta = { delta ->
                         aggregated.append(delta)
                         val currentTime = System.currentTimeMillis()
@@ -510,6 +611,68 @@ class ChatRepository(
                             val updated = assistantMessage.copy(content = aggregated.toString())
                             chatDao.updateMessage(updated)
                             lastUpdateTime = currentTime
+                        }
+                    },
+                    onToolCall = { toolCall ->
+                        // 处理工具调用
+                        // 显示工具调用中的占位提示
+                        chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
+                        if (toolCall.function?.name == "web_search") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                if (arguments != null) {
+                                    val gson = com.google.gson.Gson()
+                                    val params = gson.fromJson(arguments, Map::class.java)
+                                    val query = params["query"] as? String ?: ""
+                                    
+                                    // 执行网络搜索
+                                    val searchResponse = webSearchService.search(query)
+                                    
+                                    // 构建包含搜索结果的系统消息，让AI基于搜索结果回答
+                                    val searchResultsText = if (searchResponse.results.isNotEmpty()) {
+                                        val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
+                                            "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
+                                        }
+                                        "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
+                                    } else {
+                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。"
+                                    }
+                                    
+                                    // 将搜索结果作为系统消息添加到消息列表中
+                                    val messagesWithSearch = contextMessages.toMutableList()
+                                    messagesWithSearch.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = searchResultsText
+                                        )
+                                    )
+                                    
+                                    // 重新调用AI，让它基于搜索结果生成回答
+                                    // 注意：这里不再传递工具，避免无限循环
+                                    openAiService.streamChatCompletions(
+                                        baseUrl = group.baseUrl,
+                                        apiKey = group.apiKey,
+                                        model = model.modelName,
+                                        messages = messagesWithSearch,
+                                        tools = null, // 不再传递工具，避免循环调用
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            
+                                            // 节流更新
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        },
+                                        onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n搜索工具暂时不可用：${e.message}\n\n")
+                            }
                         }
                     }
                 )
