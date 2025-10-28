@@ -106,13 +106,32 @@ fun ModelSelectionBottomSheet(
                         modifier = Modifier.padding(start = 8.dp)
                     )
                 } else {
-                    // 显示"选择模型"标题
-                    Text(
-                        text = "选择模型",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(start = 16.dp)
-                    )
+                    // 显示"选择模型"标题和当前模型
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "选择模型",
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                        
+                        // 当前模型显示
+                        val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+                        selectedModel?.let { model ->
+                            Text(
+                                text = model.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
+                        }
+                    }
                 }
             }
             
