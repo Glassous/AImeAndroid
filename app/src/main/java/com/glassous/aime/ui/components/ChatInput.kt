@@ -81,7 +81,8 @@ fun ChatInput(
                     .heightIn(max = 120.dp)
                     .animateContentSize(),
                 placeholder = {
-                    if (!hideInputPlaceholder) {
+                    // 仅在开启极简模式且配置为隐藏时才隐藏占位符
+                    if (!(minimalMode && hideInputPlaceholder)) {
                         Text(
                             text = "输入消息...",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -93,8 +94,8 @@ fun ChatInput(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.outline,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface,
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
                 ),
                 trailingIcon = {
                     // 内嵌按钮行
@@ -192,7 +193,10 @@ fun ChatInput(
                         enabled = inputText.isNotBlank() && !isLoading,
                         modifier = Modifier.size(buttonSize),
                         shape = inputShape,
-                        colors = IconButtonDefaults.filledIconButtonColors()
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        )
                     ) {
                         if (isLoading) {
                             LoadingIndicator(

@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -311,43 +313,66 @@ fun ChatScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 工具图标
-                                selectedTool?.let { tool ->
-                                    Icon(
-                                        imageVector = tool.icon,
-                                        contentDescription = tool.displayName,
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier
-                                            .size(28.dp)
-                                            .padding(end = 8.dp)
-                                    )
+                                // 工具图标：可隐藏；背景始终显示为 50% 透明
+                                if (selectedTool != null && !(minimalMode && minimalModeConfig.hideToolIcon)) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                        shape = CircleShape,
+                                        tonalElevation = 0.dp,
+                                        modifier = Modifier.padding(end = 8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = selectedTool!!.icon,
+                                            contentDescription = selectedTool!!.displayName,
+                                            tint = MaterialTheme.colorScheme.onSurface,
+                                            modifier = Modifier
+                                                .size(28.dp)
+                                                .padding(6.dp)
+                                        )
+                                    }
                                 }
                                 
-                                // 将模型名称改为可点击的按钮
-                                TextButton(
-                                    onClick = { modelSelectionViewModel.showBottomSheet() },
-                                    colors = ButtonDefaults.textButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.onSurface
+                                // 模型按钮背景与页面背景同步；仅在极简模式且隐藏模型文字时整体透明
+                                Surface(
+                                    color = if (minimalMode && minimalModeConfig.hideModelSelectionText) {
+                                        Color.Transparent
+                                    } else {
+                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f)
+                                    },
+                                    shape = MaterialTheme.shapes.small,
+                                    tonalElevation = 0.dp,
+                                    modifier = Modifier.alpha(
+                                        if (minimalMode && minimalModeConfig.hideModelSelectionText) 0f else 1f
                                     )
                                 ) {
-                                    Text(
-                                        text = if (minimalMode && minimalModeConfig.hideModelSelectionText) {
-                                            "                     " // 使用空格确保按钮有足够宽度保持可交互
-                                        } else {
-                                            selectedModelDisplayName
-                                        },
-                                        style = MaterialTheme.typography.titleLarge
-                                    )
+                                    TextButton(
+                                        onClick = { modelSelectionViewModel.showBottomSheet() },
+                                        colors = ButtonDefaults.textButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    ) {
+                                        Text(
+                                            text = selectedModelDisplayName,
+                                            style = MaterialTheme.typography.titleLarge
+                                        )
+                                    }
                                 }
                             }
                         },
                         navigationIcon = {
                             if (!(minimalMode && minimalModeConfig.hideNavigationMenu)) {
-                                IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Menu,
-                                        contentDescription = "打开导航菜单"
-                                    )
+                                // 汉堡菜单背景始终显示为 50% 透明，不再判断
+                                Surface(
+                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                    shape = CircleShape,
+                                    tonalElevation = 0.dp
+                                ) {
+                                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Menu,
+                                            contentDescription = "打开导航菜单"
+                                        )
+                                    }
                                 }
                             }
                         },
@@ -387,7 +412,14 @@ fun ChatScreen(
                                     else -> {}
                                 }
                             }
-                        }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            containerColor = Color.Transparent,
+                            scrolledContainerColor = Color.Transparent,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
                 },
                 bottomBar = {
@@ -544,7 +576,6 @@ fun ChatScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues)
                     ) {
                         if (!(minimalMode && minimalModeConfig.hideWelcomeText)) {
                             Column(
@@ -568,16 +599,25 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(paddingValues),
+                            ,
                         contentPadding = PaddingValues(
                             top = 8.dp,
                             bottom = 6.dp
                         )
                     ) {
+                        // 顶部安全距离Spacer：初始状态保持现有起始位置，滚动后让气泡进入顶部栏区域
+                        item {
+                            Spacer(modifier = Modifier.height(paddingValues.calculateTopPadding()))
+                        }
                         items(
                             items = currentMessages,
                             key = { message -> message.id } // 添加稳定的key以优化重组性能
                         ) { message ->
+                            // 判断是否为最后一条AI消息且正在流式输出
+                            val isLastAiMessage = !message.isFromUser && 
+                                currentMessages.lastOrNull { !it.isFromUser }?.id == message.id
+                            val isStreamingMessage = isLoading && isLastAiMessage
+                            
                             MessageBubble(
                                 message = message,
                                 onShowDetails = { onNavigateToMessageDetail(message.id) },
@@ -598,8 +638,14 @@ fun ChatScreen(
                                     }
                                 },
                                 replyBubbleEnabled = replyBubbleEnabled,
-                                chatFontSize = chatFontSize
+                                chatFontSize = chatFontSize,
+                                isStreaming = isStreamingMessage,
+                                enableTypewriterEffect = true
                             )
+                        }
+                        // 底部安全距离Spacer：初始状态保持现有底部位置，滚动到底后内容可进入输入栏区域
+                        item {
+                            Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
                         }
                     }
                 }
@@ -623,6 +669,7 @@ fun ChatScreen(
                         }
                     }
                 },
+                selectedTool = selectedTool,
                 onToolSelectionClick = {
                     toolSelectionViewModel.showBottomSheet()
                 }

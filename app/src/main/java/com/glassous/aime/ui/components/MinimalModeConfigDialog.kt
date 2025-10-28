@@ -65,6 +65,7 @@ fun MinimalModeConfigDialog(
                              onToggle = { enabled ->
                                  val newConfig = when (item.id) {
                                      "navigation_menu" -> config.copy(hideNavigationMenu = enabled)
+                                     "tool_icon" -> config.copy(hideToolIcon = enabled)
                                      "welcome_text" -> config.copy(hideWelcomeText = enabled)
                                      "cloud_download" -> config.copy(hideCloudDownloadButton = enabled)
                                      "cloud_upload" -> config.copy(hideCloudUploadButton = enabled)

@@ -95,7 +95,7 @@ fun MarkdownRenderer(
     }
 }
 
-private fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
+fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
     val codeBlockPattern = Pattern.compile("```(\\w+)?\\n([\\s\\S]*?)```", Pattern.MULTILINE)
     val matcher = codeBlockPattern.matcher(markdown)

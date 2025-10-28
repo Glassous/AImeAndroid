@@ -46,6 +46,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.model.Tool
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 
 /**
@@ -58,6 +59,7 @@ fun ModelSelectionBottomSheet(
     viewModel: ModelSelectionViewModel,
     onDismiss: () -> Unit,
     onSyncResult: ((Boolean, String) -> Unit)? = null,
+    selectedTool: Tool? = null,
     onToolSelectionClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -120,16 +122,51 @@ fun ModelSelectionBottomSheet(
                             fontWeight = FontWeight.Bold
                         )
                         
-                        // 当前模型显示
-                        val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-                        selectedModel?.let { model ->
-                            Text(
-                                text = model.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(end = 16.dp)
-                            )
+                        // 右侧：工具调用显示 + 当前模型显示
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 当前工具显示（非入口，仅展示）
+                            if (selectedTool != null) {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = selectedTool.icon,
+                                            contentDescription = selectedTool.displayName,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = selectedTool.displayName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                            }
+                            // 当前模型显示
+                            val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+                            selectedModel?.let { model ->
+                                Text(
+                                    text = model.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(end = 16.dp)
+                                )
+                            }
                         }
                     }
                 }

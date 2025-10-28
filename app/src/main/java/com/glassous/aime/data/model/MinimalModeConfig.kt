@@ -17,6 +17,8 @@ data class MinimalModeConfig(
     val hideScrollToBottomButton: Boolean = true,
     val hideInputBorder: Boolean = true,
     val hideSendButtonBackground: Boolean = true,
+    // 新增：隐藏顶部栏工具图标
+    val hideToolIcon: Boolean = false,
     // 新增配置项
     val hideSyncStatusIndicator: Boolean = false,  // 隐藏顶部栏右侧同步提示
     val hideModelSelectionText: Boolean = false,   // 隐藏模型选择按钮文字
@@ -45,6 +47,13 @@ fun getMinimalModeItems(config: MinimalModeConfig): List<MinimalModeItem> {
             description = "顶部导航栏的菜单按钮",
             icon = Icons.Filled.Menu,
             isEnabled = config.hideNavigationMenu
+        ),
+        MinimalModeItem(
+            id = "tool_icon",
+            name = "工具图标",
+            description = "顶部栏的工具图标",
+            icon = Icons.Filled.Build,
+            isEnabled = config.hideToolIcon
         ),
         MinimalModeItem(
             id = "welcome_text",
