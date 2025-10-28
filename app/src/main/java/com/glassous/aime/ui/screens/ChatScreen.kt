@@ -574,9 +574,9 @@ fun ChatScreen(
                             MessageBubble(
                                 message = message,
                                 onShowDetails = { onNavigateToMessageDetail(message.id) },
-                                onRegenerate = { chatViewModel.regenerateFromAssistant(it) },
+                                onRegenerate = { chatViewModel.regenerateFromAssistant(it, selectedTool) },
                                 onEditUserMessage = { id, text -> 
-                                    chatViewModel.editUserMessageAndResend(id, text) { success, message ->
+                                    chatViewModel.editUserMessageAndResend(id, text, selectedTool) { success, message ->
                                         if (success) {
                                             syncSuccessType = "upload"
                                         } else {

@@ -241,7 +241,7 @@ class ChatRepository(
         }
     }
 
-    suspend fun regenerateFromAssistant(conversationId: Long, assistantMessageId: Long): Result<Unit> {
+    suspend fun regenerateFromAssistant(conversationId: Long, assistantMessageId: Long, selectedTool: Tool? = null): Result<Unit> {
         return try {
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == assistantMessageId }
@@ -303,26 +303,28 @@ class ChatRepository(
                     )
                 }
 
-            // 构建工具定义（支持网络搜索）
-            val tools = listOf(
-                com.glassous.aime.data.Tool(
-                    type = "function",
-                    function = com.glassous.aime.data.ToolFunction(
-                        name = "web_search",
-                        description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
-                        parameters = com.glassous.aime.data.ToolFunctionParameters(
-                            type = "object",
-                            properties = mapOf(
-                                "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                    type = "string",
-                                    description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                                )
-                            ),
-                            required = listOf("query")
+            // 构建工具定义（如果选择了工具）
+            val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
+                listOf(
+                    com.glassous.aime.data.Tool(
+                        type = "function",
+                        function = com.glassous.aime.data.ToolFunction(
+                            name = "web_search",
+                            description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
+                            parameters = com.glassous.aime.data.ToolFunctionParameters(
+                                type = "object",
+                                properties = mapOf(
+                                    "query" to com.glassous.aime.data.ToolFunctionParameter(
+                                        type = "string",
+                                        description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                                    )
+                                ),
+                                required = listOf("query")
+                            )
                         )
                     )
                 )
-            )
+            } else null
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
@@ -335,7 +337,7 @@ class ChatRepository(
                     model = model.modelName,
                     messages = contextMessages,
                     tools = tools,
-                    toolChoice = "auto",
+                    toolChoice = if (tools != null) "auto" else null,
                     onDelta = { delta ->
                         aggregated.append(delta)
                         val currentTime = System.currentTimeMillis()
@@ -495,7 +497,7 @@ class ChatRepository(
     }
 
     // Added: edit user message and resend from original position
-    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String, onSyncResult: ((Boolean, String) -> Unit)? = null): Result<Unit> {
+    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String, selectedTool: Tool? = null, onSyncResult: ((Boolean, String) -> Unit)? = null): Result<Unit> {
         return try {
             // 获取完整历史
             val history = chatDao.getMessagesForConversation(conversationId).first()
@@ -575,26 +577,28 @@ class ChatRepository(
             var lastUpdateTime = 0L
             val updateInterval = 300L
 
-            // 定义工具
-            val tools = listOf(
-                com.glassous.aime.data.Tool(
-                    type = "function",
-                    function = com.glassous.aime.data.ToolFunction(
-                        name = "web_search",
-                        description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
-                        parameters = com.glassous.aime.data.ToolFunctionParameters(
-                            type = "object",
-                            properties = mapOf(
-                                "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                    type = "string",
-                                    description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                                )
-                            ),
-                            required = listOf("query")
+            // 定义工具（如果选择了工具）
+            val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
+                listOf(
+                    com.glassous.aime.data.Tool(
+                        type = "function",
+                        function = com.glassous.aime.data.ToolFunction(
+                            name = "web_search",
+                            description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
+                            parameters = com.glassous.aime.data.ToolFunctionParameters(
+                                type = "object",
+                                properties = mapOf(
+                                    "query" to com.glassous.aime.data.ToolFunctionParameter(
+                                        type = "string",
+                                        description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                                    )
+                                ),
+                                required = listOf("query")
+                            )
                         )
                     )
                 )
-            )
+            } else null
 
             withContext(Dispatchers.IO) {
                 openAiService.streamChatCompletions(
@@ -603,7 +607,7 @@ class ChatRepository(
                     model = model.modelName,
                     messages = contextMessages,
                     tools = tools,
-                    toolChoice = "auto",
+                    toolChoice = if (tools != null) "auto" else null,
                     onDelta = { delta ->
                         aggregated.append(delta)
                         val currentTime = System.currentTimeMillis()

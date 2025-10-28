@@ -82,13 +82,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun regenerateFromAssistant(messageId: Long) {
+    fun regenerateFromAssistant(messageId: Long, selectedTool: Tool? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && !msg.isFromUser) {
-                    repository.regenerateFromAssistant(msg.conversationId, msg.id)
+                    repository.regenerateFromAssistant(msg.conversationId, msg.id, selectedTool)
                 }
             } catch (_: Exception) {
                 // swallow for now; UI can display error via message insertion
@@ -98,13 +98,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun editUserMessageAndResend(messageId: Long, newContent: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    fun editUserMessageAndResend(messageId: Long, newContent: String, selectedTool: Tool? = null, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && msg.isFromUser) {
-                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent, onSyncResult)
+                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent, selectedTool, onSyncResult)
                 }
             } catch (_: Exception) {
                 // swallow for now; UI可通过错误消息提示
