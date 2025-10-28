@@ -25,9 +25,7 @@ import android.view.WindowManager
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Install splash screen before calling super.onCreate()
         installSplashScreen()
-        
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Ensure navigation bar is translucent and content lays out behind it

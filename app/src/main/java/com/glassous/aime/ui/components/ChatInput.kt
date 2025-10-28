@@ -41,6 +41,7 @@ fun ChatInput(
     minimalMode: Boolean = false,
     hideInputBorder: Boolean = false,
     hideSendButtonBackground: Boolean = false,
+    hideInputPlaceholder: Boolean = false, // 新增参数：隐藏输入框占位符
     // 新增参数：内嵌按钮
     showUploadButton: Boolean = false,
     showDownloadButton: Boolean = false,
@@ -80,10 +81,12 @@ fun ChatInput(
                     .heightIn(max = 120.dp)
                     .animateContentSize(),
                 placeholder = {
-                    Text(
-                        text = "输入消息...",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    if (!hideInputPlaceholder) {
+                        Text(
+                            text = "输入消息...",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 },
                 enabled = true,
                 shape = inputShape,

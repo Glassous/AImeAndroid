@@ -16,7 +16,11 @@ data class MinimalModeConfig(
     val hideCloudUploadButton: Boolean = true,
     val hideScrollToBottomButton: Boolean = true,
     val hideInputBorder: Boolean = true,
-    val hideSendButtonBackground: Boolean = true
+    val hideSendButtonBackground: Boolean = true,
+    // 新增配置项
+    val hideSyncStatusIndicator: Boolean = false,  // 隐藏顶部栏右侧同步提示
+    val hideModelSelectionText: Boolean = false,   // 隐藏模型选择按钮文字
+    val hideInputPlaceholder: Boolean = false      // 隐藏输入框占位符
 )
 
 /**
@@ -83,6 +87,28 @@ fun getMinimalModeItems(config: MinimalModeConfig): List<MinimalModeItem> {
             description = "发送消息按钮的背景样式",
             icon = Icons.Filled.Send,
             isEnabled = config.hideSendButtonBackground
+        ),
+        // 新增配置项
+        MinimalModeItem(
+            id = "sync_status",
+            name = "同步状态提示",
+            description = "顶部栏右侧的同步状态指示器",
+            icon = Icons.Filled.Sync,
+            isEnabled = config.hideSyncStatusIndicator
+        ),
+        MinimalModeItem(
+            id = "model_selection_text",
+            name = "模型选择文字",
+            description = "模型选择按钮中显示的模型名称文字",
+            icon = Icons.Filled.SmartToy,
+            isEnabled = config.hideModelSelectionText
+        ),
+        MinimalModeItem(
+            id = "input_placeholder",
+            name = "输入框提示文字",
+            description = "输入框中的\"输入消息...\"占位符文字",
+            icon = Icons.Filled.TextFields,
+            isEnabled = config.hideInputPlaceholder
         )
     )
 }

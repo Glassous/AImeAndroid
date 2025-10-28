@@ -331,7 +331,11 @@ fun ChatScreen(
                                     )
                                 ) {
                                     Text(
-                                        text = selectedModelDisplayName,
+                                        text = if (minimalMode && minimalModeConfig.hideModelSelectionText) {
+                                            "                     " // 使用空格确保按钮有足够宽度保持可交互
+                                        } else {
+                                            selectedModelDisplayName
+                                        },
                                         style = MaterialTheme.typography.titleLarge
                                     )
                                 }
@@ -348,38 +352,40 @@ fun ChatScreen(
                             }
                         },
                         actions = {
-                            // 显示同步成功图标
-                            when (syncSuccessType) {
-                                "download" -> {
-                                    Icon(
-                                        imageVector = Icons.Filled.CloudDownload,
-                                        contentDescription = "获取成功",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(end = 12.dp)
-                                    )
+                            // 显示同步成功图标（仅在非极简模式或未隐藏同步状态时显示）
+                            if (!(minimalMode && minimalModeConfig.hideSyncStatusIndicator)) {
+                                when (syncSuccessType) {
+                                    "download" -> {
+                                        Icon(
+                                            imageVector = Icons.Filled.CloudDownload,
+                                            contentDescription = "获取成功",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        )
+                                    }
+                                    "upload" -> {
+                                        Icon(
+                                            imageVector = Icons.Filled.CloudUpload,
+                                            contentDescription = "上传成功",
+                                            tint = MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        )
+                                    }
+                                    else -> {}
                                 }
-                                "upload" -> {
-                                    Icon(
-                                        imageVector = Icons.Filled.CloudUpload,
-                                        contentDescription = "上传成功",
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.padding(end = 12.dp)
-                                    )
-                                }
-                                else -> {}
-                            }
 
-                            // 显示同步失败图标
-                            when (syncErrorType) {
-                                "download", "upload" -> {
-                                    Icon(
-                                        imageVector = Icons.Filled.Close,
-                                        contentDescription = "同步失败",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.padding(end = 12.dp)
-                                    )
+                                // 显示同步失败图标
+                                when (syncErrorType) {
+                                    "download", "upload" -> {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = "同步失败",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.padding(end = 12.dp)
+                                        )
+                                    }
+                                    else -> {}
                                 }
-                                else -> {}
                             }
                         }
                     )
@@ -397,6 +403,7 @@ fun ChatScreen(
                         minimalMode = minimalMode,
                         hideInputBorder = minimalModeConfig.hideInputBorder,
                         hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
+                        hideInputPlaceholder = minimalModeConfig.hideInputPlaceholder,
                         // 内嵌按钮配置
                         showUploadButton = !(minimalMode && minimalModeConfig.hideCloudUploadButton) && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
                         showDownloadButton = !(minimalMode && minimalModeConfig.hideCloudDownloadButton) && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
