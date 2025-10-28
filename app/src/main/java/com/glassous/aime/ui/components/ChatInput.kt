@@ -49,16 +49,19 @@ fun ChatInput(
     onUploadClick: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onScrollToBottomClick: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    overlayAlpha: Float = 0.5f
 ) {
     val focusManager = LocalFocusManager.current
     // 固定发送按钮高度为输入框初始高度（硬编码）
     val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
+    // 根据极简模式与隐藏占位符设置，控制输入框背景透明度
+    val inputContainerAlpha = if (minimalMode && hideInputPlaceholder && inputText.isBlank()) 0f else 0.9f
     
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = Color.Transparent,
+        color = MaterialTheme.colorScheme.background.copy(alpha = overlayAlpha.coerceIn(0f, 1f)),
         tonalElevation = 0.dp
     ) {
         Row(
@@ -67,7 +70,7 @@ fun ChatInput(
                 .padding(
                     start = 16.dp,
                     end = 16.dp,
-                    top = 6.dp,
+                    top = 0.dp,
                     bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 ),
             verticalAlignment = Alignment.Bottom,
@@ -94,8 +97,8 @@ fun ChatInput(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.primary,
                 unfocusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.outline,
-                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = inputContainerAlpha),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = inputContainerAlpha)
                 ),
                 trailingIcon = {
                     // 内嵌按钮行
@@ -194,7 +197,7 @@ fun ChatInput(
                         modifier = Modifier.size(buttonSize),
                         shape = inputShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f),
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
                             contentColor = MaterialTheme.colorScheme.onPrimary
                         )
                     ) {

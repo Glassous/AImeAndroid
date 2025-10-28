@@ -98,6 +98,8 @@ fun ChatScreen(
     val replyBubbleEnabled by themePreferences.replyBubbleEnabled.collectAsState(initial = true)
     // 新增：读取聊天字体大小
     val chatFontSize by themePreferences.chatFontSize.collectAsState(initial = 16f)
+    // 新增：读取聊天页面UI透明度
+    val chatUiOverlayAlpha by themePreferences.chatUiOverlayAlpha.collectAsState(initial = 0.5f)
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -177,6 +179,19 @@ fun ChatScreen(
                     scrollOffset = 0
                 )
             }
+        }
+    }
+
+    // 新增：当进入聊天记录时，自动滚动到最新消息
+    LaunchedEffect(currentMessages.size, currentConversationId) {
+        if (currentMessages.isNotEmpty()) {
+            // 延迟一小段时间确保UI完全渲染
+            kotlinx.coroutines.delay(100)
+            // 滚动到最新消息（最后一条消息）
+            listState.animateScrollToItem(
+                index = currentMessages.size - 1,
+                scrollOffset = 0
+            )
         }
     }
 
@@ -307,6 +322,7 @@ fun ChatScreen(
                             Modifier
                         }
                     ),
+                contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     TopAppBar(
                         title = {
@@ -414,8 +430,8 @@ fun ChatScreen(
                             }
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            scrolledContainerColor = Color.Transparent,
+                            containerColor = MaterialTheme.colorScheme.background.copy(alpha = chatUiOverlayAlpha),
+                            scrolledContainerColor = MaterialTheme.colorScheme.background.copy(alpha = chatUiOverlayAlpha),
                             navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
                             titleContentColor = MaterialTheme.colorScheme.onSurface,
                             actionIconContentColor = MaterialTheme.colorScheme.onSurface
@@ -474,12 +490,13 @@ fun ChatScreen(
                                 if (currentMessages.isNotEmpty()) {
                                     // 滚动到列表的最底部，包括底部的Spacer
                                     listState.animateScrollToItem(
-                                        index = currentMessages.size, // 滚动到Spacer项
+                                        index = currentMessages.size + 1, // 滚动到底部Spacer项（消息数量+顶部Spacer+底部Spacer）
                                         scrollOffset = 0 // 确保完全滚动到底部
                                     )
                                 }
                             }
-                        }
+                        },
+                        overlayAlpha = chatUiOverlayAlpha
                     )
                 }
             ) { paddingValues ->

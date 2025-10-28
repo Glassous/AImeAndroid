@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +23,9 @@ import com.glassous.aime.data.model.getMinimalModeItems
 fun MinimalModeConfigDialog(
     config: MinimalModeConfig,
     onDismiss: () -> Unit,
-    onConfigChange: (MinimalModeConfig) -> Unit
+    onConfigChange: (MinimalModeConfig) -> Unit,
+    fullscreenEnabled: Boolean,
+    onFullscreenChange: (Boolean) -> Unit
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -56,9 +59,17 @@ fun MinimalModeConfigDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 LazyColumn(
-                     modifier = Modifier.height(300.dp),
+                     modifier = Modifier.height(350.dp),
                      verticalArrangement = Arrangement.spacedBy(8.dp)
                  ) {
+                     // 添加全屏显示开关作为第一个项目
+                     item {
+                         FullscreenConfigItem(
+                             fullscreenEnabled = fullscreenEnabled,
+                             onFullscreenChange = onFullscreenChange
+                         )
+                     }
+                     
                      items(getMinimalModeItems(config)) { item ->
                          MinimalModeConfigItem(
                              item = item,
@@ -163,6 +174,85 @@ private fun MinimalModeConfigItem(
             Switch(
                 checked = item.isEnabled,
                 onCheckedChange = onToggle,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = MaterialTheme.colorScheme.primary,
+                    checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                )
+            )
+        }
+     }
+}
+
+@Composable
+private fun FullscreenConfigItem(
+    fullscreenEnabled: Boolean,
+    onFullscreenChange: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+            ) {
+                // 全屏图标预览
+                Card(
+                    modifier = Modifier.size(40.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (fullscreenEnabled) 
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                        else 
+                            MaterialTheme.colorScheme.surface
+                    ),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Fullscreen,
+                            contentDescription = "全屏显示",
+                            tint = if (fullscreenEnabled) 
+                                MaterialTheme.colorScheme.primary
+                            else 
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "全屏显示",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "全屏显示",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // 开关
+            Switch(
+                checked = fullscreenEnabled,
+                onCheckedChange = onFullscreenChange,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = MaterialTheme.colorScheme.primary,
                     checkedTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)

@@ -28,6 +28,14 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatFontSize = MutableStateFlow(16f)
     val chatFontSize: StateFlow<Float> = _chatFontSize.asStateFlow()
 
+    // 新增：聊天页面UI透明度
+    private val _chatUiOverlayAlpha = MutableStateFlow(0.5f)
+    val chatUiOverlayAlpha: StateFlow<Float> = _chatUiOverlayAlpha.asStateFlow()
+
+    // 新增：极简模式下全屏显示
+    private val _minimalModeFullscreen = MutableStateFlow(false)
+    val minimalModeFullscreen: StateFlow<Boolean> = _minimalModeFullscreen.asStateFlow()
+
     // 新增：极简模式配置
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
@@ -53,6 +61,18 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.chatFontSize.collect { size ->
                 _chatFontSize.value = size
+            }
+        }
+        // 收集聊天页面UI透明度
+        viewModelScope.launch {
+            themePreferences.chatUiOverlayAlpha.collect { alpha ->
+                _chatUiOverlayAlpha.value = alpha
+            }
+        }
+        // 收集极简模式下全屏显示开关
+        viewModelScope.launch {
+            themePreferences.minimalModeFullscreen.collect { enabled ->
+                _minimalModeFullscreen.value = enabled
             }
         }
         // 收集极简模式配置
@@ -93,6 +113,20 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setMinimalModeConfig(config: MinimalModeConfig) {
         viewModelScope.launch {
             themePreferences.setMinimalModeConfig(config)
+        }
+    }
+
+    // 新增：设置聊天页面UI透明度
+    fun setChatUiOverlayAlpha(alpha: Float) {
+        viewModelScope.launch {
+            themePreferences.setChatUiOverlayAlpha(alpha)
+        }
+    }
+
+    // 新增：设置极简模式下全屏显示开关
+    fun setMinimalModeFullscreen(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setMinimalModeFullscreen(enabled)
         }
     }
 }

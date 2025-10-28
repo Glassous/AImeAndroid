@@ -38,6 +38,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
+import com.glassous.aime.ui.components.TransparencySettingDialog
 import com.glassous.aime.data.model.MinimalModeConfig
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,8 +54,10 @@ fun SettingsScreen(
     // 新增：回复气泡开关状态
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
+    val chatUiOverlayAlpha by themeViewModel.chatUiOverlayAlpha.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
+    var showTransparencyDialog by remember { mutableStateOf(false) }
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
@@ -210,6 +213,7 @@ fun SettingsScreen(
                         )
                     }
 
+
                     // 新增：启用回复气泡开关
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -244,6 +248,27 @@ fun SettingsScreen(
                             )
                             Text(
                                 text = "${chatFontSize.toInt()}sp",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    // 新增：聊天页面顶部栏透明度设置
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTransparencyDialog = true }
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "修改聊天页面顶部栏透明度",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "${(chatUiOverlayAlpha * 100).toInt()}%",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -431,16 +456,30 @@ fun SettingsScreen(
             }
         )
     }
+
+    // 透明度设置弹窗
+    if (showTransparencyDialog) {
+        TransparencySettingDialog(
+            currentAlpha = chatUiOverlayAlpha,
+            onDismiss = { showTransparencyDialog = false },
+            onConfirm = { newAlpha ->
+                themeViewModel.setChatUiOverlayAlpha(newAlpha)
+            }
+        )
+    }
     
     // 极简模式配置弹窗
     if (showMinimalModeConfigDialog) {
         val minimalModeConfig by themeViewModel.minimalModeConfig.collectAsState()
+        val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
         MinimalModeConfigDialog(
             config = minimalModeConfig,
             onDismiss = { showMinimalModeConfigDialog = false },
             onConfigChange = { newConfig ->
                 themeViewModel.setMinimalModeConfig(newConfig)
-            }
+            },
+            fullscreenEnabled = minimalModeFullscreen,
+            onFullscreenChange = { themeViewModel.setMinimalModeFullscreen(it) }
         )
     }
 }

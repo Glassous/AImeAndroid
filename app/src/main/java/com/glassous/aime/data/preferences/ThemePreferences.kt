@@ -31,6 +31,10 @@ class ThemePreferences(private val context: Context) {
         private val REPLY_BUBBLE_ENABLED = booleanPreferencesKey("reply_bubble_enabled")
         // 新增：聊天字体大小设置
         private val CHAT_FONT_SIZE = floatPreferencesKey("chat_font_size")
+        // 新增：聊天页面UI透明度设置（顶部栏/状态栏区域/底部输入区），0.0-1.0，默认0.5
+        private val CHAT_UI_OVERLAY_ALPHA = floatPreferencesKey("chat_ui_overlay_alpha")
+        // 新增：极简模式下全屏显示
+        private val MINIMAL_MODE_FULLSCREEN = booleanPreferencesKey("minimal_mode_fullscreen")
     }
     
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -53,6 +57,18 @@ class ThemePreferences(private val context: Context) {
     val chatFontSize: Flow<Float> = context.dataStore.data
         .map { preferences ->
             preferences[CHAT_FONT_SIZE] ?: 16f
+        }
+
+    // 新增：聊天页面UI透明度（默认0.5）
+    val chatUiOverlayAlpha: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[CHAT_UI_OVERLAY_ALPHA] ?: 0.5f
+        }
+
+    // 新增：极简模式下全屏显示开关（默认false）
+    val minimalModeFullscreen: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[MINIMAL_MODE_FULLSCREEN] ?: false
         }
 
     // 新增：极简模式详细配置
@@ -93,6 +109,20 @@ class ThemePreferences(private val context: Context) {
     suspend fun setChatFontSize(size: Float) {
         context.dataStore.edit { preferences ->
             preferences[CHAT_FONT_SIZE] = size
+        }
+    }
+
+    // 新增：设置聊天页面UI透明度
+    suspend fun setChatUiOverlayAlpha(alpha: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAT_UI_OVERLAY_ALPHA] = alpha.coerceIn(0f, 1f)
+        }
+    }
+
+    // 新增：设置极简模式下全屏显示开关
+    suspend fun setMinimalModeFullscreen(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[MINIMAL_MODE_FULLSCREEN] = enabled
         }
     }
 

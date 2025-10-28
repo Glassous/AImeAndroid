@@ -22,26 +22,36 @@ import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
 import android.view.View
 import android.view.WindowManager
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // Ensure navigation bar is translucent and content lays out behind it
-        window.addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_NAVIGATION)
-        val decorView = window.decorView
-        decorView.systemUiVisibility = decorView.systemUiVisibility or
-                View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE
         
+        // 设置透明导航栏
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
+        
+        // 关键：设置窗口不适应系统窗口，这对全屏显示很重要
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        // 支持显示刘海屏区域
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode = 
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+        
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val minimalMode by themeViewModel.minimalMode.collectAsState()
+            val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
             
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
@@ -50,6 +60,20 @@ class MainActivity : ComponentActivity() {
             }
             
             AImeTheme(darkTheme = darkTheme) {
+                // 根据极简模式与全屏显示设置动态隐藏系统UI
+                androidx.compose.runtime.SideEffect {
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller?.let { insetsController ->
+                        if (minimalMode && minimalModeFullscreen) {
+                            // 设置全屏模式
+                            insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                            insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                        } else {
+                            // 恢复正常模式
+                            insetsController.show(WindowInsetsCompat.Type.systemBars())
+                        }
+                    }
+                }
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
