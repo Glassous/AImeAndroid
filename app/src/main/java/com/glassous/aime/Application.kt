@@ -1,6 +1,9 @@
 package com.glassous.aime
 
 import android.app.Application
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import com.glassous.aime.data.ChatDatabase
 import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.repository.ModelConfigRepository
@@ -49,6 +52,13 @@ class AIMeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-
+        // 预设分组与模型的初始化（后台）
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                modelConfigRepository.seedDefaultPresets()
+            } catch (_: Exception) {
+                // 忽略预设插入失败，不影响应用启动
+            }
+        }
     }
 }

@@ -13,6 +13,7 @@ data class ModelGroup(
     val name: String,
     val baseUrl: String,
     val apiKey: String,
+    val providerUrl: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 
@@ -26,6 +27,7 @@ data class Model(
     val groupId: String,
     val name: String,
     val modelName: String, // 实际的模型名称，如 gpt-3.5-turbo
+    val remark: String? = null,
     val createdAt: Long = System.currentTimeMillis()
 )
 

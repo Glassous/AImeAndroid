@@ -8,6 +8,7 @@ import com.glassous.aime.data.preferences.AutoSyncPreferences
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 class ModelConfigRepository(
@@ -36,13 +37,14 @@ class ModelConfigRepository(
         modelConfigDao.getModelsByGroupId(groupId)
     
     // 创建新分组
-    suspend fun createGroup(name: String, baseUrl: String, apiKey: String, onSyncResult: ((Boolean, String) -> Unit)? = null): String {
+    suspend fun createGroup(name: String, baseUrl: String, apiKey: String, providerUrl: String?, onSyncResult: ((Boolean, String) -> Unit)? = null): String {
         val groupId = UUID.randomUUID().toString()
         val group = ModelGroup(
             id = groupId,
             name = name,
             baseUrl = baseUrl,
-            apiKey = apiKey
+            apiKey = apiKey,
+            providerUrl = providerUrl
         )
         modelConfigDao.insertGroup(group)
         
@@ -82,13 +84,14 @@ class ModelConfigRepository(
     }
     
     // 添加模型到分组
-    suspend fun addModelToGroup(groupId: String, name: String, modelName: String, onSyncResult: ((Boolean, String) -> Unit)? = null): String {
+    suspend fun addModelToGroup(groupId: String, name: String, modelName: String, remark: String?, onSyncResult: ((Boolean, String) -> Unit)? = null): String {
         val modelId = UUID.randomUUID().toString()
         val model = Model(
             id = modelId,
             groupId = groupId,
             name = name,
-            modelName = modelName
+            modelName = modelName,
+            remark = remark
         )
         modelConfigDao.insertModel(model)
         
@@ -133,4 +136,76 @@ class ModelConfigRepository(
     // 获取模型详情
     suspend fun getModelById(modelId: String): Model? = 
         modelConfigDao.getModelById(modelId)
+
+    // 预设数据种子：插入几组默认模型分组与模型（可删除）
+    suspend fun seedDefaultPresets() {
+        val existingGroups = modelConfigDao.getAllGroups().first()
+
+        // Helper to find or create group by name
+        suspend fun ensureGroup(
+            name: String,
+            baseUrl: String,
+            apiKey: String = "",
+            providerUrl: String? = null
+        ): ModelGroup {
+            val found = existingGroups.find { it.name == name }
+            if (found != null) return found
+            val group = ModelGroup(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                providerUrl = providerUrl
+            )
+            modelConfigDao.insertGroup(group)
+            return group
+        }
+
+        // Helper to insert model if missing by modelName
+        suspend fun ensureModel(groupId: String, name: String, modelName: String, remark: String? = null) {
+            val existingModels = modelConfigDao.getModelsByGroupId(groupId).first()
+            val exists = existingModels.any { it.modelName == modelName }
+            if (exists) return
+            modelConfigDao.insertModel(
+                Model(
+                    id = UUID.randomUUID().toString(),
+                    groupId = groupId,
+                    name = name,
+                    modelName = modelName,
+                    remark = remark
+                )
+            )
+        }
+
+        // 1. OpenRouter
+        val openRouter = ensureGroup(
+            name = "OpenRouter",
+            baseUrl = "https://openrouter.ai/api/v1/chat/completions",
+            providerUrl = "https://openrouter.ai/"
+        )
+        ensureModel(openRouter.id, "GPT-5", "openai/gpt-5", "$1.25/M input tokens $10/M output tokens")
+        ensureModel(openRouter.id, "GPT-5-mini", "openai/gpt-5-mini", "$0.25/M input tokens $2/M output tokens")
+        ensureModel(openRouter.id, "Grok-4-fast", "x-ai/grok-4-fast", "$0.20/M input tokens $0.50/M output tokens")
+        ensureModel(openRouter.id, "Gemini-2.5-flash", "google/gemini-2.5-flash", "$0.30/M input tokens $2.50/M output tokens $1.238/K input imgs")
+        ensureModel(openRouter.id, "Claude-haiku-4.5", "anthropic/claude-haiku-4.5", "$1/M input tokens $5/M output tokens")
+
+        // 2. 阿里云
+        val aliyun = ensureGroup(
+            name = "阿里云",
+            baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
+            providerUrl = "https://bailian.console.aliyun.com/?tab=model#/model-market/all"
+        )
+        ensureModel(aliyun.id, "Qwen-flash", "qwen-flash")
+        ensureModel(aliyun.id, "Qwen3-MAX", "qwen3-max")
+        ensureModel(aliyun.id, "Qwen-plus", "qwen-plus")
+
+        // 3. DeepSeek
+        val deepseek = ensureGroup(
+            name = "DeepSeek",
+            baseUrl = "https://api.deepseek.com",
+            providerUrl = "https://platform.deepseek.com/usage"
+        )
+        ensureModel(deepseek.id, "Deepseek-reasoner", "deepseek-reasoner")
+        ensureModel(deepseek.id, "Deepseek-chat", "deepseek-chat")
+    }
 }

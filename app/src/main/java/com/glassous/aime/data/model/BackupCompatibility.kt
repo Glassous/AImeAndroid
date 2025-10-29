@@ -146,19 +146,15 @@ object BackupDataConverter {
             errors.add("备份文件标记为失败状态")
         }
         
-        // 检查模型分组
+        // 检查模型分组（仅确保ID存在，其余字段可选）
         data.data.modelGroups.forEach { group ->
             if (group.id.isBlank()) errors.add("模型分组ID不能为空")
-            if (group.name.isBlank()) errors.add("模型分组名称不能为空")
-            if (group.baseUrl.isBlank()) errors.add("模型分组BaseUrl不能为空")
         }
         
-        // 检查模型
+        // 检查模型（确保ID与分组ID存在，其余字段可选）
         data.data.models.forEach { model ->
             if (model.id.isBlank()) errors.add("模型ID不能为空")
             if (model.groupId.isBlank()) errors.add("模型分组ID不能为空")
-            if (model.name.isBlank()) errors.add("模型名称不能为空")
-            if (model.modelName.isBlank()) errors.add("模型实际名称不能为空")
         }
         
         // 检查会话
@@ -186,12 +182,11 @@ object BackupDataConverter {
         val sanitizedContent = data.data.copy(
             // 移除空的模型分组
             modelGroups = data.data.modelGroups.filter { 
-                it.id.isNotBlank() && it.name.isNotBlank() && it.baseUrl.isNotBlank() 
+                it.id.isNotBlank()
             },
             // 移除无效的模型
             models = data.data.models.filter { 
-                it.id.isNotBlank() && it.groupId.isNotBlank() && 
-                it.name.isNotBlank() && it.modelName.isNotBlank() 
+                it.id.isNotBlank() && it.groupId.isNotBlank()
             },
             // 清理会话数据
             conversations = data.data.conversations.filter { 

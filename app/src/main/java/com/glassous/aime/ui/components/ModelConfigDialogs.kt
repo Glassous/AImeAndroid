@@ -16,12 +16,13 @@ import com.glassous.aime.data.model.ModelGroup
 @Composable
 fun CreateGroupDialog(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, baseUrl: String, apiKey: String) -> Unit
+    onConfirm: (name: String, baseUrl: String, apiKey: String, providerUrl: String?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var baseUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var showApiKey by remember { mutableStateOf(false) }
+    var providerUrl by remember { mutableStateOf("") }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -45,7 +46,7 @@ fun CreateGroupDialog(
                     label = { Text("Base URL") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("https://api.openai.com/v1") }
+                    placeholder = { Text("请输入Base URL") }
                 )
                 
                 OutlinedTextField(
@@ -54,7 +55,7 @@ fun CreateGroupDialog(
                     label = { Text("API Key") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("请输入API密钥") },
+                    placeholder = { Text("请输入API Key") },
                     visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { showApiKey = !showApiKey }) {
@@ -65,16 +66,23 @@ fun CreateGroupDialog(
                         }
                     }
                 )
+
+                OutlinedTextField(
+                    value = providerUrl,
+                    onValueChange = { providerUrl = it },
+                    label = { Text("服务商官网") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("请输入服务商官网") }
+                )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank()) {
-                        onConfirm(name.trim(), baseUrl.trim(), apiKey.trim())
-                    }
+                    onConfirm(name.trim(), baseUrl.trim(), apiKey.trim(), providerUrl.trim().ifBlank { null })
                 },
-                enabled = name.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank()
+                enabled = true
             ) {
                 Text("创建")
             }
@@ -90,10 +98,11 @@ fun CreateGroupDialog(
 @Composable
 fun AddModelDialog(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, modelName: String) -> Unit
+    onConfirm: (name: String, modelName: String, remark: String?) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var modelName by remember { mutableStateOf("") }
+    var remark by remember { mutableStateOf("") }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -120,6 +129,15 @@ fun AddModelDialog(
                     placeholder = { Text("请输入模型名称") }
                 )
                 
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("备注") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    placeholder = { Text("例如价格、用途、限制说明等") }
+                )
+
                 Text(
                     text = "提示：模型名称应与API提供商的实际模型名称一致",
                     style = MaterialTheme.typography.bodySmall,
@@ -130,11 +148,9 @@ fun AddModelDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && modelName.isNotBlank()) {
-                        onConfirm(name.trim(), modelName.trim())
-                    }
+                    onConfirm(name.trim(), modelName.trim(), remark.trim().ifBlank { null })
                 },
-                enabled = name.isNotBlank() && modelName.isNotBlank()
+                enabled = true
             ) {
                 Text("添加")
             }
@@ -151,12 +167,13 @@ fun AddModelDialog(
 fun EditGroupDialog(
     group: ModelGroup,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, baseUrl: String, apiKey: String) -> Unit
+    onConfirm: (name: String, baseUrl: String, apiKey: String, providerUrl: String?) -> Unit
 ) {
     var name by remember { mutableStateOf(group.name) }
     var baseUrl by remember { mutableStateOf(group.baseUrl) }
     var apiKey by remember { mutableStateOf(group.apiKey) }
     var showApiKey by remember { mutableStateOf(false) }
+    var providerUrl by remember { mutableStateOf(group.providerUrl ?: "") }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -180,7 +197,7 @@ fun EditGroupDialog(
                     label = { Text("Base URL") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("请输入API基础地址") }
+                    placeholder = { Text("请输入Base URL") }
                 )
                 
                 OutlinedTextField(
@@ -189,7 +206,7 @@ fun EditGroupDialog(
                     label = { Text("API Key") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    placeholder = { Text("请输入API密钥") },
+                    placeholder = { Text("请输入API Key") },
                     visualTransformation = if (showApiKey) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = {
                         IconButton(onClick = { showApiKey = !showApiKey }) {
@@ -200,16 +217,23 @@ fun EditGroupDialog(
                         }
                     }
                 )
+
+                OutlinedTextField(
+                    value = providerUrl,
+                    onValueChange = { providerUrl = it },
+                    label = { Text("服务商官网") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text("请输入服务商官网") }
+                )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank()) {
-                        onConfirm(name.trim(), baseUrl.trim(), apiKey.trim())
-                    }
+                    onConfirm(name.trim(), baseUrl.trim(), apiKey.trim(), providerUrl.trim().ifBlank { null })
                 },
-                enabled = name.isNotBlank() && baseUrl.isNotBlank() && apiKey.isNotBlank()
+                enabled = true
             ) {
                 Text("保存")
             }
@@ -226,10 +250,11 @@ fun EditGroupDialog(
 fun EditModelDialog(
     model: Model,
     onDismiss: () -> Unit,
-    onConfirm: (name: String, modelName: String) -> Unit
+    onConfirm: (name: String, modelName: String, remark: String?) -> Unit
 ) {
     var name by remember { mutableStateOf(model.name) }
     var modelName by remember { mutableStateOf(model.modelName) }
+    var remark by remember { mutableStateOf(model.remark ?: "") }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -256,6 +281,15 @@ fun EditModelDialog(
                     placeholder = { Text("请输入模型名称") }
                 )
                 
+                OutlinedTextField(
+                    value = remark,
+                    onValueChange = { remark = it },
+                    label = { Text("备注") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = false,
+                    placeholder = { Text("例如价格、用途、限制说明等") }
+                )
+
                 Text(
                     text = "提示：模型名称应与API提供商的实际模型名称一致",
                     style = MaterialTheme.typography.bodySmall,
@@ -266,11 +300,9 @@ fun EditModelDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    if (name.isNotBlank() && modelName.isNotBlank()) {
-                        onConfirm(name.trim(), modelName.trim())
-                    }
+                    onConfirm(name.trim(), modelName.trim(), remark.trim().ifBlank { null })
                 },
-                enabled = name.isNotBlank() && modelName.isNotBlank()
+                enabled = true
             ) {
                 Text("保存")
             }

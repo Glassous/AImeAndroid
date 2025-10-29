@@ -1,6 +1,7 @@
 package com.glassous.aime.ui.screens
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -28,6 +29,7 @@ import android.os.Build
 import android.view.View
 import android.view.WindowManager
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.core.view.WindowCompat
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.model.Model
@@ -143,8 +145,8 @@ fun ModelConfigScreen(
     if (uiState.showCreateGroupDialog) {
         CreateGroupDialog(
             onDismiss = { viewModel.hideCreateGroupDialog() },
-            onConfirm = { name, baseUrl, apiKey ->
-                viewModel.createGroup(name, baseUrl, apiKey, onSyncResult)
+            onConfirm = { name, baseUrl, apiKey, providerUrl ->
+                viewModel.createGroup(name, baseUrl, apiKey, providerUrl, onSyncResult)
             }
         )
     }
@@ -153,8 +155,8 @@ fun ModelConfigScreen(
     if (uiState.showAddModelDialog && uiState.selectedGroupId != null) {
         AddModelDialog(
             onDismiss = { viewModel.hideAddModelDialog() },
-            onConfirm = { name, modelName ->
-                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName, onSyncResult)
+            onConfirm = { name, modelName, remark ->
+                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName, remark, onSyncResult)
             }
         )
     }
@@ -164,8 +166,8 @@ fun ModelConfigScreen(
         EditGroupDialog(
             group = uiState.selectedGroup!!,
             onDismiss = { viewModel.hideEditGroupDialog() },
-            onConfirm = { name, baseUrl, apiKey ->
-                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey, onSyncResult)
+            onConfirm = { name, baseUrl, apiKey, providerUrl ->
+                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey, providerUrl, onSyncResult)
             }
         )
     }
@@ -175,12 +177,13 @@ fun ModelConfigScreen(
         EditModelDialog(
             model = uiState.selectedModel!!,
             onDismiss = { viewModel.hideEditModelDialog() },
-            onConfirm = { name, modelName ->
+            onConfirm = { name, modelName, remark ->
                 viewModel.updateModel(
                     uiState.selectedModel!!.id,
                     uiState.selectedModel!!.groupId,
                     name,
                     modelName,
+                    remark,
                     onSyncResult
                 )
             }
@@ -252,6 +255,7 @@ fun ModelGroupCard(
     val models by viewModel.getModelsByGroupId(group.id).collectAsState(initial = emptyList())
     var expanded by remember { mutableStateOf(false) }
     var showDeleteGroupConfirm by remember { mutableStateOf(false) }
+    val uriHandler = LocalUriHandler.current
     
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -279,6 +283,16 @@ fun ModelGroupCard(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    if (!group.providerUrl.isNullOrBlank()) {
+                        Text(
+                            text = "官网: ${group.providerUrl}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .padding(top = 2.dp)
+                                .clickable { uriHandler.openUri(group.providerUrl!!) }
+                        )
+                    }
                     Text(
                         text = "模型数量: ${models.size}",
                         style = MaterialTheme.typography.bodySmall,
@@ -401,6 +415,13 @@ fun ModelItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            if (!model.remark.isNullOrBlank()) {
+                Text(
+                    text = model.remark!!,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         
         Row {
