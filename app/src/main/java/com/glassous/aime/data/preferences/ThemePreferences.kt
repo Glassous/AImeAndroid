@@ -35,6 +35,8 @@ class ThemePreferences(private val context: Context) {
         private val CHAT_UI_OVERLAY_ALPHA = floatPreferencesKey("chat_ui_overlay_alpha")
         // 新增：极简模式下全屏显示
         private val MINIMAL_MODE_FULLSCREEN = booleanPreferencesKey("minimal_mode_fullscreen")
+        // 新增：聊天页面单独全屏显示
+        private val CHAT_FULLSCREEN = booleanPreferencesKey("chat_fullscreen")
     }
     
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -59,16 +61,22 @@ class ThemePreferences(private val context: Context) {
             preferences[CHAT_FONT_SIZE] ?: 16f
         }
 
-    // 新增：聊天页面UI透明度（默认0.5）
+    // 新增：聊天页面UI透明度（默认0.75）
     val chatUiOverlayAlpha: Flow<Float> = context.dataStore.data
         .map { preferences ->
-            preferences[CHAT_UI_OVERLAY_ALPHA] ?: 0.5f
+            preferences[CHAT_UI_OVERLAY_ALPHA] ?: 0.75f
         }
 
     // 新增：极简模式下全屏显示开关（默认false）
     val minimalModeFullscreen: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[MINIMAL_MODE_FULLSCREEN] ?: false
+        }
+
+    // 新增：聊天页面单独全屏显示开关（默认false）
+    val chatFullscreen: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[CHAT_FULLSCREEN] ?: false
         }
 
     // 新增：极简模式详细配置
@@ -123,6 +131,13 @@ class ThemePreferences(private val context: Context) {
     suspend fun setMinimalModeFullscreen(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[MINIMAL_MODE_FULLSCREEN] = enabled
+        }
+    }
+
+    // 新增：设置聊天页面单独全屏显示开关
+    suspend fun setChatFullscreen(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAT_FULLSCREEN] = enabled
         }
     }
 

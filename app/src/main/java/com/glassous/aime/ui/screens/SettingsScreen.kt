@@ -55,6 +55,8 @@ fun SettingsScreen(
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
     val chatUiOverlayAlpha by themeViewModel.chatUiOverlayAlpha.collectAsState()
+    // 新增：聊天页面单独全屏显示状态
+    val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
@@ -274,6 +276,31 @@ fun SettingsScreen(
                             )
                         }
                     }
+
+                    // 新增：聊天页面单独全屏显示设置
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "聊天页面全屏显示",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = "独立于极简模式的聊天页面全屏设置",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = chatFullscreen,
+                            onCheckedChange = { themeViewModel.setChatFullscreen(it) }
+                        )
+                    }
                 }
             }
             // 模型配置卡片（移到下方）
@@ -461,10 +488,11 @@ fun SettingsScreen(
     if (showTransparencyDialog) {
         TransparencySettingDialog(
             currentAlpha = chatUiOverlayAlpha,
-            onDismiss = { showTransparencyDialog = false },
-            onConfirm = { newAlpha ->
+            onAlphaChange = { newAlpha ->
                 themeViewModel.setChatUiOverlayAlpha(newAlpha)
-            }
+            },
+            onDismiss = { showTransparencyDialog = false },
+            onConfirm = { showTransparencyDialog = false }
         )
     }
     

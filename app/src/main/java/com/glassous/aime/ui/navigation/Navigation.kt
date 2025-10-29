@@ -58,7 +58,8 @@ fun AppNavigation() {
                 onNavigateToMessageDetail = { id ->
                     navController.navigate("${Screen.MessageDetail.route}/$id")
                 },
-                modelSelectionViewModel = modelSelectionViewModel
+                modelSelectionViewModel = modelSelectionViewModel,
+                themeViewModel = themeViewModel
             )
         }
         

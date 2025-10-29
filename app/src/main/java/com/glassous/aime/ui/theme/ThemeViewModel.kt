@@ -36,6 +36,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _minimalModeFullscreen = MutableStateFlow(false)
     val minimalModeFullscreen: StateFlow<Boolean> = _minimalModeFullscreen.asStateFlow()
 
+    // 新增：聊天页面单独全屏显示
+    private val _chatFullscreen = MutableStateFlow(false)
+    val chatFullscreen: StateFlow<Boolean> = _chatFullscreen.asStateFlow()
+
     // 新增：极简模式配置
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
@@ -73,6 +77,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.minimalModeFullscreen.collect { enabled ->
                 _minimalModeFullscreen.value = enabled
+            }
+        }
+        // 收集聊天页面单独全屏显示开关
+        viewModelScope.launch {
+            themePreferences.chatFullscreen.collect { enabled ->
+                _chatFullscreen.value = enabled
             }
         }
         // 收集极简模式配置
@@ -127,6 +137,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setMinimalModeFullscreen(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setMinimalModeFullscreen(enabled)
+        }
+    }
+
+    // 新增：设置聊天页面单独全屏显示开关
+    fun setChatFullscreen(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setChatFullscreen(enabled)
         }
     }
 }

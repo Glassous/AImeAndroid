@@ -12,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -61,16 +62,25 @@ class MainActivity : ComponentActivity() {
             
             AImeTheme(darkTheme = darkTheme) {
                 // 根据极简模式与全屏显示设置动态隐藏系统UI
-                androidx.compose.runtime.SideEffect {
+                LaunchedEffect(minimalMode, minimalModeFullscreen) {
                     val controller = WindowCompat.getInsetsController(window, window.decorView)
                     controller?.let { insetsController ->
                         if (minimalMode && minimalModeFullscreen) {
-                            // 设置全屏模式
+                            // 设置全屏模式 - 隐藏状态栏和导航栏
                             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                             insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                            
+                            // 额外设置窗口标志以确保全屏效果
+                            window.setFlags(
+                                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                                WindowManager.LayoutParams.FLAG_FULLSCREEN
+                            )
                         } else {
-                            // 恢复正常模式
+                            // 恢复正常模式 - 显示状态栏和导航栏
                             insetsController.show(WindowInsetsCompat.Type.systemBars())
+                            
+                            // 清除全屏标志
+                            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
                         }
                     }
                 }

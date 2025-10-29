@@ -47,13 +47,23 @@ import com.glassous.aime.data.preferences.AutoSyncPreferences
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.platform.LocalView
+import android.app.Activity
+import android.view.WindowManager
+import com.glassous.aime.ui.theme.ThemeViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
     onNavigateToSettings: () -> Unit,
     onNavigateToMessageDetail: (Long) -> Unit,
-    modelSelectionViewModel: ModelSelectionViewModel
+    modelSelectionViewModel: ModelSelectionViewModel,
+    themeViewModel: ThemeViewModel = viewModel()
 ) {
     val chatViewModel: ChatViewModel = viewModel()
     val toolSelectionViewModel: ToolSelectionViewModel = viewModel()
@@ -100,6 +110,48 @@ fun ChatScreen(
     val chatFontSize by themePreferences.chatFontSize.collectAsState(initial = 16f)
     // 新增：读取聊天页面UI透明度
     val chatUiOverlayAlpha by themePreferences.chatUiOverlayAlpha.collectAsState(initial = 0.5f)
+
+    // 新增：读取聊天页面单独全屏显示设置
+    val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
+    // 读取全局极简模式全屏设置
+    val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
+
+    // 获取当前Activity和View用于全屏控制
+    val view = LocalView.current
+    val activity = view.context as? Activity
+
+    // 聊天页面全屏显示控制
+    DisposableEffect(chatFullscreen, minimalMode, minimalModeFullscreen) {
+        activity?.let { act ->
+            val window = act.window
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            
+            // 确定最终的全屏状态：聊天页面独立全屏 OR 全局极简模式全屏
+            val shouldBeFullscreen = chatFullscreen || (minimalMode && minimalModeFullscreen)
+            
+            if (shouldBeFullscreen) {
+                // 设置全屏模式
+                controller?.let { insetsController ->
+                    insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                }
+                // 设置窗口标志确保全屏效果
+                window.setFlags(
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN
+                )
+            } else {
+                // 恢复正常模式
+                controller?.show(WindowInsetsCompat.Type.systemBars())
+                window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            }
+        }
+        
+        onDispose {
+            // 退出聊天页面时，不做任何操作，让MainActivity的全局逻辑接管
+            // 这样可以避免与MainActivity的LaunchedEffect产生冲突
+        }
+    }
 
     val listState = rememberLazyListState()
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
