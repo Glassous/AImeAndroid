@@ -40,6 +40,7 @@ import androidx.compose.foundation.clickable
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
+import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.data.model.MinimalModeConfig
 import android.content.pm.PackageManager
 import android.os.Build
@@ -68,7 +69,10 @@ fun SettingsScreen(
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
+    var showContextLimitDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
+    val app = context.applicationContext as AIMeApplication
+    val contextLimit by app.contextPreferences.maxContextMessages.collectAsState(initial = 5)
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
     val snackbarHostState = remember { SnackbarHostState() }
@@ -341,6 +345,57 @@ fun SettingsScreen(
                         Icon(Icons.Filled.Settings, contentDescription = "模型设置")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("模型设置")
+                    }
+                }
+            }
+
+            // 最大上下文限制卡片（位于模型配置下、云端同步上方）
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "最大上下文限制",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "同一对话仅向AI发送最近N条消息",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showContextLimitDialog = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "当前限制",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                text = if ((contextLimit) <= 0) "无限" else "${contextLimit}条",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { showContextLimitDialog = true }) {
+                            Text("设置")
+                        }
                     }
                 }
             }
@@ -710,6 +765,19 @@ fun SettingsScreen(
         )
     }
     
+    // 最大上下文限制设置弹窗
+    if (showContextLimitDialog) {
+        ContextLimitSettingDialog(
+            currentLimit = contextLimit,
+            onDismiss = { showContextLimitDialog = false },
+            onConfirm = { newLimit ->
+                scope.launch {
+                    app.contextPreferences.setMaxContextMessages(newLimit)
+                }
+            }
+        )
+    }
+
     // 极简模式配置弹窗
     if (showMinimalModeConfigDialog) {
         val minimalModeConfig by themeViewModel.minimalModeConfig.collectAsState()

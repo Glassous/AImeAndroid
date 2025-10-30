@@ -36,6 +36,9 @@ class AIMeApplication : Application() {
     // Auto sync preferences instance
     val autoSyncPreferences by lazy { AutoSyncPreferences(this) }
 
+    // Context limit preferences instance
+    val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
+
     // Cloud sync view model instance
     val cloudSyncViewModel by lazy { CloudSyncViewModel(this) }
 
@@ -46,7 +49,8 @@ class AIMeApplication : Application() {
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,
             autoSyncPreferences = autoSyncPreferences,
-            cloudSyncViewModel = cloudSyncViewModel
+            cloudSyncViewModel = cloudSyncViewModel,
+            contextPreferences = contextPreferences
         )
     }
 

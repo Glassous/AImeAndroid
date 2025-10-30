@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.first
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.AutoSyncPreferences
+import com.glassous.aime.data.preferences.ContextPreferences
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
@@ -22,6 +23,7 @@ class ChatRepository(
     private val modelPreferences: ModelPreferences,
     private val autoSyncPreferences: AutoSyncPreferences,
     private val cloudSyncViewModel: CloudSyncViewModel,
+    private val contextPreferences: ContextPreferences,
     private val openAiService: OpenAiService = OpenAiService(),
     private val webSearchService: WebSearchService = WebSearchService()
 ) {
@@ -87,7 +89,7 @@ class ChatRepository(
 
             // Build conversation context for OpenAI standard
             val history = chatDao.getMessagesForConversation(conversationId).first()
-            val messages = history
+            val baseMessages = history
                 .filter { !it.isError }
                 .map {
                     OpenAiChatMessage(
@@ -97,7 +99,8 @@ class ChatRepository(
                 }
                 .toMutableList()
             
-            messages.add(OpenAiChatMessage(role = "user", content = message))
+            baseMessages.add(OpenAiChatMessage(role = "user", content = message))
+            val messages = limitContext(baseMessages)
             
             // 构建工具定义（如果选择了工具）
             val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
@@ -294,8 +297,8 @@ class ChatRepository(
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
 
-            // 构造到前置用户消息为止的上下文
-            val contextMessages = history.take(prevUserIndex + 1)
+            // 构造到前置用户消息为止的上下文，并应用限制
+            val contextMessagesBase = history.take(prevUserIndex + 1)
                 .filter { !it.isError }
                 .map {
                     OpenAiChatMessage(
@@ -303,6 +306,7 @@ class ChatRepository(
                         content = it.content
                     )
                 }
+            val contextMessages = limitContext(contextMessagesBase)
 
             // 构建工具定义（如果选择了工具）
             val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
@@ -550,8 +554,8 @@ class ChatRepository(
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
 
-            // 构造到该用户消息为止的上下文（包含编辑后的用户消息）
-            val contextMessages = history.take(targetIndex) // 不含旧用户消息
+            // 构造到该用户消息为止的上下文（包含编辑后的用户消息）并应用限制
+            val contextMessagesBase = history.take(targetIndex) // 不含旧用户消息
                 .filter { !it.isError }
                 .map {
                     OpenAiChatMessage(
@@ -560,7 +564,8 @@ class ChatRepository(
                     )
                 }
                 .toMutableList()
-            contextMessages.add(OpenAiChatMessage(role = "user", content = trimmed))
+            contextMessagesBase.add(OpenAiChatMessage(role = "user", content = trimmed))
+            val contextMessages = limitContext(contextMessagesBase)
 
             // 插入新的助手消息占位以进行流式写入
             var assistantMessage = ChatMessage(
@@ -695,6 +700,12 @@ class ChatRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    // 应用最大上下文限制（值<=0表示无限）
+    private suspend fun limitContext(messages: List<OpenAiChatMessage>): List<OpenAiChatMessage> {
+        val limit = contextPreferences.maxContextMessages.first()
+        return if (limit <= 0) messages else messages.takeLast(limit)
     }
 
     private fun safeExtractQuery(arguments: String?, default: String): String {
