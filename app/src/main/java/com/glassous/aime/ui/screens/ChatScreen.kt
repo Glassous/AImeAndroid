@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -56,6 +57,8 @@ import androidx.compose.ui.platform.LocalView
 import android.app.Activity
 import android.view.WindowManager
 import com.glassous.aime.ui.theme.ThemeViewModel
+import com.glassous.aime.data.AutoToolSelector
+import com.glassous.aime.data.model.ModelGroup
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -81,9 +84,15 @@ fun ChatScreen(
     val modelSelectionUiState by modelSelectionViewModel.uiState.collectAsState()
     val selectedModel by modelSelectionViewModel.selectedModel.collectAsState()
     val selectedModelDisplayName = selectedModel?.name ?: "请先选择模型"
+    val groups by modelSelectionViewModel.groups.collectAsState(initial = emptyList())
+    val selectedGroup: ModelGroup? = remember(selectedModel, groups) {
+        groups.firstOrNull { it.id == selectedModel?.groupId }
+    }
 
     val toolSelectionUiState by toolSelectionViewModel.uiState.collectAsState()
     val selectedTool by toolSelectionViewModel.selectedTool.collectAsState()
+    val isAutoSelected by toolSelectionViewModel.isAutoSelected.collectAsState()
+    val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
 
     // 读取 OSS 配置以控制云端上传/下载按钮显示
     val ossPreferences = remember { OssPreferences(context) }
@@ -381,22 +390,73 @@ fun ChatScreen(
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // 工具图标：可隐藏；背景始终显示为 50% 透明
-                                if (selectedTool != null && !(minimalMode && minimalModeConfig.hideToolIcon)) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                        shape = CircleShape,
-                                        tonalElevation = 0.dp,
-                                        modifier = Modifier.padding(end = 8.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = selectedTool!!.icon,
-                                            contentDescription = selectedTool!!.displayName,
-                                            tint = MaterialTheme.colorScheme.onSurface,
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .padding(6.dp)
-                                        )
+                                // 工具图标：自动/实际工具切换；可隐藏；背景始终显示为 50% 透明
+                                if (!(minimalMode && minimalModeConfig.hideToolIcon)) {
+                                    when {
+                                        toolCallInProgress -> {
+                                            // 工具调用进行中：显示实际调用工具（当前为联网搜索）
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                                shape = CircleShape,
+                                                tonalElevation = 0.dp,
+                                                modifier = Modifier.padding(end = 8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
+                                                    contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                                    tint = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .padding(6.dp)
+                                                )
+                                            }
+                                        }
+                                        selectedTool != null -> {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                                shape = CircleShape,
+                                                tonalElevation = 0.dp,
+                                                modifier = Modifier.padding(end = 8.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = selectedTool!!.icon,
+                                                    contentDescription = selectedTool!!.displayName,
+                                                    tint = MaterialTheme.colorScheme.onSurface,
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .padding(6.dp)
+                                                )
+                                            }
+                                        }
+                                        toolSelectionUiState.isProcessing || isAutoSelected -> {
+                                            // 自动模式：显示自动徽标（齿轮 + 星星）
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                                shape = CircleShape,
+                                                tonalElevation = 0.dp,
+                                                modifier = Modifier.padding(end = 8.dp)
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    modifier = Modifier
+                                                        .size(28.dp)
+                                                        .padding(6.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Build,
+                                                        contentDescription = "自动使用工具",
+                                                        tint = MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Filled.Star,
+                                                        contentDescription = "自动使用工具",
+                                                        tint = MaterialTheme.colorScheme.primary
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        else -> {}
                                     }
                                 }
                                 
@@ -495,7 +555,11 @@ fun ChatScreen(
                         inputText = inputText,
                         onInputChange = chatViewModel::updateInputText,
                         onSendMessage = {
-                            chatViewModel.sendMessage(inputText.trim(), selectedTool)
+                            chatViewModel.sendMessage(
+                                inputText.trim(),
+                                selectedTool,
+                                isAutoMode = isAutoSelected
+                            )
                             // 清空输入框
                             chatViewModel.updateInputText("")
                         },
@@ -690,9 +754,20 @@ fun ChatScreen(
                             MessageBubble(
                                 message = message,
                                 onShowDetails = { onNavigateToMessageDetail(message.id) },
-                                onRegenerate = { chatViewModel.regenerateFromAssistant(it, selectedTool) },
+                                onRegenerate = {
+                                    chatViewModel.regenerateFromAssistant(
+                                        it,
+                                        selectedTool,
+                                        isAutoMode = isAutoSelected
+                                    )
+                                },
                                 onEditUserMessage = { id, text -> 
-                                    chatViewModel.editUserMessageAndResend(id, text, selectedTool) { success, message ->
+                                    chatViewModel.editUserMessageAndResend(
+                                        id,
+                                        text,
+                                        selectedTool,
+                                        isAutoMode = isAutoSelected
+                                    ) { success, message ->
                                         if (success) {
                                             syncSuccessType = "upload"
                                         } else {
@@ -741,15 +816,37 @@ fun ChatScreen(
                 selectedTool = selectedTool,
                 onToolSelectionClick = {
                     toolSelectionViewModel.showBottomSheet()
-                }
+                },
+                autoProcessing = toolSelectionUiState.isProcessing,
+                autoSelected = isAutoSelected,
+                toolCallInProgress = toolCallInProgress
             )
         }
 
         // 工具选择Bottom Sheet
         if (toolSelectionUiState.showBottomSheet) {
+            val autoToolSelector = remember(selectedGroup, selectedModel) {
+                val group = selectedGroup
+                val model = selectedModel
+                if (group != null && model != null) {
+                    AutoToolSelector(
+                        baseUrl = group.baseUrl,
+                        apiKey = group.apiKey,
+                        modelName = model.modelName
+                    )
+                } else null
+            }
             ToolSelectionBottomSheet(
                 viewModel = toolSelectionViewModel,
-                onDismiss = { toolSelectionViewModel.hideBottomSheet() }
+                onDismiss = { toolSelectionViewModel.hideBottomSheet() },
+                autoToolSelector = autoToolSelector,
+                onAutoNavigate = { route ->
+                    when (route) {
+                        "settings" -> onNavigateToSettings()
+                        // chat 或未知路由：保持在当前聊天页
+                        else -> {}
+                    }
+                }
             )
         }
     }

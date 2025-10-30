@@ -27,6 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -60,7 +62,10 @@ fun ModelSelectionBottomSheet(
     onDismiss: () -> Unit,
     onSyncResult: ((Boolean, String) -> Unit)? = null,
     selectedTool: Tool? = null,
-    onToolSelectionClick: () -> Unit = {}
+    onToolSelectionClick: () -> Unit = {},
+    autoProcessing: Boolean = false,
+    autoSelected: Boolean = false,
+    toolCallInProgress: Boolean = false
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -127,7 +132,36 @@ fun ModelSelectionBottomSheet(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // 当前工具显示（非入口，仅展示）
-                            if (selectedTool != null) {
+                            if (toolCallInProgress) {
+                                // 工具调用进行中：显示实际调用工具（当前仅支持联网搜索）
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
+                                            contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                            } else if (selectedTool != null) {
                                 Card(
                                     colors = CardDefaults.cardColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -149,6 +183,45 @@ fun ModelSelectionBottomSheet(
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
                                             text = selectedTool.displayName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                            } else if (autoProcessing || autoSelected) {
+                                // 自动使用工具进行中：显示自动徽标（齿轮+星星）
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                    ),
+                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+                                    shape = MaterialTheme.shapes.small
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(modifier = Modifier.size(18.dp)) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Settings,
+                                                contentDescription = "自动使用工具",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.align(Alignment.Center)
+                                            )
+                                            Icon(
+                                                imageVector = Icons.Filled.Star,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier
+                                                    .size(10.dp)
+                                                    .align(Alignment.TopEnd)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "自动使用工具",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )

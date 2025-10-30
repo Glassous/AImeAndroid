@@ -35,7 +35,14 @@ class ChatRepository(
         return chatDao.getAllConversations()
     }
 
-    suspend fun sendMessage(conversationId: Long, message: String, selectedTool: Tool? = null): Result<ChatMessage> {
+    suspend fun sendMessage(
+        conversationId: Long,
+        message: String,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false,
+        onToolCallStart: (() -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null
+    ): Result<ChatMessage> {
         return try {
             // Save user message
             val userMessage = ChatMessage(
@@ -102,8 +109,8 @@ class ChatRepository(
             baseMessages.add(OpenAiChatMessage(role = "user", content = message))
             val messages = limitContext(baseMessages)
             
-            // 构建工具定义（如果选择了工具）
-            val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
+            // 构建工具定义（当选择了工具或处于自动模式时）
+            val tools = if ((selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) || isAutoMode) {
                 listOf(
                     com.glassous.aime.data.Tool(
                         type = "function",
@@ -163,6 +170,7 @@ class ChatRepository(
                         onToolCall = { toolCall ->
                             // 处理工具调用
                             // 显示工具调用中的占位提示
+                            onToolCallStart?.invoke()
                             chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
                             if (toolCall.function?.name == "web_search") {
                                 try {
@@ -219,6 +227,7 @@ class ChatRepository(
                                     aggregated.append("\n\n搜索工具暂时不可用：${e.message}\n\n")
                                 }
                             }
+                            onToolCallEnd?.invoke()
                         }
                     )
                 }
@@ -245,7 +254,14 @@ class ChatRepository(
         }
     }
 
-    suspend fun regenerateFromAssistant(conversationId: Long, assistantMessageId: Long, selectedTool: Tool? = null): Result<Unit> {
+    suspend fun regenerateFromAssistant(
+        conversationId: Long,
+        assistantMessageId: Long,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false,
+        onToolCallStart: (() -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null
+    ): Result<Unit> {
         return try {
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == assistantMessageId }
@@ -308,8 +324,8 @@ class ChatRepository(
                 }
             val contextMessages = limitContext(contextMessagesBase)
 
-            // 构建工具定义（如果选择了工具）
-            val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
+            // 构建工具定义（当选择了工具或处于自动模式时）
+            val tools = if ((selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) || isAutoMode) {
                 listOf(
                     com.glassous.aime.data.Tool(
                         type = "function",
@@ -355,6 +371,7 @@ class ChatRepository(
                     onToolCall = { toolCall ->
                         // 处理工具调用
                         // 显示工具调用中的占位提示
+                        onToolCallStart?.invoke()
                         chatDao.updateMessage(target.copy(content = "正在调用工具..."))
                         if (toolCall.function?.name == "web_search") {
                             try {
@@ -401,6 +418,7 @@ class ChatRepository(
                                 aggregated.append("\n\n搜索功能暂时不可用：${e.message}")
                             }
                         }
+                        onToolCallEnd?.invoke()
                     }
                 )
             }
@@ -500,7 +518,16 @@ class ChatRepository(
     }
 
     // Added: edit user message and resend from original position
-    suspend fun editUserMessageAndResend(conversationId: Long, userMessageId: Long, newContent: String, selectedTool: Tool? = null, onSyncResult: ((Boolean, String) -> Unit)? = null): Result<Unit> {
+    suspend fun editUserMessageAndResend(
+        conversationId: Long,
+        userMessageId: Long,
+        newContent: String,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false,
+        onToolCallStart: (() -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null,
+        onSyncResult: ((Boolean, String) -> Unit)? = null
+    ): Result<Unit> {
         return try {
             // 获取完整历史
             val history = chatDao.getMessagesForConversation(conversationId).first()
@@ -581,8 +608,8 @@ class ChatRepository(
             var lastUpdateTime = 0L
             val updateInterval = 300L
 
-            // 定义工具（如果选择了工具）
-            val tools = if (selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) {
+            // 定义工具（当选择了工具或处于自动模式时）
+            val tools = if ((selectedTool != null && selectedTool.type == ToolType.WEB_SEARCH) || isAutoMode) {
                 listOf(
                     com.glassous.aime.data.Tool(
                         type = "function",
@@ -624,6 +651,7 @@ class ChatRepository(
                     onToolCall = { toolCall ->
                         // 处理工具调用
                         // 显示工具调用中的占位提示
+                        onToolCallStart?.invoke()
                         chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
                         if (toolCall.function?.name == "web_search") {
                             try {
@@ -680,6 +708,7 @@ class ChatRepository(
                                 aggregated.append("\n\n搜索工具暂时不可用：${e.message}\n\n")
                             }
                         }
+                        onToolCallEnd?.invoke()
                     }
                 )
             }

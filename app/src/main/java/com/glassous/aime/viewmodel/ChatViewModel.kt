@@ -49,7 +49,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = text
     }
     
-    fun sendMessage(content: String, selectedTool: Tool? = null) {
+    private val _toolCallInProgress = MutableStateFlow(false)
+    val toolCallInProgress: StateFlow<Boolean> = _toolCallInProgress.asStateFlow()
+
+    fun sendMessage(content: String, selectedTool: Tool? = null, isAutoMode: Boolean = false) {
         // Prevent sending empty messages
         if (content.isBlank()) return
         
@@ -72,7 +75,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
-                repository.sendMessage(conversationId, content, selectedTool)
+                repository.sendMessage(
+                    conversationId,
+                    content,
+                    selectedTool,
+                    isAutoMode,
+                    onToolCallStart = { _toolCallInProgress.value = true },
+                    onToolCallEnd = { _toolCallInProgress.value = false }
+                )
                 _inputText.value = ""
             } catch (e: Exception) {
                 // Handle error - could show a snackbar or error message
@@ -82,13 +92,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun regenerateFromAssistant(messageId: Long, selectedTool: Tool? = null) {
+    fun regenerateFromAssistant(messageId: Long, selectedTool: Tool? = null, isAutoMode: Boolean = false) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && !msg.isFromUser) {
-                    repository.regenerateFromAssistant(msg.conversationId, msg.id, selectedTool)
+                    repository.regenerateFromAssistant(
+                        msg.conversationId,
+                        msg.id,
+                        selectedTool,
+                        isAutoMode,
+                        onToolCallStart = { _toolCallInProgress.value = true },
+                        onToolCallEnd = { _toolCallInProgress.value = false }
+                    )
                 }
             } catch (_: Exception) {
                 // swallow for now; UI can display error via message insertion
@@ -98,13 +115,22 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun editUserMessageAndResend(messageId: Long, newContent: String, selectedTool: Tool? = null, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    fun editUserMessageAndResend(messageId: Long, newContent: String, selectedTool: Tool? = null, isAutoMode: Boolean = false, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && msg.isFromUser) {
-                    repository.editUserMessageAndResend(msg.conversationId, msg.id, newContent, selectedTool, onSyncResult)
+                    repository.editUserMessageAndResend(
+                        msg.conversationId,
+                        msg.id,
+                        newContent,
+                        selectedTool,
+                        isAutoMode,
+                        onToolCallStart = { _toolCallInProgress.value = true },
+                        onToolCallEnd = { _toolCallInProgress.value = false },
+                        onSyncResult = onSyncResult
+                    )
                 }
             } catch (_: Exception) {
                 // swallow for now; UI可通过错误消息提示

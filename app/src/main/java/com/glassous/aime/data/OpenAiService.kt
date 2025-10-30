@@ -61,6 +61,7 @@ data class ChatCompletionsChunkChoiceDelta(
 
 // Tool call definition for streaming responses
 data class ToolCall(
+    @SerializedName("index") val index: Int? = null,
     val id: String?,
     val type: String?,
     val function: ToolCallFunction?
@@ -78,6 +79,8 @@ data class FunctionCall(
 )
 
 data class ChatCompletionsChunkChoice(
+    val index: Int? = null,
+    @SerializedName("finish_reason") val finishReason: String? = null,
     val delta: ChatCompletionsChunkChoiceDelta?
 )
 
@@ -100,6 +103,12 @@ data class OpenAiErrorResponse(
 class OpenAiService(
     private val client: OkHttpClient = OkHttpClient()
 ) {
+    private data class AccToolCall(
+        var id: String? = null,
+        var type: String? = null,
+        var name: String? = null,
+        val arguments: StringBuilder = StringBuilder()
+    )
     // Stream chat completion tokens; returns final aggregated text
     suspend fun streamChatCompletions(
         baseUrl: String,
@@ -158,6 +167,10 @@ class OpenAiService(
         }
         val source: BufferedSource = respBody.source()
         val finalText = StringBuilder()
+        // Accumulate tool calls across deltas to ensure complete arguments
+        val accumulatedToolCalls = mutableMapOf<Int, AccToolCall>()
+        var hasEmittedToolCalls = false
+        var accFunctionCall: AccToolCall? = null
         try {
             while (true) {
                 val line = source.readUtf8Line() ?: break
@@ -167,35 +180,98 @@ class OpenAiService(
                 // Only process data lines; ignore id/event/retry
                 if (line.startsWith("data:")) {
                     val payload = line.removePrefix("data:").trim()
-                    if (payload == "[DONE]") break
+                    if (payload == "[DONE]") {
+                        // Flush accumulated tool calls at end if not emitted
+                        if (!hasEmittedToolCalls) {
+                            accumulatedToolCalls.forEach { (_, acc) ->
+                                val tc = ToolCall(
+                                    id = acc.id,
+                                    type = acc.type,
+                                    function = ToolCallFunction(
+                                        name = acc.name,
+                                        arguments = acc.arguments.toString()
+                                    )
+                                )
+                                onToolCall(tc)
+                            }
+                            if (accumulatedToolCalls.isEmpty()) {
+                                accFunctionCall?.let { acc ->
+                                    val tc = ToolCall(
+                                        id = null,
+                                        type = "function",
+                                        function = ToolCallFunction(
+                                            name = acc.name,
+                                            arguments = acc.arguments.toString()
+                                        )
+                                    )
+                                    onToolCall(tc)
+                                }
+                            }
+                            hasEmittedToolCalls = true
+                        }
+                        break
+                    }
                     try {
                         val chunk = gson.fromJson(payload, ChatCompletionsChunk::class.java)
-                        val delta = chunk?.choices?.firstOrNull()?.delta
-                        
-                        // Handle content delta
-                        val content = delta?.content
-                        if (content != null) {
-                            finalText.append(content)
-                            onDelta(content)
-                        }
-                        
-                        // Handle tool calls
-                        val toolCalls = delta?.toolCalls
-                        if (!toolCalls.isNullOrEmpty()) {
-                            toolCalls.forEach { toolCall ->
-                                onToolCall(toolCall)
+                        val choices = chunk?.choices ?: emptyList()
+                        choices.forEach { choice ->
+                            val delta = choice.delta
+                            // Handle content delta
+                            val content = delta?.content
+                            if (content != null) {
+                                finalText.append(content)
+                                onDelta(content)
                             }
-                        }
-
-                        // Handle function_call (compat for providers emitting `function_call`)
-                        val fn = delta?.functionCall
-                        if (fn != null && (fn.name != null || fn.arguments != null)) {
-                            val synthetic = ToolCall(
-                                id = null,
-                                type = "function",
-                                function = ToolCallFunction(name = fn.name, arguments = fn.arguments)
-                            )
-                            onToolCall(synthetic)
+                            // Accumulate tool_calls deltas
+                            val toolCalls = delta?.toolCalls
+                            if (!toolCalls.isNullOrEmpty()) {
+                                toolCalls.forEach { toolCall ->
+                                    val idx = toolCall.index ?: 0
+                                    val acc = accumulatedToolCalls.getOrPut(idx) { AccToolCall() }
+                                    if (toolCall.id != null) acc.id = toolCall.id
+                                    if (toolCall.type != null) acc.type = toolCall.type
+                                    val name = toolCall.function?.name
+                                    if (name != null) acc.name = name
+                                    val argsChunk = toolCall.function?.arguments
+                                    if (argsChunk != null) acc.arguments.append(argsChunk)
+                                }
+                            }
+                            // Accumulate function_call deltas (compat)
+                            val fn = delta?.functionCall
+                            if (fn != null && (fn.name != null || fn.arguments != null)) {
+                                val acc = accFunctionCall ?: AccToolCall().also { accFunctionCall = it }
+                                if (fn.name != null) acc.name = fn.name
+                                if (fn.arguments != null) acc.arguments.append(fn.arguments)
+                            }
+                            // Flush when finish_reason indicates tool_calls
+                            val finish = choice.finishReason
+                            if (finish == "tool_calls" && !hasEmittedToolCalls) {
+                                accumulatedToolCalls.forEach { (_, acc) ->
+                                    val tc = ToolCall(
+                                        id = acc.id,
+                                        type = acc.type,
+                                        function = ToolCallFunction(
+                                            name = acc.name,
+                                            arguments = acc.arguments.toString()
+                                        )
+                                    )
+                                    onToolCall(tc)
+                                }
+                                if (accumulatedToolCalls.isEmpty()) {
+                                    accFunctionCall?.let { acc ->
+                                        val tc = ToolCall(
+                                            id = null,
+                                            type = "function",
+                                            function = ToolCallFunction(
+                                                name = acc.name,
+                                                arguments = acc.arguments.toString()
+                                            )
+                                        )
+                                        onToolCall(tc)
+                                    }
+                                }
+                                hasEmittedToolCalls = true
+                            }
                         }
                     } catch (_: Exception) {
                         // ignore per-chunk parse errors to keep stream resilient
