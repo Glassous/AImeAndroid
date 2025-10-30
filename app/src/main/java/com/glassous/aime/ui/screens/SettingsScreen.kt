@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import com.glassous.aime.R
 import com.glassous.aime.ui.theme.ThemeViewModel
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -40,6 +41,12 @@ import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
 import com.glassous.aime.data.model.MinimalModeConfig
+import android.content.pm.PackageManager
+import android.os.Build
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.net.URL
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -466,6 +473,213 @@ fun SettingsScreen(
                             modifier = Modifier.weight(1f)
                         ) {
                             Text("从本地导入")
+                        }
+                    }
+                }
+            }
+
+            // 应用信息卡片（位于页面最底部）
+            val uriHandler = LocalUriHandler.current
+            var checkingUpdate by remember { mutableStateOf(false) }
+            var latestTag by remember { mutableStateOf<String?>(null) }
+            var latestApkUrl by remember { mutableStateOf<String?>(null) }
+            var updateStatus by remember { mutableStateOf<String?>(null) }
+
+            fun getCurrentVersionName(ctx: android.content.Context): String {
+                return try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        ctx.packageManager.getPackageInfo(
+                            ctx.packageName,
+                            PackageManager.PackageInfoFlags.of(0)
+                        ).versionName ?: "unknown"
+                    } else {
+                        @Suppress("DEPRECATION")
+                        ctx.packageManager.getPackageInfo(ctx.packageName, 0).versionName ?: "unknown"
+                    }
+                } catch (e: Exception) {
+                    "unknown"
+                }
+            }
+
+            val appVersionName = remember { getCurrentVersionName(context) }
+
+            fun normalizeVersion(v: String): List<Int> {
+                val clean = v.trim().removePrefix("v")
+                val parts = clean.split('.')
+                return listOf(
+                    parts.getOrNull(0)?.toIntOrNull() ?: 0,
+                    parts.getOrNull(1)?.toIntOrNull() ?: 0,
+                    parts.getOrNull(2)?.toIntOrNull() ?: 0
+                )
+            }
+
+            fun isNewerVersion(latest: String, current: String): Boolean {
+                val l = normalizeVersion(latest)
+                val c = normalizeVersion(current)
+                return when {
+                    l[0] != c[0] -> l[0] > c[0]
+                    l[1] != c[1] -> l[1] > c[1]
+                    else -> l[2] > c[2]
+                }
+            }
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "应用信息",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // 应用名称
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "应用名称", style = MaterialTheme.typography.titleSmall)
+                        Text(text = "AIme", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    // 版本号（通过 BuildConfig 读取）
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "版本号", style = MaterialTheme.typography.titleSmall)
+                        Text(text = "v${appVersionName}", style = MaterialTheme.typography.bodyMedium)
+                    }
+
+                    // Github 仓库链接
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = "Github 仓库", style = MaterialTheme.typography.titleSmall)
+                        OutlinedButton(onClick = {
+                            uriHandler.openUri("https://github.com/Glassous/AImeAndroid")
+                        }) {
+                            Text("打开仓库")
+                        }
+                    }
+
+                    // 版本更新检测
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        Text(
+                            text = "版本更新检测",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Button(
+                                onClick = {
+                                    if (checkingUpdate) return@Button
+                                    checkingUpdate = true
+                                    updateStatus = null
+                                    latestApkUrl = null
+                                    latestTag = null
+                                    scope.launch {
+                                        val apiUrl = "https://api.github.com/repos/Glassous/AImeAndroid/releases/latest"
+                                        try {
+                                            val jsonStr = withContext(Dispatchers.IO) {
+                                                URL(apiUrl).readText()
+                                            }
+                                            val obj = JSONObject(jsonStr)
+                                            val tag = obj.optString("tag_name")
+                                            latestTag = tag
+
+                                            // 寻找符合命名规则的APK资源：AIme-vx.x.z.apk
+                                            val assets = obj.optJSONArray("assets")
+                                            var apkUrl: String? = null
+                                            if (assets != null) {
+                                                for (i in 0 until assets.length()) {
+                                                    val a = assets.optJSONObject(i)
+                                                    val name = a?.optString("name") ?: ""
+                                                    val url = a?.optString("browser_download_url")
+                                                    if (name.endsWith(".apk")) {
+                                                        // 优先匹配 AIme-v<tag>.apk
+                                                        if (tag.isNotBlank() && name == "AIme-${tag}.apk") {
+                                                            apkUrl = url
+                                                            break
+                                                        } else if (apkUrl == null) {
+                                                            apkUrl = url // 兜底取第一个apk
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            latestApkUrl = apkUrl
+
+                                            val current = appVersionName
+                                            val newer = tag.isNotBlank() && isNewerVersion(tag, current)
+                                            updateStatus = if (newer) {
+                                                "发现新版本 ${tag}"
+                                            } else {
+                                                "当前已是最新版本"
+                                            }
+                                        } catch (e: Exception) {
+                                            updateStatus = "检查失败：" + (e.message ?: "未知错误")
+                                        } finally {
+                                            checkingUpdate = false
+                                        }
+                                    }
+                                },
+                                enabled = !checkingUpdate
+                            ) {
+                                Text(if (checkingUpdate) "检测中..." else "检查更新")
+                            }
+
+                            // 打开 Release 页面（若已获取到 tag 则指向对应版本）
+                            OutlinedButton(onClick = {
+                                val url = latestTag?.let { "https://github.com/Glassous/AImeAndroid/releases/tag/${it}" }
+                                    ?: "https://github.com/Glassous/AImeAndroid/releases/tag/v2.1.0"
+                                uriHandler.openUri(url)
+                            }) {
+                                Text("打开Release")
+                            }
+
+                            // 下载更新（当检测到APK时出现）
+                            if (!checkingUpdate && latestApkUrl != null) {
+                                Button(onClick = { uriHandler.openUri(latestApkUrl!!) }) {
+                                    Text("下载更新")
+                                }
+                            }
+                        }
+
+                        if (updateStatus != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = updateStatus!!,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
                 }
