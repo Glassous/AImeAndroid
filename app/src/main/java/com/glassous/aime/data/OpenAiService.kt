@@ -55,7 +55,8 @@ data class ChatCompletionsRequest(
 data class ChatCompletionsChunkChoiceDelta(
     @SerializedName("content") val content: String?,
     @SerializedName("role") val role: String? = null,
-    @SerializedName("tool_calls") val toolCalls: List<ToolCall>? = null
+    @SerializedName("tool_calls") val toolCalls: List<ToolCall>? = null,
+    @SerializedName("function_call") val functionCall: FunctionCall? = null
 )
 
 // Tool call definition for streaming responses
@@ -66,6 +67,12 @@ data class ToolCall(
 )
 
 data class ToolCallFunction(
+    val name: String?,
+    val arguments: String?
+)
+
+// Some providers (e.g., Aliyun DashScope compatible) emit `function_call` instead of `tool_calls`
+data class FunctionCall(
     val name: String?,
     val arguments: String?
 )
@@ -178,6 +185,17 @@ class OpenAiService(
                             toolCalls.forEach { toolCall ->
                                 onToolCall(toolCall)
                             }
+                        }
+
+                        // Handle function_call (compat for providers emitting `function_call`)
+                        val fn = delta?.functionCall
+                        if (fn != null && (fn.name != null || fn.arguments != null)) {
+                            val synthetic = ToolCall(
+                                id = null,
+                                type = "function",
+                                function = ToolCallFunction(name = fn.name, arguments = fn.arguments)
+                            )
+                            onToolCall(synthetic)
                         }
                     } catch (_: Exception) {
                         // ignore per-chunk parse errors to keep stream resilient

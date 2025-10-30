@@ -10,6 +10,9 @@ import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
 import com.google.gson.Gson
 import java.util.Date
+import com.google.gson.reflect.TypeToken
+import com.google.gson.stream.JsonReader
+import java.io.StringReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -162,9 +165,7 @@ class ChatRepository(
                                 try {
                                     val arguments = toolCall.function.arguments
                                     if (arguments != null) {
-                                        val gson = com.google.gson.Gson()
-                                        val params = gson.fromJson(arguments, Map::class.java)
-                                        val query = params["query"] as? String ?: message
+                                        val query = safeExtractQuery(arguments, message)
                                         
                                         // 执行网络搜索
                                         val searchResponse = webSearchService.search(query)
@@ -354,9 +355,7 @@ class ChatRepository(
                         if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val gson = com.google.gson.Gson()
-                                val searchArgs = gson.fromJson(arguments, Map::class.java) as Map<String, Any>
-                                val query = searchArgs["query"] as? String ?: ""
+                                val query = safeExtractQuery(arguments, "")
                                 
                                 if (query.isNotEmpty()) {
                                     val searchResponse = webSearchService.search(query)
@@ -625,9 +624,7 @@ class ChatRepository(
                             try {
                                 val arguments = toolCall.function.arguments
                                 if (arguments != null) {
-                                    val gson = com.google.gson.Gson()
-                                    val params = gson.fromJson(arguments, Map::class.java)
-                                    val query = params["query"] as? String ?: ""
+                                    val query = safeExtractQuery(arguments, "")
                                     
                                     // 执行网络搜索
                                     val searchResponse = webSearchService.search(query)
@@ -698,5 +695,37 @@ class ChatRepository(
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+
+    private fun safeExtractQuery(arguments: String?, default: String): String {
+        if (arguments.isNullOrBlank()) return default
+        val raw = arguments.trim()
+        val gson = Gson()
+
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                val value = map["query"] as? String
+                if (value.isNullOrBlank()) null else value
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        tryParse(raw)?.let { return it }
+
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+
+        val regexQuoted = Regex("""(?i)\"?query\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""")
+        val regexUnquoted = Regex("""(?i)\"?query\"?\s*[:=]\s*([^,}\n\r]+)""")
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // Fallback: if arguments is plain text, use it directly
+        return raw
     }
 }
