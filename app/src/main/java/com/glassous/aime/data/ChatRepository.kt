@@ -327,7 +327,7 @@ class ChatRepository(
             val target = history[targetIndex]
             if (target.isFromUser) return Result.failure(IllegalArgumentException("Cannot regenerate user message"))
 
-            // find previous user message
+            // 寻找前置用户消息；若找不到，则回退到最近一条有效用户消息
             var prevUserIndex = -1
             for (i in targetIndex - 1 downTo 0) {
                 if (history[i].isFromUser && !history[i].isError) {
@@ -336,14 +336,20 @@ class ChatRepository(
                 }
             }
             if (prevUserIndex == -1) {
-                // 更新目标消息为错误提示
-                chatDao.updateMessage(
-                    target.copy(
-                        content = "无法重新生成：缺少前置用户消息。",
-                        isError = true
+                // 回退：使用整个会话中最近一条有效用户消息
+                val lastValidUserIndex = history.indexOfLast { it.isFromUser && !it.isError }
+                if (lastValidUserIndex != -1) {
+                    prevUserIndex = lastValidUserIndex
+                } else {
+                    // 仍然找不到任何用户消息，提示错误
+                    chatDao.updateMessage(
+                        target.copy(
+                            content = "无法重新生成：缺少用户消息。",
+                            isError = true
+                        )
                     )
-                )
-                return Result.failure(IllegalStateException("No preceding user message"))
+                    return Result.failure(IllegalStateException("No user messages in conversation"))
+                }
             }
 
             // 删除目标消息后的所有消息
@@ -371,7 +377,7 @@ class ChatRepository(
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
 
-            // 构造到前置用户消息为止的上下文，并应用限制
+            // 构造到选定用户消息为止的上下文，并应用限制
             val contextMessagesBase = history.take(prevUserIndex + 1)
                 .filter { !it.isError }
                 .map {
