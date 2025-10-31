@@ -93,6 +93,7 @@ fun ChatScreen(
     val selectedTool by toolSelectionViewModel.selectedTool.collectAsState()
     val isAutoSelected by toolSelectionViewModel.isAutoSelected.collectAsState()
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
+    val activeToolInProgress by chatViewModel.activeToolInProgress.collectAsState()
 
     // 读取 OSS 配置以控制云端上传/下载按钮显示
     val ossPreferences = remember { OssPreferences(context) }
@@ -394,20 +395,26 @@ fun ChatScreen(
                                 if (!(minimalMode && minimalModeConfig.hideToolIcon)) {
                                     when {
                                         toolCallInProgress -> {
-                                            // 工具调用进行中：显示实际调用工具（当前为联网搜索）
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                                shape = CircleShape,
-                                                tonalElevation = 0.dp,
-                                                modifier = Modifier.padding(end = 8.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
-                                                    contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
-                                                    tint = MaterialTheme.colorScheme.onSurface,
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .padding(6.dp)
+                                            // 工具调用进行中：显示实际调用工具图标并附加旋转指示器（图形化，无文本）
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                                    shape = CircleShape,
+                                                    tonalElevation = 0.dp,
+                                                    modifier = Modifier.padding(end = 8.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = (activeToolInProgress ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).icon,
+                                                        contentDescription = (activeToolInProgress ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).displayName,
+                                                        tint = MaterialTheme.colorScheme.onSurface,
+                                                        modifier = Modifier
+                                                            .size(28.dp)
+                                                            .padding(6.dp)
+                                                    )
+                                                }
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(16.dp),
+                                                    strokeWidth = 2.dp
                                                 )
                                             }
                                         }
@@ -819,7 +826,8 @@ fun ChatScreen(
                 },
                 autoProcessing = toolSelectionUiState.isProcessing,
                 autoSelected = isAutoSelected,
-                toolCallInProgress = toolCallInProgress
+                toolCallInProgress = toolCallInProgress,
+                activeToolType = activeToolInProgress
             )
         }
 

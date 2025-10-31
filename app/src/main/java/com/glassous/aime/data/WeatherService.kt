@@ -120,10 +120,47 @@ class WeatherService(
         }
         val sb = StringBuilder()
         sb.append("🌤 城市：${result.city}\n\n")
+        var overallMin: Int? = null
+        var overallMax: Int? = null
         result.days.forEach { day ->
             sb.append("• ${day.date}：${day.weather}，${day.temperature}，${day.wind}，空气质量：${day.airQuality}\n")
+
+            // 基于温度/天气/空气质量生成生活提示
+            val temps = Regex("-?\\d+").findAll(day.temperature).map { it.value.toIntOrNull() }.filterNotNull().toList()
+            val min = temps.minOrNull()
+            val max = temps.maxOrNull()
+            if (min != null) overallMin = (overallMin?.let { kotlin.math.min(it, min) } ?: min)
+            if (max != null) overallMax = (overallMax?.let { kotlin.math.max(it, max) } ?: max)
+
+            val tips = mutableListOf<String>()
+            if (min != null && min <= 10) tips.add("气温较低，注意保暖，适当加衣")
+            if (max != null && max >= 30) tips.add("气温偏高，注意防暑，多喝水")
+            if (min != null && max != null && (max - min) >= 8) tips.add("昼夜温差较大，注意增减衣物")
+
+            val w = day.weather
+            if (w.contains("雨")) tips.add("可能有降雨，出门记得带伞")
+            if (w.contains("雪")) tips.add("可能降雪，注意防滑与保暖")
+            if (w.contains("雾") || w.contains("霾")) tips.add("能见度较低，驾车谨慎")
+
+            val aq = day.airQuality
+            if (aq.contains("污染") || aq.contains("重度") || aq.contains("严重")) {
+                tips.add("空气质量欠佳，减少户外活动，佩戴口罩")
+            }
+
+            if (tips.isNotEmpty()) {
+                sb.append("  建议：${tips.joinToString("，")}。\n")
+            }
         }
-        sb.append("\n请基于上述数据为用户提供简洁、有用的天气说明。")
+
+        // 综合提示
+        val summaryTips = mutableListOf<String>()
+        if ((overallMin ?: 99) <= 10) summaryTips.add("天气偏冷，外出注意保暖")
+        if ((overallMax ?: -99) >= 30) summaryTips.add("天气炎热，注意防暑补水")
+        if (summaryTips.isNotEmpty()) {
+            sb.append("\n综合建议：${summaryTips.joinToString("，")}。\n")
+        }
+
+        sb.append("\n请基于上述数据提供简洁、有用的天气说明，并在回答中自然加入贴心生活提示（如穿衣、防雨、防晒、通勤等）。")
         return sb.toString()
     }
 }

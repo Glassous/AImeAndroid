@@ -26,7 +26,8 @@ class ChatRepository(
     private val contextPreferences: ContextPreferences,
     private val openAiService: OpenAiService = OpenAiService(),
     private val webSearchService: WebSearchService = WebSearchService(),
-    private val weatherService: WeatherService = WeatherService()
+    private val weatherService: WeatherService = WeatherService(),
+    private val stockService: StockService = StockService()
 ) {
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>> {
         return chatDao.getMessagesForConversation(conversationId)
@@ -41,7 +42,7 @@ class ChatRepository(
         message: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
         return try {
@@ -108,7 +109,22 @@ class ChatRepository(
                 .toMutableList()
             
             baseMessages.add(OpenAiChatMessage(role = "user", content = message))
-            val messages = limitContext(baseMessages)
+            val messages = limitContext(baseMessages).toMutableList()
+
+            // 关键词偏好：提升天气工具的选择概率
+            val weatherKeywords = listOf(
+                "天气", "气温", "气候", "下雨", "降雨", "降雪", "风力", "空气质量",
+                "雾霾", "穿衣", "紫外线", "晴", "阴", "多云", "预报", "未来",
+                "今日", "明天", "后天", "温度", "湿度"
+            )
+            val isWeatherIntent = weatherKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            // 股票/证券相关关键词与意图识别
+            val stockKeywords = listOf(
+                "股票", "股价", "行情", "证券", "K线", "分时", "上证", "深证", "沪深",
+                "A股", "港股", "美股", "涨跌", "成交量", "市值", "收盘", "开盘", "最高",
+                "最低", "板块", "龙头", "代码", "证券代码", "指数"
+            )
+            val isStockIntent = stockKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -145,11 +161,55 @@ class ChatRepository(
                     )
                 )
             )
+            val stockDataTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "stock_query",
+                    description = "查询指定证券的历史行情数据（K线）。参数 `secid` 支持 `交易所.代码`（如 `sh.600519`、`sz.000001`）或纯数字代码（如 `600519`、`000001`）；可选参数 `num` 表示返回的天数，默认 30。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "secid" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "证券标识，支持 `交易所.代码` 或纯代码，如 `sh.600519` 或 `600519`"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "返回的交易日天数，默认 30"
+                            )
+                        ),
+                        required = listOf("secid")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                isAutoMode -> listOf(webSearchTool, cityWeatherTool)
+                selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                isAutoMode -> when {
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                }
                 else -> null
+            }
+
+            // 在自动模式下，若检测到天气意图，加入系统提示以偏向使用天气工具
+            if (isAutoMode && isWeatherIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "本条消息可能涉及天气相关，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若用户未提供城市，请结合上下文推测或礼貌询问其所在城市名称。"
+                    )
+                )
+            }
+            if (isAutoMode && isStockIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及股票/股价，请优先考虑调用工具 stock_query 获取指定证券的历史行情数据。若未明确证券代码，请礼貌询问或结合上下文推测（如名称/代码）。"
+                    )
+                )
             }
 
             // Insert assistant placeholder for streaming
@@ -188,10 +248,13 @@ class ChatRepository(
                             }
                         },
                         onToolCall = { toolCall ->
-                            // 处理工具调用
-                            // 显示工具调用中的占位提示
-                        onToolCallStart?.invoke()
-                        chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
+                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
+                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
+                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                            }
                             if (toolCall.function?.name == "web_search") {
                                 try {
                                     val arguments = toolCall.function.arguments
@@ -284,6 +347,45 @@ class ChatRepository(
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n天气工具暂时不可用：${e.message}\n\n")
                                 }
+                            } else if (toolCall.function?.name == "stock_query") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    if (arguments != null) {
+                                        val secid = safeExtractSecId(arguments, message)
+                                        val num = safeExtractNum(arguments, 30)
+                                        val stockResult = stockService.query(secid, num)
+                                        val stockText = stockService.format(stockResult)
+
+                                        val messagesWithStock = messages.toMutableList()
+                                        messagesWithStock.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = stockText
+                                            )
+                                        )
+
+                                        openAiService.streamChatCompletions(
+                                            baseUrl = group.baseUrl,
+                                            apiKey = group.apiKey,
+                                            model = model.modelName,
+                                            messages = messagesWithStock,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
+                                            },
+                                            onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n股票工具暂时不可用：${e.message}\n\n")
+                                }
                             }
                             onToolCallEnd?.invoke()
                         }
@@ -317,7 +419,7 @@ class ChatRepository(
         assistantMessageId: Long,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
         return try {
@@ -387,6 +489,21 @@ class ChatRepository(
                     )
                 }
             val contextMessages = limitContext(contextMessagesBase)
+            val messagesWithBias = contextMessages.toMutableList()
+
+            // 关键词偏好：提升天气/股票工具的选择概率（根据关联的用户消息内容）
+            val weatherKeywords = listOf(
+                "天气", "气温", "气候", "下雨", "降雨", "降雪", "风力", "空气质量",
+                "雾霾", "穿衣", "紫外线", "晴", "阴", "多云", "预报", "未来",
+                "今日", "明天", "后天", "温度", "湿度"
+            )
+            val userTextForIntent = history[prevUserIndex].content
+            val isWeatherIntent = weatherKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
+            val stockKeywords = listOf(
+                "股票", "股价", "证券", "行情", "涨跌", "K线", "成交量", "成交额", "换手率",
+                "300", "600", "SH", "SZ", "同花顺", "东财", "收盘", "开盘", "历史"
+            )
+            val isStockIntent = stockKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
 
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -423,11 +540,55 @@ class ChatRepository(
                     )
                 )
             )
+            val stockDataTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "stock_query",
+                    description = "查询指定证券代码的历史行情数据（开盘/收盘/振幅等）。适用于用户询问股价走势、成交量、涨跌幅等问题。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "secid" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "证券代码，例如：300033"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "返回条数，默认30"
+                            )
+                        ),
+                        required = listOf("secid")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                isAutoMode -> listOf(webSearchTool, cityWeatherTool)
+                selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                isAutoMode -> when {
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                }
                 else -> null
+            }
+
+            // 在自动模式下，若检测到天气/股票意图，加入系统提示以偏向调用对应工具
+            if (isAutoMode && isWeatherIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话与天气相关，请优先考虑调用工具 city_weather 获取指定城市的天气与空气质量信息。若城市不明确，请礼貌询问或依据上下文推测。"
+                    )
+                )
+            }
+            if (isAutoMode && isStockIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及股票/股价，请优先考虑调用工具 stock_query 获取指定证券的历史行情数据。若未明确证券代码，请礼貌询问或结合上下文推测（如名称/代码）。"
+                    )
+                )
             }
 
             val aggregated = StringBuilder()
@@ -439,7 +600,7 @@ class ChatRepository(
                     baseUrl = group.baseUrl,
                     apiKey = group.apiKey,
                     model = model.modelName,
-                    messages = contextMessages,
+                    messages = messagesWithBias,
                     tools = tools,
                     toolChoice = if (tools != null) "auto" else null,
                     onDelta = { delta ->
@@ -451,12 +612,15 @@ class ChatRepository(
                             lastUpdateTime = currentTime
                         }
                     },
-                    onToolCall = { toolCall ->
-                        // 处理工具调用
-                        // 显示工具调用中的占位提示
-                        onToolCallStart?.invoke()
-                        chatDao.updateMessage(target.copy(content = "正在调用工具..."))
-                        if (toolCall.function?.name == "web_search") {
+                        onToolCall = { toolCall ->
+                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
+                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
+                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                            }
+                            if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
                                 val query = safeExtractQuery(arguments, "")
@@ -533,6 +697,41 @@ class ChatRepository(
                                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n天气功能暂时不可用：${e.message}")
+                            }
+                        } else if (toolCall.function?.name == "stock_query") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                val secid = safeExtractSecId(arguments, "")
+                                val num = safeExtractNum(arguments, 30)
+                                
+                                if (secid.isNotEmpty()) {
+                                    val stockResult = stockService.query(secid, num)
+                                    val messagesWithStock = contextMessages.toMutableList()
+                                    messagesWithStock.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = stockService.format(stockResult)
+                                        )
+                                    )
+                                    
+                                    openAiService.streamChatCompletions(
+                                        baseUrl = group.baseUrl,
+                                        apiKey = group.apiKey,
+                                        model = model.modelName,
+                                        messages = messagesWithStock,
+                                        onDelta = { delta ->
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = target.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n股票功能暂时不可用：${e.message}")
                             }
                         }
                         onToolCallEnd?.invoke()
@@ -641,7 +840,7 @@ class ChatRepository(
         newContent: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null,
         onSyncResult: ((Boolean, String) -> Unit)? = null
     ): Result<Unit> {
@@ -710,6 +909,25 @@ class ChatRepository(
                 .toMutableList()
             contextMessagesBase.add(OpenAiChatMessage(role = "user", content = trimmed))
             val contextMessages = limitContext(contextMessagesBase)
+            val messagesWithBias = contextMessages.toMutableList()
+
+            // 关键词偏好：提升天气工具的选择概率（基于编辑后的用户内容）
+            val weatherKeywords = listOf(
+                "天气", "气温", "气候", "下雨", "降雨", "降雪", "风力", "空气质量",
+                "雾霾", "穿衣", "紫外线", "晴", "阴", "多云", "预报", "未来",
+                "今日", "明天", "后天", "温度", "湿度"
+            )
+            val isWeatherIntent = weatherKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+            // 股票关键词与意图识别（基于编辑后的用户内容）
+            val stockKeywords = listOf(
+                "股票", "股价", "证券", "行情", "K线", "分时", "上证", "深证", "沪深",
+                "A股", "港股", "美股", "涨跌", "成交量", "市值", "收盘", "开盘", "最高",
+                "最低", "板块", "龙头", "代码", "证券代码", "指数"
+            )
+            val isStockIntent = stockKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+
+            var preLabelAdded = false
+            var postLabelAdded = false
 
             // 插入新的助手消息占位以进行流式写入
             var assistantMessage = ChatMessage(
@@ -760,11 +978,55 @@ class ChatRepository(
                     )
                 )
             )
+            val stockDataTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "stock_query",
+                    description = "查询指定证券的历史行情数据（K线）。参数 `secid` 支持 `交易所.代码`（如 `sh.600519`、`sz.000001`）或纯数字代码（如 `600519`、`000001`）；可选参数 `num` 表示返回的天数，默认 30。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "secid" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "证券标识，支持 `交易所.代码` 或纯代码，如 `sh.600519` 或 `600519`"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "返回的交易日天数，默认 30"
+                            )
+                        ),
+                        required = listOf("secid")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                isAutoMode -> listOf(webSearchTool, cityWeatherTool)
+                selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                isAutoMode -> when {
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                }
                 else -> null
+            }
+
+            // 在自动模式下，若检测到天气意图，加入系统提示以偏向使用天气工具
+            if (isAutoMode && isWeatherIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及天气，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若城市未给出，请礼貌询问或依据上下文推测。"
+                    )
+                )
+            }
+            if (isAutoMode && isStockIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及股票/股价，请优先考虑调用工具 stock_query 获取指定证券的历史行情数据。若未明确证券代码，请礼貌询问或结合上下文推测（如名称/代码）。"
+                    )
+                )
             }
 
             withContext(Dispatchers.IO) {
@@ -772,7 +1034,7 @@ class ChatRepository(
                     baseUrl = group.baseUrl,
                     apiKey = group.apiKey,
                     model = model.modelName,
-                    messages = contextMessages,
+                    messages = messagesWithBias,
                     tools = tools,
                     toolChoice = if (tools != null) "auto" else null,
                     onDelta = { delta ->
@@ -784,12 +1046,15 @@ class ChatRepository(
                             lastUpdateTime = currentTime
                         }
                     },
-                    onToolCall = { toolCall ->
-                        // 处理工具调用
-                        // 显示工具调用中的占位提示
-                        onToolCallStart?.invoke()
-                        chatDao.updateMessage(assistantMessage.copy(content = "正在调用工具..."))
-                        if (toolCall.function?.name == "web_search") {
+                        onToolCall = { toolCall ->
+                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
+                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
+                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
+                            }
+                            if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
                                 if (arguments != null) {
@@ -826,9 +1091,9 @@ class ChatRepository(
                                         messages = messagesWithSearch,
                                         tools = null, // 不再传递工具，避免循环调用
                                         toolChoice = null,
-                                        onDelta = { delta ->
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
+                                            onDelta = { delta ->
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
                                             
                                             // 节流更新
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -867,6 +1132,10 @@ class ChatRepository(
                                         tools = null,
                                         toolChoice = null,
                                         onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n【工具调用后】\n")
+                                                postLabelAdded = true
+                                            }
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -880,6 +1149,49 @@ class ChatRepository(
                                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n天气工具暂时不可用：${e.message}\n\n")
+                            }
+                        } else if (toolCall.function?.name == "stock_query") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                if (arguments != null) {
+                                    val secid = safeExtractSecId(arguments, "")
+                                    val num = safeExtractNum(arguments, 30)
+                                    val stockResult = stockService.query(secid, num)
+                                    val stockText = stockService.format(stockResult)
+
+                                    val messagesWithStock = contextMessages.toMutableList()
+                                    messagesWithStock.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = stockText
+                                        )
+                                    )
+
+                                    openAiService.streamChatCompletions(
+                                        baseUrl = group.baseUrl,
+                                        apiKey = group.apiKey,
+                                        model = model.modelName,
+                                        messages = messagesWithStock,
+                                        tools = null,
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n【工具调用后】\n")
+                                                postLabelAdded = true
+                                            }
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        },
+                                        onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n股票工具暂时不可用：${e.message}\n\n")
                             }
                         }
                         onToolCallEnd?.invoke()
@@ -972,5 +1284,80 @@ class ChatRepository(
 
         // Fallback: if arguments is plain text, use it directly
         return raw
+    }
+
+    private fun safeExtractSecId(arguments: String?, default: String): String {
+        if (arguments.isNullOrBlank()) return default
+        val raw = arguments.trim()
+        val gson = Gson()
+
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                val value = map["secid"] as? String
+                if (value.isNullOrBlank()) null else value
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        fun normalize(code: String): String {
+            // 提取数字部分，适配如 "sh.600519"、"sz000001" 等形式
+            val digits = Regex("""([0-9]{5,6})""").find(code)?.groupValues?.getOrNull(1)
+            return digits ?: code
+        }
+
+        tryParse(raw)?.let { return normalize(it) }
+
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return normalize(it) }
+
+        val regexQuoted = Regex("""(?i)\"?secid\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""")
+        val regexUnquoted = Regex("""(?i)\"?secid\"?\s*[:=]\s*([^,}\n\r]+)""")
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return normalize(it) }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return normalize(it) }
+
+        // 直接从原始文本中提取可能的 5-6 位数字代码
+        Regex("""([0-9]{5,6})""").find(raw)?.groupValues?.getOrNull(1)?.let { return it }
+
+        // Fallback
+        return default
+    }
+
+    private fun safeExtractNum(arguments: String?, default: Int): Int {
+        if (arguments.isNullOrBlank()) return default
+        val raw = arguments.trim()
+        val gson = Gson()
+
+        fun tryParse(text: String): Int? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                when (val v = map["num"]) {
+                    is Number -> v.toInt()
+                    is String -> v.toIntOrNull()
+                    else -> null
+                }
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        tryParse(raw)?.let { return it }
+
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+
+        val regexQuoted = Regex("""(?i)\"?num\"?\s*[:=]\s*\"([0-9]+)\"""")
+        val regexUnquoted = Regex("""(?i)\"?num\"?\s*[:=]\s*([0-9]+)""")
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.toIntOrNull()?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.toIntOrNull()?.let { return it }
+
+        return default
     }
 }
