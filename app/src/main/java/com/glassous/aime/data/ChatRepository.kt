@@ -42,7 +42,7 @@ class ChatRepository(
         message: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: ((ToolType) -> Unit)? = null,
+        onToolCallStart: (() -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
         return try {
@@ -249,12 +249,7 @@ class ChatRepository(
                         },
                         onToolCall = { toolCall ->
                             // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                            when (toolCall.function?.name) {
-                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
-                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
-                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                            }
+                            onToolCallStart?.invoke()
                             if (toolCall.function?.name == "web_search") {
                                 try {
                                     val arguments = toolCall.function.arguments
@@ -419,7 +414,7 @@ class ChatRepository(
         assistantMessageId: Long,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: ((ToolType) -> Unit)? = null,
+        onToolCallStart: (() -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
         return try {
@@ -612,15 +607,10 @@ class ChatRepository(
                             lastUpdateTime = currentTime
                         }
                     },
-                        onToolCall = { toolCall ->
-                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                            when (toolCall.function?.name) {
-                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
-                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
-                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                            }
-                            if (toolCall.function?.name == "web_search") {
+                    onToolCall = { toolCall ->
+                        // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
+                        onToolCallStart?.invoke()
+                        if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
                                 val query = safeExtractQuery(arguments, "")
@@ -840,7 +830,7 @@ class ChatRepository(
         newContent: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: ((ToolType) -> Unit)? = null,
+        onToolCallStart: (() -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null,
         onSyncResult: ((Boolean, String) -> Unit)? = null
     ): Result<Unit> {
@@ -1046,15 +1036,10 @@ class ChatRepository(
                             lastUpdateTime = currentTime
                         }
                     },
-                        onToolCall = { toolCall ->
-                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                            when (toolCall.function?.name) {
-                                "web_search" -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                                "city_weather" -> onToolCallStart?.invoke(ToolType.WEATHER_QUERY)
-                                "stock_query" -> onToolCallStart?.invoke(ToolType.STOCK_QUERY)
-                                else -> onToolCallStart?.invoke(ToolType.WEB_SEARCH)
-                            }
-                            if (toolCall.function?.name == "web_search") {
+                    onToolCall = { toolCall ->
+                        // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
+                        onToolCallStart?.invoke()
+                        if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
                                 if (arguments != null) {

@@ -50,7 +50,6 @@ import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
-import com.glassous.aime.data.model.ToolType
 
 /**
  * 模型选择Bottom Sheet
@@ -66,8 +65,7 @@ fun ModelSelectionBottomSheet(
     onToolSelectionClick: () -> Unit = {},
     autoProcessing: Boolean = false,
     autoSelected: Boolean = false,
-    toolCallInProgress: Boolean = false,
-    activeToolType: ToolType? = null
+    toolCallInProgress: Boolean = false
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -149,14 +147,14 @@ fun ModelSelectionBottomSheet(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = (activeToolType ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).icon,
-                                            contentDescription = (activeToolType ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).displayName,
+                                            imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
+                                            contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = (activeToolType ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).displayName,
+                                            text = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )
