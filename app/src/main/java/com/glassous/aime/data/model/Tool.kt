@@ -2,6 +2,7 @@ package com.glassous.aime.data.model
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -16,6 +17,11 @@ enum class ToolType(
         displayName = "联网搜索",
         icon = Icons.Default.Search,
         description = "通过互联网搜索获取实时信息"
+    ),
+    WEATHER_QUERY(
+        displayName = "城市天气查询",
+        icon = Icons.Default.WbSunny,
+        description = "查询指定城市的未来几天天气与空气质量"
     );
     
     companion object {
