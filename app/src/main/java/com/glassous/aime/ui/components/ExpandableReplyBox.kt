@@ -38,11 +38,14 @@ fun ExpandableReplyBox(
     // 兼容旧标记，同时统一渲染为“【前置回复】”
     val preLabelNew = "【前置回复】"
     val preLabelOld = "【第一次回复】"
-    val postLabel = "【正式回复】"
+    // 移除“正式回复”和“工具调用结果”的可见标签，改用三个换行作为分隔符
+    val tripleSep = "\n\n\n"
 
     val preIndexCandidate = content.indexOf(preLabelNew)
     val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
-    val postIndex = content.indexOf(postLabel)
+    // 使用分隔符识别中间工具结果与正式回复
+    val afterPreLabelStart = preIndex + if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
+    val firstSepIndex = content.indexOf(tripleSep, afterPreLabelStart)
 
     // 若没有“第一次回复”标记，则不展示折叠框
     if (preIndex == -1) {
@@ -57,10 +60,27 @@ fun ExpandableReplyBox(
     }
 
     val preLabelLength = if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
-    val preText = content.substring(preIndex + preLabelLength, if (postIndex != -1) postIndex else content.length).trim()
-    val officialText = if (postIndex != -1) content.substring(postIndex + postLabel.length).trim() else null
+    val preTextEnd = if (firstSepIndex != -1) firstSepIndex else content.length
+    val preText = content.substring(preIndex + preLabelLength, preTextEnd).trim()
 
-    var expanded by remember { mutableStateOf(false) }
+    var toolText: String? = null
+    var officialText: String? = null
+    if (firstSepIndex != -1) {
+        val secondSepIndex = content.indexOf(tripleSep, firstSepIndex + tripleSep.length)
+        if (secondSepIndex != -1) {
+            toolText = content.substring(firstSepIndex + tripleSep.length, secondSepIndex).trim()
+            officialText = content.substring(secondSepIndex + tripleSep.length).trim()
+        } else {
+            officialText = content.substring(firstSepIndex + tripleSep.length).trim()
+        }
+    }
+
+    // 初始保持展开；在正式回复出现后自动折叠
+    var expanded by remember { mutableStateOf(true) }
+    LaunchedEffect(officialText) {
+        // 正式回复开始（非空）时自动折叠；正式回复未开始前保持展开
+        expanded = officialText.isNullOrEmpty()
+    }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
@@ -101,10 +121,21 @@ fun ExpandableReplyBox(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            // 展开后与正式回复之间留出额外间距
-            val shouldAddGap = expanded && preText.isNotEmpty() && officialText != null && officialText.isNotEmpty()
-            if (shouldAddGap) {
-                Spacer(Modifier.height(40.dp))
+            // 恢复前置回复与工具调用结果之间的 40dp 间距
+            if (toolText != null && toolText.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(40.dp))
+            }
+            // 中间：工具调用结果区域（无标题、无折叠），与正式回复视觉一致
+            if (toolText != null && toolText.isNotEmpty()) {
+                TypewriterMarkdownRenderer(
+                    markdown = toolText,
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = onLongClick,
+                    isStreaming = false,
+                    typingDelayMs = 30L,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             // 正式回复：正常渲染，不折叠

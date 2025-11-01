@@ -102,8 +102,7 @@ fun MessageBubble(
                     // 识别特殊两段格式，使用可折叠框渲染
                     val hasTwoPartReply = !message.isFromUser && (
                         message.content.contains("【前置回复】") ||
-                        message.content.contains("【第一次回复】") ||
-                        message.content.contains("【正式回复】")
+                        message.content.contains("【第一次回复】")
                     )
 
                     if (hasTwoPartReply) {
@@ -153,8 +152,7 @@ fun MessageBubble(
                     // 识别特殊两段格式，使用可折叠框渲染
                     val hasTwoPartReply = !message.isFromUser && (
                         message.content.contains("【前置回复】") ||
-                        message.content.contains("【第一次回复】") ||
-                        message.content.contains("【正式回复】")
+                        message.content.contains("【第一次回复】")
                     )
 
                     if (hasTwoPartReply) {

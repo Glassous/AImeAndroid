@@ -309,7 +309,8 @@ class ChatRepository(
                                             toolChoice = null,
                                             onDelta = { delta ->
                                                 if (!postLabelAdded) {
-                                                    aggregated.append("\n【正式回复】\n")
+                                                    // 使用三个换行分隔正式回复起始，移除可见标签
+                                                    aggregated.append("\n\n\n")
                                                     postLabelAdded = true
                                                 }
                                                 aggregated.append(delta)
@@ -335,6 +336,16 @@ class ChatRepository(
                                         val city = safeExtractCity(arguments, message)
                                         val weatherResult = weatherService.query(city)
                                         val weatherText = weatherService.format(weatherResult)
+
+                                        // 在前置回复与正式回复之间插入工具调用结果（Markdown表格），移除可见标签
+                                        val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
+                                        aggregated.append("\n\n\n") // 工具结果开始分隔
+                                        aggregated.append(weatherTable.trim())
+                                        aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                        // 已设置正式回复起始分隔，避免在流中再次插入
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
                                         
                                         val messagesWithWeather = messages.toMutableList()
                                         messagesWithWeather.add(
@@ -353,7 +364,7 @@ class ChatRepository(
                                             toolChoice = null,
                                             onDelta = { delta ->
                                                 if (!postLabelAdded) {
-                                                    aggregated.append("\n【正式回复】\n")
+                                                    aggregated.append("\n\n\n")
                                                     postLabelAdded = true
                                                 }
                                                 aggregated.append(delta)
@@ -396,7 +407,7 @@ class ChatRepository(
                                             toolChoice = null,
                                             onDelta = { delta ->
                                                 if (!postLabelAdded) {
-                                                    aggregated.append("\n【正式回复】\n")
+                                                    aggregated.append("\n\n\n")
                                                     postLabelAdded = true
                                                 }
                                                 aggregated.append(delta)
@@ -694,7 +705,7 @@ class ChatRepository(
                                         messages = messagesWithSearch,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【正式回复】\n")
+                                                aggregated.append("\n\n\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
@@ -717,6 +728,14 @@ class ChatRepository(
                                 
                                 if (city.isNotEmpty()) {
                                     val weatherResult = weatherService.query(city)
+                                    // 插入工具调用结果（Markdown表格）到消息流中，位于前置回复和正式回复之间
+                                    val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
+                                    aggregated.append("\n\n\n") // 工具结果开始分隔
+                                    aggregated.append(weatherTable.trim())
+                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
                                     val messagesWithWeather = contextMessages.toMutableList()
                                     messagesWithWeather.add(
                                         OpenAiChatMessage(
@@ -732,7 +751,7 @@ class ChatRepository(
                                         messages = messagesWithWeather,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【正式回复】\n")
+                                                aggregated.append("\n\n\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
@@ -771,7 +790,7 @@ class ChatRepository(
                                         messages = messagesWithStock,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【正式回复】\n")
+                                                aggregated.append("\n\n\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
@@ -1160,7 +1179,8 @@ class ChatRepository(
                                         toolChoice = null,
                                             onDelta = { delta ->
                                                 if (!postLabelAdded) {
-                                                    aggregated.append("\n【正式回复】\n")
+                                                    // 使用三个换行分隔正式回复起始，移除可见标签
+                                                    aggregated.append("\n\n\n")
                                                     postLabelAdded = true
                                                 }
                                                 aggregated.append(delta)
@@ -1186,6 +1206,15 @@ class ChatRepository(
                                     val city = safeExtractCity(arguments, "")
                                     val weatherResult = weatherService.query(city)
                                     val weatherText = weatherService.format(weatherResult)
+
+                                    // 插入工具调用结果（Markdown表格）到消息中，位于前置回复与正式回复之间
+                                    val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
+                                    aggregated.append("\n\n\n") // 工具结果开始分隔
+                                    aggregated.append(weatherTable.trim())
+                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
                                     
                                     val messagesWithWeather = contextMessages.toMutableList()
                                     messagesWithWeather.add(
@@ -1204,7 +1233,7 @@ class ChatRepository(
                                         toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【正式回复】\n")
+                                                aggregated.append("\n\n\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
@@ -1230,6 +1259,14 @@ class ChatRepository(
                                     val stockResult = stockService.query(secid, num)
                                     val stockText = stockService.format(stockResult)
 
+                                    // 插入工具调用结果到消息中，位于前置回复与正式回复之间
+                                    aggregated.append("\n\n\n") // 工具结果开始分隔
+                                    aggregated.append(stockText.trim())
+                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
+
                                     val messagesWithStock = contextMessages.toMutableList()
                                     messagesWithStock.add(
                                         OpenAiChatMessage(
@@ -1247,7 +1284,8 @@ class ChatRepository(
                                         toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【正式回复】\n")
+                                                // 使用三个换行作为正式回复开始分隔，移除可见标签
+                                                aggregated.append("\n\n\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)

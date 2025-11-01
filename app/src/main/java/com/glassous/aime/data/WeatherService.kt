@@ -163,4 +163,24 @@ class WeatherService(
         sb.append("\n请基于上述数据提供简洁、有用的天气说明，并在回答中自然加入贴心生活提示（如穿衣、防雨、防晒、通勤等）。")
         return sb.toString()
     }
+
+    /**
+     * 将天气结果格式化为 Markdown 表格，用于 UI 的工具调用结果区域展示
+     */
+    fun formatAsMarkdownTable(result: WeatherQueryResult): String {
+        if (!result.success || result.days.isEmpty()) {
+            return "未能获取到「${result.city}」的天气信息：${result.message}。"
+        }
+        val sb = StringBuilder()
+        // 城市说明（非标题）
+        sb.append("城市：${result.city}\n\n")
+        // 表头
+        sb.append("| 日期 | 天气 | 温度 | 风向 | 空气质量 |\n")
+        sb.append("| --- | --- | --- | --- | --- |\n")
+        // 行数据
+        result.days.forEach { day ->
+            sb.append("| ${day.date} | ${day.weather} | ${day.temperature} | ${day.wind} | ${day.airQuality} |\n")
+        }
+        return sb.toString()
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
@@ -436,29 +438,32 @@ fun ChatScreen(
                                             }
                                         }
                                         toolSelectionUiState.isProcessing || isAutoSelected -> {
-                                            // 自动模式：显示自动徽标（齿轮 + 星星）
+                                            // 自动模式：使用与 BottomSheet 一致的组合图标（齿轮 + 星星）
                                             Surface(
                                                 color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
                                                 shape = CircleShape,
                                                 tonalElevation = 0.dp,
                                                 modifier = Modifier.padding(end = 8.dp)
                                             ) {
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
+                                                androidx.compose.foundation.layout.Box(
                                                     modifier = Modifier
                                                         .size(28.dp)
                                                         .padding(6.dp)
                                                 ) {
                                                     Icon(
-                                                        imageVector = Icons.Filled.Build,
-                                                        contentDescription = "自动使用工具",
-                                                        tint = MaterialTheme.colorScheme.onSurface
+                                                        imageVector = Icons.Filled.Settings,
+                                                        contentDescription = "自动调用",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.align(Alignment.Center)
                                                     )
-                                                    Spacer(modifier = Modifier.width(2.dp))
                                                     Icon(
                                                         imageVector = Icons.Filled.Star,
-                                                        contentDescription = "自动使用工具",
-                                                        tint = MaterialTheme.colorScheme.primary
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.secondary,
+                                                        modifier = Modifier
+                                                            .size(12.dp)
+                                                            .align(Alignment.TopEnd)
+                                                            .rotate(-20f)
                                                     )
                                                 }
                                             }
