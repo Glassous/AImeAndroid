@@ -93,12 +93,17 @@ fun ExpandableReplyBox(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = preLabelNew,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelMedium,
-                    modifier = Modifier.weight(1f)
-                )
+                if (expanded) {
+                    Text(
+                        text = preLabelNew,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                } else {
+                    // 折叠时隐藏“前置回复”文字，但保留右侧按钮位置
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
@@ -113,17 +118,19 @@ fun ExpandableReplyBox(
                 enter = expandVertically(),
                 exit = shrinkVertically()
             ) {
-                MarkdownRenderer(
-                    markdown = preText,
-                    textColor = textColor,
-                    textSizeSp = textSizeSp,
-                    onLongClick = onLongClick,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            // 恢复前置回复与工具调用结果之间的 40dp 间距
-            if (toolText != null && toolText.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(40.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    MarkdownRenderer(
+                        markdown = preText,
+                        textColor = textColor,
+                        textSizeSp = textSizeSp,
+                        onLongClick = onLongClick,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    // 将 40dp 间距移动到折叠容器内部，折叠时一并隐藏
+                    if (toolText != null && toolText.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(40.dp))
+                    }
+                }
             }
             // 中间：工具调用结果区域（无标题、无折叠），与正式回复视觉一致
             if (toolText != null && toolText.isNotEmpty()) {
