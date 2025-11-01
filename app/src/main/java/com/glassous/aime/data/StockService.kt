@@ -150,4 +150,39 @@ class StockService(
         sb.append("\n请基于以上数据进行简洁的市场解读（趋势、波动、成交量变化等），并提醒用户投资需谨慎，以上信息仅供参考，不构成投资建议。")
         return sb.toString()
     }
+
+    /**
+     * 将股票结果格式化为 Markdown 表格，用于 UI 的工具调用结果区域展示（本地插入，不参与模型上下文）
+     * 表结构参考：
+     * | 日期 | 开盘 | 收盘 | 最高 | 最低 | 成交量 | 成交额 | 振幅 | 涨跌幅 | 涨跌额 | 换手率 |
+     */
+    fun formatAsMarkdownTable(result: StockQueryResult, maxRows: Int = 15): String {
+        if (!result.success || result.items.isEmpty()) {
+            return "未能获取到「${result.secid}」的股票数据：${result.message}。"
+        }
+
+        val sb = StringBuilder()
+        val titleName = if (result.name.isNotBlank()) result.name else ""
+        sb.append("### 股票数据 · ${titleName} (${result.secid})\n\n")
+
+        // 最新一日高亮（引用块）
+        result.items.firstOrNull()?.let { latest ->
+            sb.append(
+                "> 最新 ${latest.time} 收盘：${latest.closing} | 涨跌：${latest.inorde}（${latest.inordeAmount}） | 成交额：${latest.turnover} | 换手率：${latest.turnoverRate} | 振幅：${latest.amplitude}\n\n"
+            )
+        }
+
+        // 表头
+        sb.append("| 日期 | 开盘 | 收盘 | 最高 | 最低 | 成交量 | 成交额 | 振幅 | 涨跌幅 | 涨跌额 | 换手率 |\n")
+        sb.append("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+
+        // 行数据（限制行数）
+        result.items.take(maxRows).forEach { d ->
+            sb.append("| ${d.time} | ${d.opening} | ${d.closing} | ${d.highest} | ${d.lowest} | ${d.tradingVolume} | ${d.turnover} | ${d.amplitude} | ${d.inorde} | ${d.inordeAmount} | ${d.turnoverRate} |\n")
+        }
+
+        // 免责声明（不作为模型指令，仅UI展示）
+        sb.append("\n> 注：以上数据仅供参考，不构成投资建议。")
+        return sb.toString()
+    }
 }

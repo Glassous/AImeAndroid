@@ -392,23 +392,23 @@ class ChatRepository(
                                     val arguments = toolCall.function.arguments
                                     if (arguments != null) {
                                         val secid = safeExtractSecId(arguments, message)
-                                        val num = safeExtractNum(arguments, 30)
+                                        val numRaw = safeExtractNum(arguments, 30)
+                                        val num = minOf(numRaw, 15)
                                         val stockResult = stockService.query(secid, num)
-                                        val stockText = stockService.format(stockResult)
-
-                                        val messagesWithStock = messages.toMutableList()
-                                        messagesWithStock.add(
-                                            OpenAiChatMessage(
-                                                role = "system",
-                                                content = stockText
-                                            )
-                                        )
+                                        // 本地插入Markdown表格到工具调用区域，避免向模型注入大数据
+                                        val stockMarkdown = stockService.formatAsMarkdownTable(stockResult)
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append(stockMarkdown)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
 
                                         openAiService.streamChatCompletions(
                                             baseUrl = group.baseUrl,
                                             apiKey = group.apiKey,
                                             model = model.modelName,
-                                            messages = messagesWithStock,
+                                            messages = messages,
                                             tools = null,
                                             toolChoice = null,
                                             onDelta = { delta ->
@@ -784,23 +784,25 @@ class ChatRepository(
                             try {
                                 val arguments = toolCall.function.arguments
                                 val secid = safeExtractSecId(arguments, "")
-                                val num = safeExtractNum(arguments, 30)
+                                val numRaw = safeExtractNum(arguments, 30)
+                                val num = minOf(numRaw, 15)
                                 
                                 if (secid.isNotEmpty()) {
                                     val stockResult = stockService.query(secid, num)
-                                    val messagesWithStock = contextMessages.toMutableList()
-                                    messagesWithStock.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = stockService.format(stockResult)
-                                        )
-                                    )
+                                    // 本地插入Markdown表格到工具调用区域，避免向模型注入大数据
+                                    val stockMarkdown = stockService.formatAsMarkdownTable(stockResult)
+                                    aggregated.append("\n\n\n")
+                                    aggregated.append(stockMarkdown)
+                                    aggregated.append("\n\n\n")
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
                                     
                                     openAiService.streamChatCompletions(
                                         baseUrl = group.baseUrl,
                                         apiKey = group.apiKey,
                                         model = model.modelName,
-                                        messages = messagesWithStock,
+                                        messages = contextMessages,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
                                                 aggregated.append("\n\n\n")
@@ -1274,31 +1276,24 @@ class ChatRepository(
                                 val arguments = toolCall.function.arguments
                                 if (arguments != null) {
                                     val secid = safeExtractSecId(arguments, "")
-                                    val num = safeExtractNum(arguments, 30)
+                                    val numRaw = safeExtractNum(arguments, 30)
+                                    val num = minOf(numRaw, 15)
                                     val stockResult = stockService.query(secid, num)
-                                    val stockText = stockService.format(stockResult)
+                                    val stockMarkdown = stockService.formatAsMarkdownTable(stockResult)
 
                                     // 插入工具调用结果到消息中，位于前置回复与正式回复之间
                                     aggregated.append("\n\n\n") // 工具结果开始分隔
-                                    aggregated.append(stockText.trim())
+                                    aggregated.append(stockMarkdown.trim())
                                     aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
                                     postLabelAdded = true
                                     val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                     chatDao.updateMessage(updatedBeforeOfficial)
-
-                                    val messagesWithStock = contextMessages.toMutableList()
-                                    messagesWithStock.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = stockText
-                                        )
-                                    )
-
+                                    
                                     openAiService.streamChatCompletions(
                                         baseUrl = group.baseUrl,
                                         apiKey = group.apiKey,
                                         model = model.modelName,
-                                        messages = messagesWithStock,
+                                        messages = contextMessages,
                                         tools = null,
                                         toolChoice = null,
                                         onDelta = { delta ->
