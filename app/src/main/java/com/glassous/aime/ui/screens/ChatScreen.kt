@@ -93,6 +93,7 @@ fun ChatScreen(
     val selectedTool by toolSelectionViewModel.selectedTool.collectAsState()
     val isAutoSelected by toolSelectionViewModel.isAutoSelected.collectAsState()
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
+    val currentToolType by chatViewModel.currentToolType.collectAsState()
 
     // 读取 OSS 配置以控制云端上传/下载按钮显示
     val ossPreferences = remember { OssPreferences(context) }
@@ -403,8 +404,8 @@ fun ChatScreen(
                                                     modifier = Modifier.padding(end = 8.dp)
                                                 ) {
                                                     Icon(
-                                                        imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
-                                                        contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                                        imageVector = (currentToolType ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).icon,
+                                                        contentDescription = (currentToolType ?: com.glassous.aime.data.model.ToolType.WEB_SEARCH).displayName,
                                                         tint = MaterialTheme.colorScheme.onSurface,
                                                         modifier = Modifier
                                                             .size(28.dp)
@@ -825,7 +826,8 @@ fun ChatScreen(
                 },
                 autoProcessing = toolSelectionUiState.isProcessing,
                 autoSelected = isAutoSelected,
-                toolCallInProgress = toolCallInProgress
+                toolCallInProgress = toolCallInProgress,
+                currentToolType = currentToolType
             )
         }
 

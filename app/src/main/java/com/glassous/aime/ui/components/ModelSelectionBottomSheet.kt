@@ -49,6 +49,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.model.Tool
+import com.glassous.aime.data.model.ToolType
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 
 /**
@@ -65,7 +66,8 @@ fun ModelSelectionBottomSheet(
     onToolSelectionClick: () -> Unit = {},
     autoProcessing: Boolean = false,
     autoSelected: Boolean = false,
-    toolCallInProgress: Boolean = false
+    toolCallInProgress: Boolean = false,
+    currentToolType: ToolType? = null
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -133,7 +135,7 @@ fun ModelSelectionBottomSheet(
                         ) {
                             // 当前工具显示（非入口，仅展示）
                             if (toolCallInProgress) {
-                                // 工具调用进行中：显示实际调用工具（当前仅支持联网搜索）
+                                // 工具调用进行中：显示实际调用工具（根据当前工具类型）
                                 Card(
                                     colors = CardDefaults.cardColors(
                                         containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -147,14 +149,14 @@ fun ModelSelectionBottomSheet(
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Icon(
-                                            imageVector = com.glassous.aime.data.model.ToolType.WEB_SEARCH.icon,
-                                            contentDescription = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                            imageVector = (currentToolType ?: ToolType.WEB_SEARCH).icon,
+                                            contentDescription = (currentToolType ?: ToolType.WEB_SEARCH).displayName,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(modifier = Modifier.width(6.dp))
                                         Text(
-                                            text = com.glassous.aime.data.model.ToolType.WEB_SEARCH.displayName,
+                                            text = (currentToolType ?: ToolType.WEB_SEARCH).displayName,
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.primary
                                         )

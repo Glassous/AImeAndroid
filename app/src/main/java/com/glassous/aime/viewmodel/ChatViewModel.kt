@@ -6,6 +6,7 @@ import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.Conversation
 import com.glassous.aime.data.model.Tool
+import com.glassous.aime.data.model.ToolType
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -52,6 +53,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _toolCallInProgress = MutableStateFlow(false)
     val toolCallInProgress: StateFlow<Boolean> = _toolCallInProgress.asStateFlow()
 
+    private val _currentToolType = MutableStateFlow<ToolType?>(null)
+    val currentToolType: StateFlow<ToolType?> = _currentToolType.asStateFlow()
+
     fun sendMessage(content: String, selectedTool: Tool? = null, isAutoMode: Boolean = false) {
         // Prevent sending empty messages
         if (content.isBlank()) return
@@ -80,8 +84,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     content,
                     selectedTool,
                     isAutoMode,
-                    onToolCallStart = { _toolCallInProgress.value = true },
-                    onToolCallEnd = { _toolCallInProgress.value = false }
+                    onToolCallStart = { type ->
+                        _currentToolType.value = type
+                        _toolCallInProgress.value = true
+                    },
+                    onToolCallEnd = {
+                        _toolCallInProgress.value = false
+                        _currentToolType.value = null
+                    }
                 )
                 _inputText.value = ""
             } catch (e: Exception) {
@@ -103,8 +113,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         msg.id,
                         selectedTool,
                         isAutoMode,
-                        onToolCallStart = { _toolCallInProgress.value = true },
-                        onToolCallEnd = { _toolCallInProgress.value = false }
+                        onToolCallStart = { type ->
+                            _currentToolType.value = type
+                            _toolCallInProgress.value = true
+                        },
+                        onToolCallEnd = {
+                            _toolCallInProgress.value = false
+                            _currentToolType.value = null
+                        }
                     )
                 }
             } catch (_: Exception) {
@@ -127,8 +143,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         newContent,
                         selectedTool,
                         isAutoMode,
-                        onToolCallStart = { _toolCallInProgress.value = true },
-                        onToolCallEnd = { _toolCallInProgress.value = false },
+                        onToolCallStart = { type ->
+                            _currentToolType.value = type
+                            _toolCallInProgress.value = true
+                        },
+                        onToolCallEnd = {
+                            _toolCallInProgress.value = false
+                            _currentToolType.value = null
+                        },
                         onSyncResult = onSyncResult
                     )
                 }

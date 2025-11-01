@@ -99,23 +99,40 @@ fun MessageBubble(
                     }
                     val textSizeSp = chatFontSize
 
-                    // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                    if (!message.isFromUser && enableTypewriterEffect) {
-                        TypewriterMarkdownRenderer(
-                            markdown = message.content,
+                    // 识别特殊两段格式，使用可折叠框渲染
+                    val hasTwoPartReply = !message.isFromUser && (
+                        message.content.contains("【前置回复】") ||
+                        message.content.contains("【第一次回复】") ||
+                        message.content.contains("【正式回复】")
+                    )
+
+                    if (hasTwoPartReply) {
+                        ExpandableReplyBox(
+                            content = message.content,
                             textColor = textColor,
                             textSizeSp = textSizeSp,
-                            onLongClick = { showDialog = true },
                             isStreaming = isStreaming,
-                            typingDelayMs = 30L
-                        )
-                    } else {
-                        MarkdownRenderer(
-                            markdown = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
                             onLongClick = { showDialog = true }
                         )
+                    } else {
+                        // 根据是否为AI回复且启用打字机效果来选择渲染组件
+                        if (!message.isFromUser && enableTypewriterEffect) {
+                            TypewriterMarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true },
+                                isStreaming = isStreaming,
+                                typingDelayMs = 30L
+                            )
+                        } else {
+                            MarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true }
+                            )
+                        }
                     }
                 }
             }
@@ -133,23 +150,41 @@ fun MessageBubble(
                     .fillMaxWidth()
                     .padding(horizontal = 8.dp)
                 ) {
-                    // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                    if (!message.isFromUser && enableTypewriterEffect) {
-                        TypewriterMarkdownRenderer(
-                            markdown = message.content,
+                    // 识别特殊两段格式，使用可折叠框渲染
+                    val hasTwoPartReply = !message.isFromUser && (
+                        message.content.contains("【前置回复】") ||
+                        message.content.contains("【第一次回复】") ||
+                        message.content.contains("【正式回复】")
+                    )
+
+                    if (hasTwoPartReply) {
+                        ExpandableReplyBox(
+                            content = message.content,
                             textColor = textColor,
                             textSizeSp = textSizeSp,
-                            onLongClick = { showDialog = true },
                             isStreaming = isStreaming,
-                            typingDelayMs = 30L
+                            onLongClick = { showDialog = true },
+                            modifier = Modifier.fillMaxWidth()
                         )
                     } else {
-                        MarkdownRenderer(
-                            markdown = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            onLongClick = { showDialog = true }
-                        )
+                        // 根据是否为AI回复且启用打字机效果来选择渲染组件
+                        if (!message.isFromUser && enableTypewriterEffect) {
+                            TypewriterMarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true },
+                                isStreaming = isStreaming,
+                                typingDelayMs = 30L
+                            )
+                        } else {
+                            MarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true }
+                            )
+                        }
                     }
                 }
             }

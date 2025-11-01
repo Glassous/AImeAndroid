@@ -1,0 +1,130 @@
+package com.glassous.aime.ui.components
+
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.IconButton
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
+
+/**
+ * 识别并展示“【第一次回复】…【正式回复】…”格式的可折叠框。
+ * - 顶部展示“第一次回复”的概要
+ * - 正文为“正式回复”，默认折叠，可点击展开/收起
+ */
+@Composable
+fun ExpandableReplyBox(
+    content: String,
+    textColor: Color,
+    textSizeSp: Float,
+    isStreaming: Boolean,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    // 兼容旧标记，同时统一渲染为“【前置回复】”
+    val preLabelNew = "【前置回复】"
+    val preLabelOld = "【第一次回复】"
+    val postLabel = "【正式回复】"
+
+    val preIndexCandidate = content.indexOf(preLabelNew)
+    val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
+    val postIndex = content.indexOf(postLabel)
+
+    // 若没有“第一次回复”标记，则不展示折叠框
+    if (preIndex == -1) {
+        MarkdownRenderer(
+            markdown = content,
+            textColor = textColor,
+            textSizeSp = textSizeSp,
+            onLongClick = onLongClick,
+            modifier = modifier
+        )
+        return
+    }
+
+    val preLabelLength = if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
+    val preText = content.substring(preIndex + preLabelLength, if (postIndex != -1) postIndex else content.length).trim()
+    val officialText = if (postIndex != -1) content.substring(postIndex + postLabel.length).trim() else null
+
+    var expanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        tonalElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(modifier = Modifier.padding(vertical = 6.dp)) {
+            // 顶部：折叠/展开第一次回复
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = preLabelNew,
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = expanded && preText.isNotEmpty(),
+                enter = expandVertically(),
+                exit = shrinkVertically()
+            ) {
+                MarkdownRenderer(
+                    markdown = preText,
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = onLongClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            // 展开后与正式回复之间留出额外间距
+            val shouldAddGap = expanded && preText.isNotEmpty() && officialText != null && officialText.isNotEmpty()
+            if (shouldAddGap) {
+                Spacer(Modifier.height(40.dp))
+            }
+
+            // 正式回复：正常渲染，不折叠
+            if (officialText != null && officialText.isNotEmpty()) {
+                TypewriterMarkdownRenderer(
+                    markdown = officialText,
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = onLongClick,
+                    isStreaming = isStreaming,
+                    typingDelayMs = 30L
+                )
+            } else {
+                Text(
+                    text = "等待正式回复…",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}

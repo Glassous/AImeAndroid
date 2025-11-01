@@ -42,7 +42,7 @@ class ChatRepository(
         message: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
         return try {
@@ -225,6 +225,8 @@ class ChatRepository(
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
             val updateInterval = 300L // 限制更新频率为每300ms一次，减少频繁重组引发的抖动
+            var preLabelAdded = false
+            var postLabelAdded = false
             
             try {
                 // Switch blocking network streaming to IO dispatcher to avoid main-thread networking
@@ -248,8 +250,26 @@ class ChatRepository(
                             }
                         },
                         onToolCall = { toolCall ->
-                            // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                            onToolCallStart?.invoke()
+                            // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
+                            // 通知UI具体的工具类型以正确显示图标
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                                "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                                else -> {}
+                            }
+                            if (!preLabelAdded) {
+                                val pre = aggregated.toString().trim()
+                                if (pre.isNotEmpty()) {
+                                    aggregated.setLength(0)
+                                    aggregated.append("【前置回复】\n")
+                                    aggregated.append(pre)
+                                    aggregated.append("\n\n")
+                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updated)
+                                }
+                                preLabelAdded = true
+                            }
                             if (toolCall.function?.name == "web_search") {
                                 try {
                                     val arguments = toolCall.function.arguments
@@ -288,6 +308,10 @@ class ChatRepository(
                                             tools = null, // 不再传递工具，避免循环调用
                                             toolChoice = null,
                                             onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n【正式回复】\n")
+                                                    postLabelAdded = true
+                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                                 
@@ -328,6 +352,10 @@ class ChatRepository(
                                             tools = null,
                                             toolChoice = null,
                                             onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n【正式回复】\n")
+                                                    postLabelAdded = true
+                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                                 if (currentTime - lastUpdateTime >= updateInterval) {
@@ -367,6 +395,10 @@ class ChatRepository(
                                             tools = null,
                                             toolChoice = null,
                                             onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n【正式回复】\n")
+                                                    postLabelAdded = true
+                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                                 if (currentTime - lastUpdateTime >= updateInterval) {
@@ -414,7 +446,7 @@ class ChatRepository(
         assistantMessageId: Long,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
         return try {
@@ -589,6 +621,8 @@ class ChatRepository(
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
             val updateInterval = 300L
+            var preLabelAdded = false
+            var postLabelAdded = false
 
             withContext(Dispatchers.IO) {
                 openAiService.streamChatCompletions(
@@ -608,8 +642,26 @@ class ChatRepository(
                         }
                     },
                     onToolCall = { toolCall ->
-                        // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                        onToolCallStart?.invoke()
+                        // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
+                        // 通知UI具体的工具类型以正确显示图标
+                        when (toolCall.function?.name) {
+                            "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                            "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                            "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                            else -> {}
+                        }
+                        if (!preLabelAdded) {
+                            val pre = aggregated.toString().trim()
+                            if (pre.isNotEmpty()) {
+                                aggregated.setLength(0)
+                                aggregated.append("【前置回复】\n")
+                                aggregated.append(pre)
+                                aggregated.append("\n\n")
+                                val updated = target.copy(content = aggregated.toString())
+                                chatDao.updateMessage(updated)
+                            }
+                            preLabelAdded = true
+                        }
                         if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
@@ -641,6 +693,10 @@ class ChatRepository(
                                         model = model.modelName,
                                         messages = messagesWithSearch,
                                         onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n【正式回复】\n")
+                                                postLabelAdded = true
+                                            }
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -675,6 +731,10 @@ class ChatRepository(
                                         model = model.modelName,
                                         messages = messagesWithWeather,
                                         onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n【正式回复】\n")
+                                                postLabelAdded = true
+                                            }
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -710,6 +770,10 @@ class ChatRepository(
                                         model = model.modelName,
                                         messages = messagesWithStock,
                                         onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n【正式回复】\n")
+                                                postLabelAdded = true
+                                            }
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -830,7 +894,7 @@ class ChatRepository(
         newContent: String,
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
-        onToolCallStart: (() -> Unit)? = null,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null,
         onSyncResult: ((Boolean, String) -> Unit)? = null
     ): Result<Unit> {
@@ -1037,8 +1101,26 @@ class ChatRepository(
                         }
                     },
                     onToolCall = { toolCall ->
-                        // 处理工具调用：切换UI状态为调用中，不再向聊天内容插入占位文本
-                        onToolCallStart?.invoke()
+                        // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
+                        // 通知UI具体的工具类型以正确显示图标
+                        when (toolCall.function?.name) {
+                            "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                            "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                            "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                            else -> {}
+                        }
+                        if (!preLabelAdded) {
+                            val pre = aggregated.toString().trim()
+                            if (pre.isNotEmpty()) {
+                                aggregated.setLength(0)
+                                aggregated.append("【前置回复】\n")
+                                aggregated.append(pre)
+                                aggregated.append("\n\n")
+                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                chatDao.updateMessage(updated)
+                            }
+                            preLabelAdded = true
+                        }
                         if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
@@ -1077,6 +1159,10 @@ class ChatRepository(
                                         tools = null, // 不再传递工具，避免循环调用
                                         toolChoice = null,
                                             onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n【正式回复】\n")
+                                                    postLabelAdded = true
+                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                             
@@ -1118,7 +1204,7 @@ class ChatRepository(
                                         toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【工具调用后】\n")
+                                                aggregated.append("\n【正式回复】\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
@@ -1161,7 +1247,7 @@ class ChatRepository(
                                         toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
-                                                aggregated.append("\n【工具调用后】\n")
+                                                aggregated.append("\n【正式回复】\n")
                                                 postLabelAdded = true
                                             }
                                             aggregated.append(delta)
