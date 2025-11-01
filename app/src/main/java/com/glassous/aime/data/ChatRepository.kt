@@ -278,15 +278,26 @@ class ChatRepository(
                                         
                                         // 执行网络搜索
                                         val searchResponse = webSearchService.search(query)
-                                        
-                                        // 构建包含搜索结果的系统消息，让AI基于搜索结果回答
-                                        val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                            val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
-                                                "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
+
+                                        // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
+                                        if (searchResponse.results.isNotEmpty()) {
+                                            val linksMarkdown = searchResponse.results.joinToString("\n") { r ->
+                                                "- [${r.title}](${r.url})"
                                             }
-                                            "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
+                                            aggregated.append("\n\n\n")
+                                            aggregated.append("## 搜索结果\n")
+                                            aggregated.append(linksMarkdown)
+                                            aggregated.append("\n\n\n")
+                                            postLabelAdded = true
+                                            val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                            chatDao.updateMessage(updatedBeforeOfficial)
+                                        }
+
+                                        // 构建最小化系统消息，避免消耗额外token（不附带搜索结果文本）
+                                        val searchResultsText = if (searchResponse.results.isNotEmpty()) {
+                                            "已完成联网搜索，请继续回答用户问题。不要在末尾附加网址或参考链接。"
                                         } else {
-                                            "搜索未找到相关结果，请基于你的知识回答用户的问题。"
+                                            "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                         }
                                         
                                         // 将搜索结果作为系统消息添加到消息列表中
@@ -308,11 +319,6 @@ class ChatRepository(
                                             tools = null, // 不再传递工具，避免循环调用
                                             toolChoice = null,
                                             onDelta = { delta ->
-                                                if (!postLabelAdded) {
-                                                    // 使用三个换行分隔正式回复起始，移除可见标签
-                                                    aggregated.append("\n\n\n")
-                                                    postLabelAdded = true
-                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                                 
@@ -680,19 +686,30 @@ class ChatRepository(
                                 
                                 if (query.isNotEmpty()) {
                                     val searchResponse = webSearchService.search(query)
-                                    
-                                    // 将搜索结果作为系统消息传递给AI进行总结
+
+                                    // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
+                                    if (searchResponse.results.isNotEmpty()) {
+                                        val linksMarkdown = searchResponse.results.joinToString("\n") { r ->
+                                            "- [${r.title}](${r.url})"
+                                        }
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append("## 搜索结果\n")
+                                        aggregated.append(linksMarkdown)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+                                    }
+
+                                    // 将最小化系统消息传递给AI进行总结（不包含搜索结果文本）
                                     val messagesWithSearch = contextMessages.toMutableList()
                                     messagesWithSearch.add(
                                         OpenAiChatMessage(
                                             role = "system",
                                             content = if (searchResponse.results.isNotEmpty()) {
-                                                val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
-                                                    "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
-                                                }
-                                                "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
+                                                "已完成联网搜索，请继续回答用户问题。不要在末尾附加网址或参考链接。"
                                             } else {
-                                                "搜索未找到相关结果，请基于你的知识回答用户的问题。"
+                                                "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                             }
                                         )
                                     )
@@ -704,10 +721,6 @@ class ChatRepository(
                                         model = model.modelName,
                                         messages = messagesWithSearch,
                                         onDelta = { delta ->
-                                            if (!postLabelAdded) {
-                                                aggregated.append("\n\n\n")
-                                                postLabelAdded = true
-                                            }
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -1148,15 +1161,26 @@ class ChatRepository(
                                     
                                     // 执行网络搜索
                                     val searchResponse = webSearchService.search(query)
-                                    
-                                    // 构建包含搜索结果的系统消息，让AI基于搜索结果回答
-                                    val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                        val resultsFormatted = searchResponse.results.joinToString("\n\n") { result ->
-                                            "标题：${result.title}\n链接：${result.url}\n摘要：${result.snippet}"
+
+                                    // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
+                                    if (searchResponse.results.isNotEmpty()) {
+                                        val linksMarkdown = searchResponse.results.joinToString("\n") { r ->
+                                            "- [${r.title}](${r.url})"
                                         }
-                                        "基于以下搜索结果回答用户的问题：\n\n$resultsFormatted\n\n请根据这些搜索结果提供准确、有用的回答。在回答的末尾，请使用markdown格式添加相关链接，格式为：\n\n## 参考链接\n- [标题](链接)\n- [标题](链接)"
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append("## 搜索结果\n")
+                                        aggregated.append(linksMarkdown)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+                                    }
+
+                                    // 构建最小化系统消息，避免消耗额外token（不附带搜索结果文本）
+                                    val searchResultsText = if (searchResponse.results.isNotEmpty()) {
+                                        "已完成联网搜索，请继续回答用户问题。不要在末尾附加网址或参考链接。"
                                     } else {
-                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。"
+                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                     }
                                     
                                     // 将搜索结果作为系统消息添加到消息列表中
@@ -1178,11 +1202,6 @@ class ChatRepository(
                                         tools = null, // 不再传递工具，避免循环调用
                                         toolChoice = null,
                                             onDelta = { delta ->
-                                                if (!postLabelAdded) {
-                                                    // 使用三个换行分隔正式回复起始，移除可见标签
-                                                    aggregated.append("\n\n\n")
-                                                    postLabelAdded = true
-                                                }
                                                 aggregated.append(delta)
                                                 val currentTime = System.currentTimeMillis()
                                             

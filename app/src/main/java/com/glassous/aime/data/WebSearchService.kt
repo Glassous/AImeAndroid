@@ -190,18 +190,36 @@ class WebSearchService(
             val results = mutableListOf<SearchResult>()
             for (item in pearApiResponse.data.take(maxResults)) {
                 try {
-                    // 清理URL（移除可能的空格和引号）
-                    val cleanUrl = item.href.trim().removeSurrounding("\"").removeSurrounding("'")
-                    
-                    // 验证URL有效性
-                    if (cleanUrl.isNotBlank() && (cleanUrl.startsWith("http://") || cleanUrl.startsWith("https://"))) {
+                    // 清理URL（移除可能的空格、引号、反引号）
+                    fun cleanse(raw: String): String {
+                        return raw
+                            .trim()
+                            .removeSurrounding("\"")
+                            .removeSurrounding("'")
+                            .removeSurrounding("`")
+                            .replace("`", "")
+                            .trim()
+                    }
+
+                    val hrefRaw = item.href
+                    val cacheRaw = item.cacheLink
+                    val cleanHref = cleanse(hrefRaw)
+                    val cleanCache = cleanse(cacheRaw)
+
+                    fun isValid(url: String): Boolean =
+                        url.isNotBlank() && (url.startsWith("http://") || url.startsWith("https://"))
+
+                    val chosenUrl = if (isValid(cleanHref)) cleanHref else cleanCache
+
+                    // 验证URL有效性（优先使用 href，其次使用 cache_link）
+                    if (isValid(chosenUrl)) {
                         // 抓取网页内容
-                        val fullContent = fetchWebContent(cleanUrl)
-                        
+                        val fullContent = fetchWebContent(chosenUrl)
+
                         results.add(
                             SearchResult(
                                 title = item.title.trim(),
-                                url = cleanUrl,
+                                url = chosenUrl,
                                 snippet = item.abstract.trim(),
                                 fullContent = fullContent
                             )
