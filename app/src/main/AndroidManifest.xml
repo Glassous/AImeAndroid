@@ -26,6 +26,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 用户设置页面 -->
+        <activity
+            android:name=".ui.settings.UserSettingsActivity"
+            android:exported="false"
+            android:label="用户设置"
+            android:theme="@style/Theme.AIme" />
     </application>
 
 </manifest>

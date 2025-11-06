@@ -18,12 +18,16 @@ import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModelFactory
 import com.glassous.aime.ui.settings.OssConfigScreen
 import com.glassous.aime.data.preferences.OssPreferences
+import com.glassous.aime.ui.settings.UserSettingsScreen
+import com.glassous.aime.ui.viewmodel.UserProfileViewModel
+import com.glassous.aime.ui.viewmodel.UserProfileViewModelFactory
 
 sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object Settings : Screen("settings")
     object ModelConfig : Screen("model_config")
     object OssConfig : Screen("oss_config")
+    object UserSettings : Screen("user_settings")
     object MessageDetail : Screen("message_detail")
 }
 
@@ -74,6 +78,9 @@ fun AppNavigation() {
                 onNavigateToOssConfig = {
                     navController.navigate(Screen.OssConfig.route)
                 },
+                onNavigateToUserSettings = {
+                    navController.navigate(Screen.UserSettings.route)
+                },
                 themeViewModel = themeViewModel
             )
         }
@@ -90,6 +97,16 @@ fun AppNavigation() {
             OssConfigScreen(
                 ossPreferences = ossPreferences,
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.UserSettings.route) {
+            val userProfileViewModel: UserProfileViewModel = viewModel(
+                factory = UserProfileViewModelFactory(application)
+            )
+            UserSettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                viewModel = userProfileViewModel
             )
         }
 

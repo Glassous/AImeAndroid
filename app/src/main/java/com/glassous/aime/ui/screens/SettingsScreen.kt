@@ -55,6 +55,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToModelConfig: () -> Unit,
     onNavigateToOssConfig: () -> Unit,
+    onNavigateToUserSettings: () -> Unit,
     themeViewModel: ThemeViewModel
 ) {
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
@@ -63,8 +64,6 @@ fun SettingsScreen(
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
     val chatUiOverlayAlpha by themeViewModel.chatUiOverlayAlpha.collectAsState()
-    // 新增：聊天页面单独全屏显示状态
-    val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
@@ -288,30 +287,6 @@ fun SettingsScreen(
                         }
                     }
 
-                    // 新增：聊天页面单独全屏显示设置
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "聊天页面全屏显示",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "独立于极简模式的聊天页面全屏设置",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = chatFullscreen,
-                            onCheckedChange = { themeViewModel.setChatFullscreen(it) }
-                        )
-                    }
                 }
             }
             // 模型配置卡片（移到下方）
@@ -345,6 +320,41 @@ fun SettingsScreen(
                         Icon(Icons.Filled.Settings, contentDescription = "模型设置")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("模型设置")
+                    }
+                }
+            }
+
+            // 用户设置卡片（位于模型配置与最大上下文限制之间）
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "用户设置",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "编辑昵称、城市、语言、年龄等个人资料",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Button(
+                        onClick = onNavigateToUserSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Settings, contentDescription = "用户设置")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("打开用户设置")
                     }
                 }
             }

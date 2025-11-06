@@ -10,6 +10,7 @@ import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.OssPreferences
 import com.glassous.aime.data.preferences.AutoSyncPreferences
+import com.glassous.aime.data.preferences.UserProfilePreferences
 import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 
 
@@ -36,6 +37,9 @@ class AIMeApplication : Application() {
     // Auto sync preferences instance
     val autoSyncPreferences by lazy { AutoSyncPreferences(this) }
 
+    // User profile preferences instance
+    val userProfilePreferences by lazy { UserProfilePreferences(this) }
+
     // Context limit preferences instance
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
 
@@ -50,7 +54,8 @@ class AIMeApplication : Application() {
             modelPreferences = modelPreferences,
             autoSyncPreferences = autoSyncPreferences,
             cloudSyncViewModel = cloudSyncViewModel,
-            contextPreferences = contextPreferences
+            contextPreferences = contextPreferences,
+            userProfilePreferences = userProfilePreferences
         )
     }
 

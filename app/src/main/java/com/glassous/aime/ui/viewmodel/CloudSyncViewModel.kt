@@ -26,6 +26,7 @@ import com.glassous.aime.data.model.ModelConfigBackup
 import com.glassous.aime.data.model.HistoryIndex
 import com.glassous.aime.data.model.HistoryEntry
 import com.glassous.aime.data.model.HistoryRecord
+import com.glassous.aime.data.model.UserProfile
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.alibaba.sdk.android.oss.OSS
@@ -60,6 +61,7 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
     private val modelConfigKey = "AIme/model_config.json"
     private val historyIndexKey = "AIme/history/index.json"
     private fun historyRecordKey(id: Long) = "AIme/history/${id}.json"
+    private val userProfileKey = "AIme/user_profile.json"
 
     private suspend fun createBackupData(): BackupData {
         val groups = modelDao.getAllGroups().first()
@@ -69,6 +71,7 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
             models.addAll(m)
         }
         val selectedModelId = modelPreferences.selectedModelId.first()
+        val profile: UserProfile = app.userProfilePreferences.profile.first()
 
         val conversations = chatDao.getAllConversations().first()
         val backupConversations = mutableListOf<BackupConversation>()
@@ -99,7 +102,8 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
             modelGroups = groups,
             models = models,
             selectedModelId = selectedModelId,
-            conversations = backupConversations
+            conversations = backupConversations,
+            userProfile = profile
         )
     }
 
@@ -206,9 +210,15 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                 }
                 val toDeleteRemote = remoteMap.keys.filter { it !in localMap.keys }
 
-                // 4) 上传模型配置（始终覆盖，体量小）
+                // 4) 上传模型配置与用户资料（始终覆盖，体量小）
                 val modelJson = gson.toJson(modelBackup)
                 oss.putObject(PutObjectRequest(bucket, modelConfigKey, modelJson.toByteArray(StandardCharsets.UTF_8)))
+                // 用户资料
+                try {
+                    val profile: UserProfile = app.userProfilePreferences.profile.first()
+                    val profileJson = gson.toJson(profile)
+                    oss.putObject(PutObjectRequest(bucket, userProfileKey, profileJson.toByteArray(StandardCharsets.UTF_8)))
+                } catch (_: Exception) { /* 用户资料不存在或序列化失败时忽略 */ }
 
                 // 5) 删除远端多余记录文件
                 toDeleteRemote.forEach { id ->
@@ -254,6 +264,28 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    /** 仅上传用户资料（用于用户保存时的轻量同步） */
+    fun uploadUserProfileOnly(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val endpoint = ossPreferences.endpoint.first() ?: throw IllegalStateException("请先配置Endpoint")
+                val bucket = ossPreferences.bucket.first() ?: throw IllegalStateException("请先配置Bucket名称")
+                val ak = ossPreferences.accessKeyId.first() ?: throw IllegalStateException("请先配置AccessKey ID")
+                val sk = ossPreferences.accessKeySecret.first() ?: throw IllegalStateException("请先配置AccessKey Secret")
+
+                val credentialProvider: OSSCredentialProvider = OSSPlainTextAKSKCredentialProvider(ak, sk)
+                val oss: OSS = OSSClient(getApplication(), endpoint, credentialProvider)
+
+                val profile: UserProfile = app.userProfilePreferences.profile.first()
+                val profileJson = gson.toJson(profile)
+                oss.putObject(PutObjectRequest(bucket, userProfileKey, profileJson.toByteArray(StandardCharsets.UTF_8)))
+                onResult(true, "用户资料上传成功")
+            } catch (e: Exception) {
+                onResult(false, "用户资料上传失败：${e.message}")
+            }
+        }
+    }
+
     /**
      * 智能下载并导入：优先增量；无增量结构则回退旧AImeBackup.json
      */
@@ -289,6 +321,14 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                         mc.models.forEach { modelDao.insertModel(it) }
                         if (mc.selectedModelId != null) modelPreferences.setSelectedModelId(mc.selectedModelId)
                     } catch (_: Exception) { /* 若没有模型文件则跳过 */ }
+
+                    // 1.5) 下载并保存用户资料（可选）
+                    try {
+                        val upObj = oss.getObject(GetObjectRequest(bucket, userProfileKey))
+                        val upJson = BufferedReader(InputStreamReader(upObj.objectContent, StandardCharsets.UTF_8)).use { it.readText() }
+                        val profile = gson.fromJson(upJson, UserProfile::class.java)
+                        app.userProfilePreferences.setUserProfile(profile)
+                    } catch (_: Exception) { /* 若没有用户资料文件则跳过 */ }
 
                     // 2) 按索引迭代会话记录：存在同ID则覆盖更新，不存在则创建新会话
                     remoteIndex.items.forEach { entry ->
@@ -408,6 +448,11 @@ class CloudSyncViewModel(application: Application) : AndroidViewModel(applicatio
                             )
                         )
                     }
+                }
+
+                // 导入用户资料（若存在）
+                backup.userProfile?.let { profile ->
+                    try { app.userProfilePreferences.setUserProfile(profile) } catch (_: Exception) {}
                 }
 
                 val formatName = when (format) {

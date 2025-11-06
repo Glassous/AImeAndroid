@@ -21,6 +21,7 @@ import com.glassous.aime.data.model.ValidationResult
 import com.glassous.aime.data.model.BackupData
 import com.glassous.aime.data.model.BackupConversation
 import com.glassous.aime.data.model.BackupMessage
+import com.glassous.aime.data.model.UserProfile
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -55,6 +56,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     models.addAll(m)
                 }
                 val selectedModelId = modelPreferences.selectedModelId.first()
+                val profile: UserProfile = app.userProfilePreferences.profile.first()
 
                 val conversations = chatDao.getAllConversations().first()
                 val backupConversations = mutableListOf<BackupConversation>()
@@ -85,7 +87,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     modelGroups = groups,
                     models = models,
                     selectedModelId = selectedModelId,
-                    conversations = backupConversations
+                    conversations = backupConversations,
+                    userProfile = profile
                 )
 
                 context.contentResolver.openOutputStream(uri)?.use { os ->
@@ -176,6 +179,11 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                             )
                         )
                     }
+                }
+
+                // 导入用户资料（若存在）
+                backup.userProfile?.let { profile ->
+                    try { app.userProfilePreferences.setUserProfile(profile) } catch (_: Exception) {}
                 }
 
                 val formatName = when (format) {

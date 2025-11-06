@@ -9,7 +9,8 @@ data class BackupData(
     val modelGroups: List<ModelGroup>,
     val models: List<Model>,
     val selectedModelId: String?,
-    val conversations: List<BackupConversation>
+    val conversations: List<BackupConversation>,
+    val userProfile: UserProfile? = null
 )
 
 data class BackupConversation(
