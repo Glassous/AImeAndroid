@@ -14,8 +14,8 @@ android {
         applicationId = "com.glassous.aime"
         minSdk = 33
         targetSdk = 36
-        versionCode = 4
-        versionName = "2.2"
+        versionCode = 5
+        versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
