@@ -26,6 +26,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import kotlin.math.roundToInt
+import com.glassous.aime.data.ChatMessage
 
 @Composable
 fun TransparencySettingDialog(
@@ -81,22 +82,54 @@ fun TransparencySettingDialog(
                         .background(MaterialTheme.colorScheme.background)
                         .border(1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
                 ) {
-                    // 铺设超长文本：使用《罪与罚》公共领域译文片段
+                    // 预览内容：底层为可滚动消息，顶部栏与底部输入栏悬浮覆盖
                     val previewText = stringResource(id = com.glassous.aime.R.string.preview_long_text_dostoevsky)
-                    Text(
-                        text = previewText,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(12.dp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                        fontSize = 12.sp,
-                        lineHeight = 16.sp,
-                        textAlign = TextAlign.Start
-                    )
-                    Column(Modifier.fillMaxSize()) {
-                        // 顶部栏（整体遮罩 + 按钮背景）
+                    Box(Modifier.fillMaxSize()) {
+                        // 可滚动消息层：跨越整个预览区域，使内容可延伸至顶部栏与输入栏下方
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // 顶部安全距离（与顶部栏同高），初始时避免内容被遮挡，滚动后可进入顶部栏区域
+                            Spacer(modifier = Modifier.height(56.dp))
+
+                            // 发送气泡（用户消息）：位于回复文章上方
+                            MessageBubble(
+                                message = ChatMessage(
+                                    id = -1L,
+                                    conversationId = 0L,
+                                    content = "来个小说片段",
+                                    isFromUser = true
+                                ),
+                                onShowDetails = { _ -> },
+                                onRegenerate = null,
+                                onEditUserMessage = null,
+                                replyBubbleEnabled = true,
+                                chatFontSize = 12f,
+                                isStreaming = false,
+                                enableTypewriterEffect = false
+                            )
+
+                            // 回复区域：无气泡，保持文本展示
+                            Text(
+                                text = previewText,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp,
+                                textAlign = TextAlign.Start
+                            )
+
+                            // 底部安全距离：与输入栏近似同高，初始时避免内容被遮挡，滚动到末尾后可进入输入栏区域
+                            Spacer(modifier = Modifier.height(60.dp))
+                        }
+
+                        // 顶部栏（整体遮罩 + 按钮背景）悬浮层
                         Box(
                             modifier = Modifier
+                                .align(Alignment.TopStart)
                                 .fillMaxWidth()
                                 .height(56.dp)
                                 .background(MaterialTheme.colorScheme.background.copy(alpha = tempAlpha))
@@ -137,18 +170,13 @@ fun TransparencySettingDialog(
                             }
                         }
 
-                        // 中部内容占位留白（由底层超长文本覆盖）
-                        Spacer(
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(12.dp)
-                        )
-
-                        // 输入区域（外层遮罩 + 内部背景）
+                        // 输入区域（外层遮罩 + 内部背景）悬浮层
                         Surface(
                             color = MaterialTheme.colorScheme.background.copy(alpha = tempAlpha),
                             tonalElevation = 0.dp,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth()
                         ) {
                             Row(
                                 modifier = Modifier
@@ -178,9 +206,13 @@ fun TransparencySettingDialog(
                                 FilledIconButton(
                                     onClick = {},
                                     shape = RoundedCornerShape(24.dp),
-                                    modifier = Modifier.size(36.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
-                                    Icon(imageVector = Icons.AutoMirrored.Filled.Send, contentDescription = null)
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
                             }
                         }
