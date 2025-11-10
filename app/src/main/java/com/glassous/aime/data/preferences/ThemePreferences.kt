@@ -33,6 +33,12 @@ class ThemePreferences(private val context: Context) {
         private val CHAT_FONT_SIZE = floatPreferencesKey("chat_font_size")
         // 新增：聊天页面UI透明度设置（顶部栏/状态栏区域/底部输入区），0.0-1.0，默认0.5
         private val CHAT_UI_OVERLAY_ALPHA = floatPreferencesKey("chat_ui_overlay_alpha")
+        // 新增：顶部栏汉堡菜单按钮背景透明度（默认0.5）
+        private val TOPBAR_HAMBURGER_ALPHA = floatPreferencesKey("topbar_hamburger_alpha")
+        // 新增：顶部栏模型文字按钮背景透明度（默认0.5）
+        private val TOPBAR_MODEL_TEXT_ALPHA = floatPreferencesKey("topbar_model_text_alpha")
+        // 新增：输入框内部背景透明度（默认0.9）
+        private val CHAT_INPUT_INNER_ALPHA = floatPreferencesKey("chat_input_inner_alpha")
         // 新增：极简模式下全屏显示
         private val MINIMAL_MODE_FULLSCREEN = booleanPreferencesKey("minimal_mode_fullscreen")
         // 新增：聊天页面单独全屏显示
@@ -65,6 +71,24 @@ class ThemePreferences(private val context: Context) {
     val chatUiOverlayAlpha: Flow<Float> = context.dataStore.data
         .map { preferences ->
             preferences[CHAT_UI_OVERLAY_ALPHA] ?: 0.75f
+        }
+
+    // 新增：顶部栏汉堡菜单按钮背景透明度（默认0.5）
+    val topBarHamburgerAlpha: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[TOPBAR_HAMBURGER_ALPHA] ?: 0.5f
+        }
+
+    // 新增：顶部栏模型文字按钮背景透明度（默认0.5）
+    val topBarModelTextAlpha: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[TOPBAR_MODEL_TEXT_ALPHA] ?: 0.5f
+        }
+
+    // 新增：输入框内部背景透明度（默认0.9）
+    val chatInputInnerAlpha: Flow<Float> = context.dataStore.data
+        .map { preferences ->
+            preferences[CHAT_INPUT_INNER_ALPHA] ?: 0.9f
         }
 
     // 新增：极简模式下全屏显示开关（默认false）
@@ -124,6 +148,27 @@ class ThemePreferences(private val context: Context) {
     suspend fun setChatUiOverlayAlpha(alpha: Float) {
         context.dataStore.edit { preferences ->
             preferences[CHAT_UI_OVERLAY_ALPHA] = alpha.coerceIn(0f, 1f)
+        }
+    }
+
+    // 新增：设置顶部栏汉堡菜单按钮背景透明度
+    suspend fun setTopBarHamburgerAlpha(alpha: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[TOPBAR_HAMBURGER_ALPHA] = alpha.coerceIn(0f, 1f)
+        }
+    }
+
+    // 新增：设置顶部栏模型文字按钮背景透明度
+    suspend fun setTopBarModelTextAlpha(alpha: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[TOPBAR_MODEL_TEXT_ALPHA] = alpha.coerceIn(0f, 1f)
+        }
+    }
+
+    // 新增：设置输入框内部背景透明度
+    suspend fun setChatInputInnerAlpha(alpha: Float) {
+        context.dataStore.edit { preferences ->
+            preferences[CHAT_INPUT_INNER_ALPHA] = alpha.coerceIn(0f, 1f)
         }
     }
 

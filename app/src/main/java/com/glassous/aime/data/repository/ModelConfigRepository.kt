@@ -207,5 +207,15 @@ class ModelConfigRepository(
         )
         ensureModel(deepseek.id, "Deepseek-reasoner", "deepseek-reasoner")
         ensureModel(deepseek.id, "Deepseek-chat", "deepseek-chat")
+
+        // 4. 豆包
+        val doubao = ensureGroup(
+            name = "豆包",
+            baseUrl = "https://ark.cn-beijing.volces.com/api/v3",
+            providerUrl = "https://www.volcengine.com/product/ark"
+        )
+        ensureModel(doubao.id, "doubao-seed-1-6-251015", "doubao-seed-1-6-251015")
+        ensureModel(doubao.id, "doubao-seed-1-6-flash-250828", "doubao-seed-1-6-flash-250828")
+        ensureModel(doubao.id, "doubao-seed-1-6-lite-251015", "doubao-seed-1-6-lite-251015")
     }
 }

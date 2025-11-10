@@ -32,6 +32,18 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatUiOverlayAlpha = MutableStateFlow(0.5f)
     val chatUiOverlayAlpha: StateFlow<Float> = _chatUiOverlayAlpha.asStateFlow()
 
+    // 新增：顶部栏汉堡菜单按钮背景透明度
+    private val _topBarHamburgerAlpha = MutableStateFlow(0.5f)
+    val topBarHamburgerAlpha: StateFlow<Float> = _topBarHamburgerAlpha.asStateFlow()
+
+    // 新增：顶部栏模型文字按钮背景透明度
+    private val _topBarModelTextAlpha = MutableStateFlow(0.5f)
+    val topBarModelTextAlpha: StateFlow<Float> = _topBarModelTextAlpha.asStateFlow()
+
+    // 新增：输入框内部背景透明度
+    private val _chatInputInnerAlpha = MutableStateFlow(0.9f)
+    val chatInputInnerAlpha: StateFlow<Float> = _chatInputInnerAlpha.asStateFlow()
+
     // 新增：极简模式下全屏显示
     private val _minimalModeFullscreen = MutableStateFlow(false)
     val minimalModeFullscreen: StateFlow<Boolean> = _minimalModeFullscreen.asStateFlow()
@@ -71,6 +83,24 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.chatUiOverlayAlpha.collect { alpha ->
                 _chatUiOverlayAlpha.value = alpha
+            }
+        }
+        // 收集顶部栏汉堡菜单按钮背景透明度
+        viewModelScope.launch {
+            themePreferences.topBarHamburgerAlpha.collect { alpha ->
+                _topBarHamburgerAlpha.value = alpha
+            }
+        }
+        // 收集顶部栏模型文字按钮背景透明度
+        viewModelScope.launch {
+            themePreferences.topBarModelTextAlpha.collect { alpha ->
+                _topBarModelTextAlpha.value = alpha
+            }
+        }
+        // 收集输入框内部背景透明度
+        viewModelScope.launch {
+            themePreferences.chatInputInnerAlpha.collect { alpha ->
+                _chatInputInnerAlpha.value = alpha
             }
         }
         // 收集极简模式下全屏显示开关
@@ -130,6 +160,27 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setChatUiOverlayAlpha(alpha: Float) {
         viewModelScope.launch {
             themePreferences.setChatUiOverlayAlpha(alpha)
+        }
+    }
+
+    // 新增：设置顶部栏汉堡菜单按钮背景透明度
+    fun setTopBarHamburgerAlpha(alpha: Float) {
+        viewModelScope.launch {
+            themePreferences.setTopBarHamburgerAlpha(alpha)
+        }
+    }
+
+    // 新增：设置顶部栏模型文字按钮背景透明度
+    fun setTopBarModelTextAlpha(alpha: Float) {
+        viewModelScope.launch {
+            themePreferences.setTopBarModelTextAlpha(alpha)
+        }
+    }
+
+    // 新增：设置输入框内部背景透明度
+    fun setChatInputInnerAlpha(alpha: Float) {
+        viewModelScope.launch {
+            themePreferences.setChatInputInnerAlpha(alpha)
         }
     }
 

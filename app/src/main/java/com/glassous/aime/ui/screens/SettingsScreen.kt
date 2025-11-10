@@ -64,6 +64,9 @@ fun SettingsScreen(
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
     val chatUiOverlayAlpha by themeViewModel.chatUiOverlayAlpha.collectAsState()
+    val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
+    val topBarModelTextAlpha by themeViewModel.topBarModelTextAlpha.collectAsState()
+    val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
@@ -276,13 +279,8 @@ fun SettingsScreen(
                     ) {
                         Column(Modifier.weight(1f)) {
                             Text(
-                                text = "修改聊天页面顶部栏透明度",
+                                text = "修改聊天页面组件透明度",
                                 style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "${(chatUiOverlayAlpha * 100).toInt()}%",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -769,6 +767,18 @@ fun SettingsScreen(
             currentAlpha = chatUiOverlayAlpha,
             onAlphaChange = { newAlpha ->
                 themeViewModel.setChatUiOverlayAlpha(newAlpha)
+            },
+            currentHamburgerAlpha = topBarHamburgerAlpha,
+            onHamburgerAlphaChange = { newAlpha ->
+                themeViewModel.setTopBarHamburgerAlpha(newAlpha)
+            },
+            currentModelTextAlpha = topBarModelTextAlpha,
+            onModelTextAlphaChange = { newAlpha ->
+                themeViewModel.setTopBarModelTextAlpha(newAlpha)
+            },
+            currentInputInnerAlpha = chatInputInnerAlpha,
+            onInputInnerAlphaChange = { newAlpha ->
+                themeViewModel.setChatInputInnerAlpha(newAlpha)
             },
             onDismiss = { showTransparencyDialog = false },
             onConfirm = { showTransparencyDialog = false }

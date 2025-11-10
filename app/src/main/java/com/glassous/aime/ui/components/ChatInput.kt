@@ -50,14 +50,16 @@ fun ChatInput(
     onDownloadClick: () -> Unit = {},
     onScrollToBottomClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    overlayAlpha: Float = 0.5f
+    overlayAlpha: Float = 0.5f,
+    // 新增：输入框内部背景透明度（默认与当前实现一致）
+    innerAlpha: Float = 0.9f
 ) {
     val focusManager = LocalFocusManager.current
     // 固定发送按钮高度为输入框初始高度（硬编码）
     val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
-    // 根据极简模式与隐藏占位符设置，控制输入框背景透明度
-    val inputContainerAlpha = if (minimalMode && hideInputPlaceholder && inputText.isBlank()) 0f else 0.9f
+    // 根据极简模式与隐藏占位符设置，控制输入框内部背景透明度
+    val inputContainerAlpha = if (minimalMode && hideInputPlaceholder && inputText.isBlank()) 0f else innerAlpha.coerceIn(0f, 1f)
     
     Surface(
         modifier = modifier.fillMaxWidth(),

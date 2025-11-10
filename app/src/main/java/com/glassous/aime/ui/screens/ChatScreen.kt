@@ -123,6 +123,11 @@ fun ChatScreen(
     // 新增：读取聊天页面UI透明度
     val chatUiOverlayAlpha by themePreferences.chatUiOverlayAlpha.collectAsState(initial = 0.5f)
 
+    // 新增：读取顶部栏汉堡菜单与模型文字按钮透明度，以及输入框内部透明度
+    val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
+    val topBarModelTextAlpha by themeViewModel.topBarModelTextAlpha.collectAsState()
+    val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
+
     // 新增：读取聊天页面单独全屏显示设置
     val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
     // 读取全局极简模式全屏设置
@@ -477,7 +482,7 @@ fun ChatScreen(
                                     color = if (minimalMode && minimalModeConfig.hideModelSelectionText) {
                                         Color.Transparent
                                     } else {
-                                        MaterialTheme.colorScheme.background.copy(alpha = 0.5f)
+                                        MaterialTheme.colorScheme.background.copy(alpha = topBarModelTextAlpha)
                                     },
                                     shape = MaterialTheme.shapes.small,
                                     tonalElevation = 0.dp,
@@ -503,7 +508,7 @@ fun ChatScreen(
                             if (!(minimalMode && minimalModeConfig.hideNavigationMenu)) {
                                 // 汉堡菜单背景始终显示为 50% 透明，不再判断
                                 Surface(
-                                    color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
+                                    color = MaterialTheme.colorScheme.background.copy(alpha = topBarHamburgerAlpha),
                                     shape = CircleShape,
                                     tonalElevation = 0.dp
                                 ) {
@@ -624,7 +629,8 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        overlayAlpha = chatUiOverlayAlpha
+                        overlayAlpha = chatUiOverlayAlpha,
+                        innerAlpha = chatInputInnerAlpha
                     )
                 }
             ) { paddingValues ->

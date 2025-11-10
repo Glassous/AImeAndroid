@@ -3,6 +3,8 @@ package com.glassous.aime.data
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import com.glassous.aime.data.repository.ModelConfigRepository
+import com.glassous.aime.data.model.Model
+import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.AutoSyncPreferences
 import com.glassous.aime.data.preferences.ContextPreferences
@@ -28,6 +30,7 @@ class ChatRepository(
     private val contextPreferences: ContextPreferences,
     private val userProfilePreferences: UserProfilePreferences,
     private val openAiService: OpenAiService = OpenAiService(),
+    private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
     private val weatherService: WeatherService = WeatherService(),
     private val stockService: StockService = StockService()
@@ -237,10 +240,9 @@ class ChatRepository(
             try {
                 // Switch blocking network streaming to IO dispatcher to avoid main-thread networking
                 val finalText = withContext(Dispatchers.IO) {
-                    openAiService.streamChatCompletions(
-                        baseUrl = group.baseUrl,
-                        apiKey = group.apiKey,
-                        model = model.modelName,
+                    streamWithFallback(
+                        primaryGroup = group,
+                        primaryModel = model,
                         messages = messages,
                         tools = tools,
                         toolChoice = if (tools != null) "auto" else null,
@@ -317,10 +319,9 @@ class ChatRepository(
                                         
                                         // 重新调用AI，让它基于搜索结果生成回答
                                         // 注意：这里不再传递工具，避免无限循环
-                                        val searchBasedResponse = openAiService.streamChatCompletions(
-                                            baseUrl = group.baseUrl,
-                                            apiKey = group.apiKey,
-                                            model = model.modelName,
+                                        val searchBasedResponse = streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
                                             messages = messagesWithSearch,
                                             tools = null, // 不再传递工具，避免循环调用
                                             toolChoice = null,
@@ -367,10 +368,9 @@ class ChatRepository(
                                             )
                                         )
                                         
-                                        openAiService.streamChatCompletions(
-                                            baseUrl = group.baseUrl,
-                                            apiKey = group.apiKey,
-                                            model = model.modelName,
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
                                             messages = messagesWithWeather,
                                             tools = null,
                                             toolChoice = null,
@@ -410,10 +410,9 @@ class ChatRepository(
                                         val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                         chatDao.updateMessage(updatedBeforeOfficial)
 
-                                        openAiService.streamChatCompletions(
-                                            baseUrl = group.baseUrl,
-                                            apiKey = group.apiKey,
-                                            model = model.modelName,
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
                                             messages = messages,
                                             tools = null,
                                             toolChoice = null,
@@ -451,7 +450,7 @@ class ChatRepository(
 
                 Result.success(finalUpdated)
             } catch (e: Exception) {
-                // On error, update assistant message with error content
+                // 如果走到这里，说明主流调用与回调均失败
                 val errorUpdated = assistantMessage.copy(
                     content = "生成失败：${e.message}",
                     isError = true
@@ -654,10 +653,9 @@ class ChatRepository(
             var postLabelAdded = false
 
             withContext(Dispatchers.IO) {
-                openAiService.streamChatCompletions(
-                    baseUrl = group.baseUrl,
-                    apiKey = group.apiKey,
-                    model = model.modelName,
+                streamWithFallback(
+                    primaryGroup = group,
+                    primaryModel = model,
                     messages = messagesWithBias,
                     tools = tools,
                     toolChoice = if (tools != null) "auto" else null,
@@ -727,11 +725,12 @@ class ChatRepository(
                                     )
                                     
                                     // 重新调用AI进行总结（不传递tools避免无限循环）
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = messagesWithSearch,
+                                        tools = null,
+                                        toolChoice = null,
                                         onDelta = { delta ->
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
@@ -769,11 +768,12 @@ class ChatRepository(
                                         )
                                     )
                                     
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = messagesWithWeather,
+                                        tools = null,
+                                        toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
                                                 aggregated.append("\n\n\n")
@@ -810,11 +810,12 @@ class ChatRepository(
                                     val updatedBeforeOfficial = target.copy(content = aggregated.toString())
                                     chatDao.updateMessage(updatedBeforeOfficial)
                                     
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = contextMessages,
+                                        tools = null,
+                                        toolChoice = null,
                                         onDelta = { delta ->
                                             if (!postLabelAdded) {
                                                 aggregated.append("\n\n\n")
@@ -1130,10 +1131,9 @@ class ChatRepository(
             }
 
             withContext(Dispatchers.IO) {
-                openAiService.streamChatCompletions(
-                    baseUrl = group.baseUrl,
-                    apiKey = group.apiKey,
-                    model = model.modelName,
+                streamWithFallback(
+                    primaryGroup = group,
+                    primaryModel = model,
                     messages = messagesWithBias,
                     tools = tools,
                     toolChoice = if (tools != null) "auto" else null,
@@ -1210,16 +1210,15 @@ class ChatRepository(
                                     
                                     // 重新调用AI，让它基于搜索结果生成回答
                                     // 注意：这里不再传递工具，避免无限循环
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = messagesWithSearch,
                                         tools = null, // 不再传递工具，避免循环调用
                                         toolChoice = null,
-                                            onDelta = { delta ->
-                                                aggregated.append(delta)
-                                                val currentTime = System.currentTimeMillis()
+                                        onDelta = { delta ->
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
                                             
                                             // 节流更新
                                             if (currentTime - lastUpdateTime >= updateInterval) {
@@ -1261,10 +1260,9 @@ class ChatRepository(
                                         )
                                     )
                                     
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = messagesWithWeather,
                                         tools = null,
                                         toolChoice = null,
@@ -1305,10 +1303,9 @@ class ChatRepository(
                                     val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                     chatDao.updateMessage(updatedBeforeOfficial)
                                     
-                                    openAiService.streamChatCompletions(
-                                        baseUrl = group.baseUrl,
-                                        apiKey = group.apiKey,
-                                        model = model.modelName,
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
                                         messages = buildList {
                                             addAll(contextMessages)
                                             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
@@ -1332,7 +1329,7 @@ class ChatRepository(
                                         },
                                         onToolCall = { /* 不处理工具调用，避免循环 */ }
                                     )
-                                }
+                }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n股票工具暂时不可用：${e.message}\n\n")
                             }
@@ -1550,5 +1547,60 @@ class ChatRepository(
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.toIntOrNull()?.let { return it }
 
         return default
+    }
+
+    // 统一的流式调用，失败时自动回调至豆包（Ark）
+    private suspend fun streamWithFallback(
+        primaryGroup: ModelGroup,
+        primaryModel: Model,
+        messages: List<OpenAiChatMessage>,
+        tools: List<com.glassous.aime.data.Tool>? = null,
+        toolChoice: String? = null,
+        onDelta: suspend (String) -> Unit,
+        onToolCall: suspend (ToolCall) -> Unit = {}
+    ): String {
+        return try {
+            openAiService.streamChatCompletions(
+                baseUrl = primaryGroup.baseUrl,
+                apiKey = primaryGroup.apiKey,
+                model = primaryModel.modelName,
+                messages = messages,
+                tools = tools,
+                toolChoice = toolChoice,
+                onDelta = onDelta,
+                onToolCall = onToolCall
+            )
+        } catch (e: Exception) {
+            val fallback = findDoubaoFallbackModel()
+            if (fallback != null) {
+                val (dg, dm) = fallback
+                doubaoService.streamChatCompletions(
+                    baseUrl = dg.baseUrl,
+                    apiKey = dg.apiKey,
+                    model = dm.modelName,
+                    messages = messages,
+                    tools = null, // 回调不传工具，避免循环/兼容性问题
+                    toolChoice = null,
+                    onDelta = onDelta,
+                    onToolCall = { /* 回调阶段忽略工具调用 */ }
+                )
+            } else {
+                throw e
+            }
+        }
+    }
+
+    private suspend fun findDoubaoFallbackModel(): Pair<ModelGroup, Model>? {
+        val groups = modelConfigRepository.getAllGroups().first()
+        val doubaoGroup = groups.find {
+            it.baseUrl.contains("ark.cn-beijing.volces.com") ||
+            it.name.contains("豆包") ||
+            it.name.contains("Volc", ignoreCase = true) ||
+            it.name.contains("Ark", ignoreCase = true)
+        } ?: return null
+        val models = modelConfigRepository.getModelsByGroupId(doubaoGroup.id).first()
+        val m = models.firstOrNull() ?: return null
+        if (doubaoGroup.apiKey.isBlank() || m.modelName.isBlank()) return null
+        return doubaoGroup to m
     }
 }
