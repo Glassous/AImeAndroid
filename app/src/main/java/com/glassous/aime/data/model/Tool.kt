@@ -38,6 +38,11 @@ enum class ToolType(
         displayName = "高铁动车车票查询",
         icon = Icons.Default.Search,
         description = "查询高铁/动车的车次、时间与价格（默认当天）"
+    ),
+    BAIDU_TIKU(
+        displayName = "百度题库搜索",
+        icon = Icons.Default.Search,
+        description = "检索题库并返回题干/选项/答案"
     );
     
     companion object {

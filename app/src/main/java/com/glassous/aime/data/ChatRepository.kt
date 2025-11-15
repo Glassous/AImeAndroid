@@ -144,6 +144,10 @@ class ChatRepository(
                 "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
             )
             val isHsIntent = hsKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            val tikuKeywords = listOf(
+                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
+            )
+            val isTikuIntent = tikuKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -238,18 +242,37 @@ class ChatRepository(
                     )
                 )
             )
+            val baiduTikuTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "baidu_tiku",
+                    description = "检索题库并返回题干/选项/答案。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "question" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "完整题干文本"
+                            )
+                        ),
+                        required = listOf("question")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
                 selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
+                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool)
-                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
                 }
                 else -> null
             }
@@ -284,6 +307,14 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isTikuIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
                     )
                 )
             }
@@ -333,6 +364,7 @@ class ChatRepository(
                     "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
                     "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                     "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
+                    "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                     else -> {}
                 }
                             if (!preLabelAdded) {
@@ -551,6 +583,59 @@ class ChatRepository(
                                     )
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n黄金价格工具暂时不可用：${e.message}\n\n")
+                                }
+                            } else if (toolCall.function?.name == "baidu_tiku") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    if (arguments != null) {
+                                        val question = safeExtractQuestion(arguments, message)
+                                        val tikuResult = BaiduTikuService().query(question)
+                                        val md = BaiduTikuService().formatAsMarkdown(tikuResult)
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append(md)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+
+                                        val messagesWithTiku = messages.toMutableList()
+                                        val summary = if (tikuResult.success) {
+                                            val ans = tikuResult.answer.ifBlank { "暂无" }
+                                            "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
+                                        } else {
+                                            "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
+                                        }
+                                        messagesWithTiku.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = summary
+                                            )
+                                        )
+
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
+                                            messages = messagesWithTiku,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n\n\n")
+                                                    postLabelAdded = true
+                                                }
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
+                                            },
+                                            onToolCall = { }
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n题库工具暂时不可用：${e.message}\n\n")
                                 }
                             }
                             onToolCallEnd?.invoke()
@@ -792,6 +877,7 @@ class ChatRepository(
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
                             "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                            "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             else -> {}
                         }
                         if (!preLabelAdded) {
@@ -950,6 +1036,58 @@ class ChatRepository(
                                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n股票功能暂时不可用：${e.message}")
+                            }
+                        } else if (toolCall.function?.name == "baidu_tiku") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                val question = safeExtractQuestion(arguments, "")
+                                if (question.isNotEmpty()) {
+                                    val tikuResult = BaiduTikuService().query(question)
+                                    val md = BaiduTikuService().formatAsMarkdown(tikuResult)
+                                    aggregated.append("\n\n\n")
+                                    aggregated.append(md)
+                                    aggregated.append("\n\n\n")
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
+
+                                    val messagesWithTiku = contextMessages.toMutableList()
+                                    val summary = if (tikuResult.success) {
+                                        val ans = tikuResult.answer.ifBlank { "暂无" }
+                                        "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
+                                    } else {
+                                        "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
+                                    }
+                                    messagesWithTiku.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = summary
+                                        )
+                                    )
+
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
+                                        messages = messagesWithTiku,
+                                        tools = null,
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n\n\n")
+                                                postLabelAdded = true
+                                            }
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = target.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n题库功能暂时不可用：${e.message}")
                             }
                         }
                         onToolCallEnd?.invoke()
@@ -1664,6 +1802,34 @@ class ChatRepository(
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.toIntOrNull()?.let { return it }
 
         return default
+    }
+
+    private fun safeExtractQuestion(arguments: String?, default: String): String {
+        if (arguments.isNullOrBlank()) return default
+        val raw = arguments.trim()
+        val gson = Gson()
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                val value = map["question"] as? String
+                if (value.isNullOrBlank()) null else value
+            } catch (_: Exception) {
+                null
+            }
+        }
+        tryParse(raw)?.let { return it }
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+        val regexQuoted = Regex("""(?i)\"?question\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
+        )
+        val regexUnquoted = Regex("""(?i)\"?question\"?\s*[:=]\s*([^,}\n\r]+)"""
+        )
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        return raw
     }
 
     private fun safeExtractFrom(arguments: String?): String? {
