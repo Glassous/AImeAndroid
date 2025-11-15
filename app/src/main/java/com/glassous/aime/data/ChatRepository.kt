@@ -1559,6 +1559,18 @@ class ChatRepository(
         onDelta: suspend (String) -> Unit,
         onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
+        if (primaryGroup.baseUrl.contains("volces", ignoreCase = true)) {
+            return doubaoService.streamChatCompletions(
+                baseUrl = primaryGroup.baseUrl,
+                apiKey = primaryGroup.apiKey,
+                model = primaryModel.modelName,
+                messages = messages,
+                tools = tools,
+                toolChoice = toolChoice,
+                onDelta = onDelta,
+                onToolCall = onToolCall
+            )
+        }
         return try {
             openAiService.streamChatCompletions(
                 baseUrl = primaryGroup.baseUrl,

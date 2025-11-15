@@ -32,6 +32,7 @@ class AutoToolSelector(
     private val openAiService: OpenAiService = OpenAiService()
 ) {
     private val gson = Gson()
+    private val doubaoService: DoubaoArkService = DoubaoArkService()
 
     suspend fun selectTool(tools: List<Tool>): AutoToolSelectionResult {
         // 序列化工具列表
@@ -57,13 +58,23 @@ class AutoToolSelector(
         )
 
         // 使用流式接口获取最终文本
-        val finalText = openAiService.streamChatCompletions(
-            baseUrl = baseUrl,
-            apiKey = apiKey,
-            model = modelName,
-            messages = messages,
-            onDelta = { /* 忽略中间增量 */ }
-        )
+        val finalText = if (baseUrl.contains("volces", ignoreCase = true)) {
+            doubaoService.streamChatCompletions(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                model = modelName,
+                messages = messages,
+                onDelta = { }
+            )
+        } else {
+            openAiService.streamChatCompletions(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                model = modelName,
+                messages = messages,
+                onDelta = { }
+            )
+        }
 
         // 尝试解析JSON；失败时降级为第一个工具
         return try {

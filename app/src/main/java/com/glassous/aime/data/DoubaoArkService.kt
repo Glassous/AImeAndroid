@@ -11,7 +11,12 @@ import java.io.IOException
 
 // 兼容 OpenAI 协议的豆包（火山引擎 Ark）聊天服务
 class DoubaoArkService(
-    private val client: OkHttpClient = OkHttpClient()
+    private val client: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(0, java.util.concurrent.TimeUnit.MILLISECONDS)
+        .retryOnConnectionFailure(true)
+        .build()
 ) {
     private data class AccToolCall(
         var id: String? = null,
@@ -68,6 +73,8 @@ class DoubaoArkService(
             .url(endpoint)
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Accept", "text/event-stream")
+            .addHeader("Cache-Control", "no-cache")
+            .addHeader("Connection", "keep-alive")
             .post(body)
             .build()
 
