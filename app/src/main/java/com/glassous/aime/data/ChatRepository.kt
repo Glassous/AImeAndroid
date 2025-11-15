@@ -134,6 +134,12 @@ class ChatRepository(
                 "最低", "板块", "龙头", "代码", "证券代码", "指数"
             )
             val isStockIntent = stockKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            // 黄金相关关键词与意图识别
+            val goldKeywords = listOf(
+                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
+                "购买黄金", "投资黄金", "金饰", "贵金属"
+            )
+            val isGoldIntent = goldKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -191,14 +197,28 @@ class ChatRepository(
                     )
                 )
             )
+            val goldPriceTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "gold_price",
+                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = emptyMap(),
+                        required = null
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 isAutoMode -> when {
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
-                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool)
                 }
                 else -> null
             }
@@ -217,6 +237,14 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话涉及股票/股价，请优先考虑调用工具 stock_query 获取指定证券的历史行情数据。若未明确证券代码，请礼貌询问或结合上下文推测（如名称/代码）。"
+                    )
+                )
+            }
+            if (isAutoMode && isGoldIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
                     )
                 )
             }
@@ -260,12 +288,13 @@ class ChatRepository(
                         onToolCall = { toolCall ->
                             // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
                             // 通知UI具体的工具类型以正确显示图标
-                            when (toolCall.function?.name) {
-                                "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
-                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                                "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
-                                else -> {}
-                            }
+                when (toolCall.function?.name) {
+                    "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                    "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                    "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                    "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
+                    else -> {}
+                }
                             if (!preLabelAdded) {
                                 val pre = aggregated.toString().trim()
                                 if (pre.isNotEmpty()) {
@@ -434,6 +463,54 @@ class ChatRepository(
                                     }
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n股票工具暂时不可用：${e.message}\n\n")
+                                }
+                            } else if (toolCall.function?.name == "gold_price") {
+                                try {
+                                    val goldResult = GoldPriceService().query()
+                                    val md = GoldPriceService().formatAsMarkdownParagraphs(goldResult)
+                                    aggregated.append("\n\n\n")
+                                    aggregated.append(md)
+                                    aggregated.append("\n\n\n")
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
+
+                                    val messagesWithGold = messages.toMutableList()
+                                    messagesWithGold.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = md
+                                        )
+                                    )
+                                    messagesWithGold.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = "已获取黄金价格数据，请结合用户需求给出购买建议（如购买金条/首饰或回收差价等），并提示价格波动与风险。"
+                                        )
+                                    )
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
+                                        messages = messagesWithGold,
+                                        tools = null,
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n\n\n")
+                                                postLabelAdded = true
+                                            }
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        },
+                                        onToolCall = { }
+                                    )
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n黄金价格工具暂时不可用：${e.message}\n\n")
                                 }
                             }
                             onToolCallEnd?.invoke()

@@ -28,6 +28,11 @@ enum class ToolType(
         displayName = "股票数据查询",
         icon = Icons.Default.TrendingUp,
         description = "查询指定证券代码的历史行情数据（开盘/收盘/振幅等）"
+    ),
+    GOLD_PRICE(
+        displayName = "黄金价格查询",
+        icon = Icons.Default.TrendingUp,
+        description = "查询银行金条、回收价格与品牌贵金属价格"
     );
     
     companion object {
