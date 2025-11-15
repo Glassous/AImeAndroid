@@ -10,26 +10,12 @@ import java.io.IOException
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
-// 天气每日数据
 data class WeatherDaily(
     @SerializedName("date") val date: String,
     @SerializedName("temperature") val temperature: String,
     @SerializedName("weather") val weather: String,
     @SerializedName("wind") val wind: String,
     @SerializedName("air_quality") val airQuality: String
-)
-
-// API data 载荷
-data class WeatherDataPayload(
-    @SerializedName("city") val city: String,
-    @SerializedName("data") val data: List<WeatherDaily>
-)
-
-// API 返回
-data class WeatherApiResponse(
-    @SerializedName("code") val code: Int,
-    @SerializedName("msg") val msg: String,
-    @SerializedName("data") val data: WeatherDataPayload?
 )
 
 // 查询结果
@@ -41,8 +27,10 @@ data class WeatherQueryResult(
 )
 
 /**
- * 城市天气查询服务，基于 xxapi 天气接口：
- * GET https://v2.xxapi.cn/api/weather?city=城市名称
+ * 城市天气查询服务，基于 Open‑Meteo：
+ * - 地理编码：https://geocoding-api.open-meteo.com/v1/search
+ * - 天气每日：https://api.open-meteo.com/v1/forecast
+ * - 空气质量：https://air-quality-api.open-meteo.com/v1/air-quality
  */
 class WeatherService(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -53,53 +41,118 @@ class WeatherService(
 ) {
     private val gson = Gson()
 
+    private data class GeocodingResult(val results: List<GeocodeItem>?)
+    private data class GeocodeItem(
+        val name: String?,
+        val latitude: Double?,
+        val longitude: Double?,
+        val country: String?,
+        val admin1: String?
+    )
+
+    private data class ForecastDaily(
+        val time: List<String>?,
+        @SerializedName("temperature_2m_max") val tMax: List<Double>?,
+        @SerializedName("temperature_2m_min") val tMin: List<Double>?,
+        @SerializedName("weather_code") val wcode: List<Int>?,
+        @SerializedName("wind_speed_10m_max") val windSpeedMax: List<Double>?,
+        @SerializedName("wind_direction_10m_dominant") val windDirDominant: List<Int>?
+    )
+    private data class ForecastResp(val daily: ForecastDaily?)
+
+    private data class AirQualityHourly(
+        val time: List<String>?,
+        @SerializedName("european_aqi") val aqi: List<Double>?
+    )
+    private data class AirQualityResp(val hourly: AirQualityHourly?)
+
     /**
-     * 查询指定城市天气（中文城市名，如：滕州/滕州市/枣庄滕州）
+     * 查询指定城市天气（中文城市名）
      */
     suspend fun query(city: String): WeatherQueryResult = withContext(Dispatchers.IO) {
         try {
             val encodedCity = URLEncoder.encode(city.trim(), "UTF-8")
-            val url = "https://v2.xxapi.cn/api/weather?city=$encodedCity"
-
-            val request = Request.Builder()
-                .url(url)
+            val geoUrl = "https://geocoding-api.open-meteo.com/v1/search?name=$encodedCity&count=1&language=zh&format=json"
+            val geoReq = Request.Builder()
+                .url(geoUrl)
                 .addHeader("Accept", "application/json")
-                .addHeader(
-                    "User-Agent",
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
-                )
                 .build()
-
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext WeatherQueryResult(
-                    success = false,
-                    city = city,
-                    days = emptyList(),
-                    message = "天气请求失败：HTTP ${response.code}"
-                )
+            val geoResp = client.newCall(geoReq).execute()
+            val geoBody = geoResp.body?.string()
+            if (!geoResp.isSuccessful || geoBody.isNullOrBlank()) {
+                return@withContext WeatherQueryResult(false, city, emptyList(), "地理编码失败：HTTP ${geoResp.code}")
+            }
+            val geo = gson.fromJson(geoBody, GeocodingResult::class.java)
+            val first = geo.results?.firstOrNull()
+            val lat = first?.latitude
+            val lon = first?.longitude
+            val displayCity = listOfNotNull(first?.name, first?.admin1, first?.country).joinToString(" ").ifBlank { city }
+            if (lat == null || lon == null) {
+                return@withContext WeatherQueryResult(false, city, emptyList(), "未找到城市坐标")
             }
 
-            val body = response.body?.string()
-            if (body.isNullOrBlank()) {
-                return@withContext WeatherQueryResult(
-                    success = false,
-                    city = city,
-                    days = emptyList(),
-                    message = "天气响应为空"
-                )
+            val forecastUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto&forecast_days=5"
+            val fcReq = Request.Builder().url(forecastUrl).addHeader("Accept", "application/json").build()
+            val fcResp = client.newCall(fcReq).execute()
+            val fcBody = fcResp.body?.string()
+            if (!fcResp.isSuccessful || fcBody.isNullOrBlank()) {
+                return@withContext WeatherQueryResult(false, displayCity, emptyList(), "天气数据获取失败：HTTP ${fcResp.code}")
+            }
+            val fc = gson.fromJson(fcBody, ForecastResp::class.java)
+            val d = fc.daily
+            val times = d?.time ?: emptyList()
+            val tmax = d?.tMax ?: emptyList()
+            val tmin = d?.tMin ?: emptyList()
+            val wcodes = d?.wcode ?: emptyList()
+            val wsp = d?.windSpeedMax ?: emptyList()
+            val wdir = d?.windDirDominant ?: emptyList()
+
+            val days = mutableListOf<WeatherDaily>()
+            val count = listOf(times.size, tmax.size, tmin.size).minOrNull() ?: 0
+            repeat(count) { i ->
+                val date = times.getOrNull(i) ?: return@repeat
+                val min = tmin.getOrNull(i)
+                val max = tmax.getOrNull(i)
+                val code = wcodes.getOrNull(i)
+                val ws = wsp.getOrNull(i)
+                val wd = wdir.getOrNull(i)
+                val tempStr = if (min != null && max != null) "${min.toInt()}~${max.toInt()}℃" else "—"
+                val weatherStr = weatherCodeToZh(code)
+                val windStr = windToZh(ws, wd)
+                days.add(WeatherDaily(date = date, temperature = tempStr, weather = weatherStr, wind = windStr, airQuality = ""))
             }
 
-            val apiResp = gson.fromJson(body, WeatherApiResponse::class.java)
-            val payload = apiResp.data
-            val days = payload?.data ?: emptyList()
-            val ok = apiResp.code == 200 && payload != null && days.isNotEmpty()
+            val aqUrl = "https://air-quality-api.open-meteo.com/v1/air-quality?latitude=$lat&longitude=$lon&hourly=european_aqi&timezone=auto"
+            val aqReq = Request.Builder().url(aqUrl).addHeader("Accept", "application/json").build()
+            val aqResp = client.newCall(aqReq).execute()
+            val aqBody = aqResp.body?.string()
+            val aq = if (aqResp.isSuccessful && !aqBody.isNullOrBlank()) gson.fromJson(aqBody, AirQualityResp::class.java) else null
+            val aqiHourly = aq?.hourly
+            if (aqiHourly != null && !aqiHourly.time.isNullOrEmpty() && !aqiHourly.aqi.isNullOrEmpty()) {
+                val perDayMax = mutableMapOf<String, Double>()
+                for (idx in aqiHourly.time!!.indices) {
+                    val t = aqiHourly.time!![idx]
+                    val v = aqiHourly.aqi!![idx]
+                    val day = t.substring(0, 10)
+                    val prev = perDayMax[day]
+                    if (prev == null || v > prev) perDayMax[day] = v
+                }
+                days.replaceAll { dItem ->
+                    val dayKey = dItem.date.take(10)
+                    val v = perDayMax[dayKey]
+                    val aqStr = v?.let { mapAqiToZh(it) } ?: "—"
+                    dItem.copy(airQuality = aqStr)
+                }
+            } else {
+                days.replaceAll { it.copy(airQuality = "—") }
+            }
 
+            val ok = days.isNotEmpty()
             WeatherQueryResult(
                 success = ok,
-                city = payload?.city ?: city,
+                city = displayCity,
                 days = days,
-                message = if (ok) "数据请求成功" else apiResp.msg.ifBlank { "未获取到天气数据" }
+                message = if (ok) "数据请求成功" else "未获取到天气数据"
             )
         } catch (e: Exception) {
             WeatherQueryResult(
@@ -108,6 +161,51 @@ class WeatherService(
                 days = emptyList(),
                 message = "天气查询异常：${e.message}"
             )
+        }
+    }
+
+    private fun weatherCodeToZh(code: Int?): String {
+        return when (code) {
+            0 -> "晴"
+            1, 2, 3 -> "多云"
+            45, 48 -> "雾/霾"
+            51, 53, 55 -> "毛毛雨"
+            56, 57 -> "冻毛毛雨"
+            61, 63, 65 -> "小雨/中雨/大雨"
+            66, 67 -> "冻雨"
+            71, 73, 75 -> "小雪/中雪/大雪"
+            77 -> "飘雪"
+            80, 81, 82 -> "阵雨"
+            85, 86 -> "阵雪"
+            95 -> "雷阵雨"
+            96, 99 -> "雷暴/冰雹"
+            else -> "不明"
+        }
+    }
+
+    private fun windToZh(speed: Double?, dirDeg: Int?): String {
+        val dir = when (dirDeg ?: -1) {
+            in 23..67 -> "东北"
+            in 68..112 -> "东"
+            in 113..157 -> "东南"
+            in 158..202 -> "南"
+            in 203..247 -> "西南"
+            in 248..292 -> "西"
+            in 293..337 -> "西北"
+            else -> "北"
+        }
+        val s = speed?.let { String.format("%.1f", it) } ?: "—"
+        return "风速 ${s} m/s，风向 ${dir}"
+    }
+
+    private fun mapAqiToZh(v: Double): String {
+        return when {
+            v <= 50 -> "优"
+            v <= 100 -> "良"
+            v <= 150 -> "轻度污染"
+            v <= 200 -> "中度污染"
+            v <= 300 -> "重度污染"
+            else -> "严重污染"
         }
     }
 
