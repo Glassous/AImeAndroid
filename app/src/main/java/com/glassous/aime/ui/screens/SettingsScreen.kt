@@ -67,6 +67,7 @@ fun SettingsScreen(
     val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
     val topBarModelTextAlpha by themeViewModel.topBarModelTextAlpha.collectAsState()
     val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
+    val hideImportSharedButton by themeViewModel.hideImportSharedButton.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
@@ -245,6 +246,23 @@ fun SettingsScreen(
                         Switch(
                             checked = replyBubbleEnabled,
                             onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                text = "是否显示“获取分享对话”按钮",
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                        }
+                        Switch(
+                            checked = hideImportSharedButton,
+                            onCheckedChange = { themeViewModel.setHideImportSharedButton(it) }
                         )
                     }
                     

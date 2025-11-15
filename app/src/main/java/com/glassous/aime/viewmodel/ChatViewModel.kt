@@ -189,6 +189,28 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             repository.updateConversationTitle(conversationId, newTitle, onSyncResult)
         }
     }
+
+    fun generateShareCode(conversationId: Long, onResult: (String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val code = repository.generateShareCode(conversationId)
+                onResult(code)
+            } catch (_: Exception) {
+                onResult(null)
+            }
+        }
+    }
+
+    fun importSharedConversation(code: String, onResult: (Long?) -> Unit, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                val newId = repository.importSharedConversation(code, onSyncResult)
+                onResult(newId)
+            } catch (_: Exception) {
+                onResult(null)
+            }
+        }
+    }
 }
 
 class ChatViewModelFactory : ViewModelProvider.Factory {

@@ -122,6 +122,7 @@ fun ChatScreen(
     val chatFontSize by themePreferences.chatFontSize.collectAsState(initial = 16f)
     // 新增：读取聊天页面UI透明度
     val chatUiOverlayAlpha by themePreferences.chatUiOverlayAlpha.collectAsState(initial = 0.5f)
+    val hideImportSharedButton by themePreferences.hideImportSharedButton.collectAsState(initial = false)
 
     // 新增：读取顶部栏汉堡菜单与模型文字按钮透明度，以及输入框内部透明度
     val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
@@ -376,6 +377,30 @@ fun ChatScreen(
                             }
                         }
                     },
+                    onGenerateShareCode = { convId, onResult ->
+                        chatViewModel.generateShareCode(convId) { code ->
+                            onResult(code)
+                        }
+                    },
+                    onImportSharedConversation = { code, onResult ->
+                        chatViewModel.importSharedConversation(code, { newId ->
+                            onResult(newId)
+                            if (newId != null) {
+                                chatViewModel.selectConversation(newId)
+                                scope.launch { drawerState.close() }
+                            }
+                        }) { success, message ->
+                            if (!success) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        message = "同步失败: $message",
+                                        duration = SnackbarDuration.Short
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    hideImportSharedButton = hideImportSharedButton,
                     onNavigateToSettings = onNavigateToSettings
                 )
             }

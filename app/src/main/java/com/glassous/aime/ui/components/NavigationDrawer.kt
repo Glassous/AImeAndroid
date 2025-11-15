@@ -23,6 +23,13 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -33,6 +40,9 @@ fun NavigationDrawer(
     onNewConversation: () -> Unit,
     onDeleteConversation: (Long) -> Unit,
     onEditConversationTitle: (Long, String) -> Unit,
+    onGenerateShareCode: (Long, (String?) -> Unit) -> Unit,
+    onImportSharedConversation: (String, (Long?) -> Unit) -> Unit,
+    hideImportSharedButton: Boolean,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -61,7 +71,7 @@ fun NavigationDrawer(
                 onClick = onNewConversation,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 6.dp),
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Icon(
@@ -71,6 +81,35 @@ fun NavigationDrawer(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("新建对话")
+            }
+
+            var showImportDialog by remember { mutableStateOf(false) }
+            var importCode by remember { mutableStateOf("") }
+            val context = LocalContext.current
+            val importJsonLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) {
+                    val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
+                    val code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
+                    importCode = code
+                }
+            }
+
+            if (!hideImportSharedButton) {
+                OutlinedButton(
+                    onClick = { showImportDialog = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "获取分享的对话",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("获取分享的对话")
+                }
             }
 
             // Conversations List
@@ -94,6 +133,11 @@ fun NavigationDrawer(
                             onDelete = { onDeleteConversation(conversation.id) },
                             onEditTitle = { conversationId, newTitle ->
                                 onEditConversationTitle(conversationId, newTitle)
+                            },
+                            onShare = { convId, onCode ->
+                                onGenerateShareCode(convId) { code ->
+                                    onCode(code)
+                                }
                             }
                         )
                     }
@@ -130,6 +174,48 @@ fun NavigationDrawer(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("设置")
             }
+
+            if (showImportDialog) {
+                AlertDialog(
+                    onDismissRequest = { showImportDialog = false },
+                    title = { Text("获取分享的对话") },
+                    text = {
+                        Column {
+                            OutlinedTextField(
+                                value = importCode,
+                                onValueChange = { importCode = it },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true,
+                                label = { Text("粘贴分享码") }
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(onClick = { importJsonLauncher.launch(arrayOf("application/json")) }) {
+                                    Text("从JSON文件获取")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                onImportSharedConversation(importCode) { _ ->
+                                    showImportDialog = false
+                                    importCode = ""
+                                }
+                            }
+                        ) {
+                            Text("插入")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showImportDialog = false }) { Text("取消") }
+                    }
+                )
+            }
         }
     }
 }
@@ -142,6 +228,7 @@ private fun ConversationItem(
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onEditTitle: (Long, String) -> Unit,
+    onShare: (Long, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
@@ -150,6 +237,20 @@ private fun ConversationItem(
     var editingTitle by remember { mutableStateOf(conversation.title) }
     // 新增：删除确认弹窗状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
+    var showShareDialog by remember { mutableStateOf(false) }
+    var shareCode by remember { mutableStateOf<String?>(null) }
+    var isLongShare by remember { mutableStateOf(false) }
+    var shareJson by remember { mutableStateOf<String>("") }
+    val clipboard = LocalClipboardManager.current
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            context.contentResolver.openOutputStream(uri)?.use { os ->
+                os.write(shareJson.toByteArray(Charsets.UTF_8))
+            }
+            showShareDialog = false
+        }
+    }
     
     Card(
         onClick = { 
@@ -290,8 +391,6 @@ private fun ConversationItem(
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("编辑")
                     }
                     
                     OutlinedButton(
@@ -309,8 +408,37 @@ private fun ConversationItem(
                             contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("删除")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            onShare(conversation.id) { code ->
+                                shareCode = code
+                                isLongShare = (code?.length ?: 0) > 3000
+                                if (isLongShare) {
+                                    if (code != null) {
+                                        try {
+                                            shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
+                                        } catch (_: Exception) {
+                                            shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
+                                        }
+                                    } else {
+                                        shareJson = ""
+                                    }
+                                }
+                                showShareDialog = true
+                                isExpanded = false
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
@@ -337,6 +465,64 @@ private fun ConversationItem(
                         ) {
                             Text("取消")
                         }
+                    }
+                )
+            }
+
+            if (showShareDialog) {
+                AlertDialog(
+                    onDismissRequest = { showShareDialog = false },
+                    title = { Text("分享对话") },
+                    text = {
+                        Column {
+                            val scrollState = rememberScrollState()
+                            Box(
+                                modifier = Modifier
+                                    .heightIn(max = 240.dp)
+                                    .verticalScroll(scrollState)
+                            ) {
+                                Text(
+                                    text = if (isLongShare) "分享码较长，请导出为JSON文件" else (shareCode ?: "正在生成分享码…"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            if (!isLongShare) {
+                                TextButton(
+                                    onClick = {
+                                        shareCode?.let { code ->
+                                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(code))
+                                            showShareDialog = false
+                                        }
+                                    }
+                                ) { Text("复制分享码") }
+                                TextButton(
+                                    onClick = {
+                                        shareCode?.let { code ->
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/plain"
+                                                putExtra(Intent.EXTRA_TEXT, code)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "分享对话"))
+                                            showShareDialog = false
+                                        }
+                                    }
+                                ) { Text("系统分享") }
+                            } else {
+                                TextButton(
+                                    onClick = {
+                                        exportLauncher.launch("shared-conversation-${System.currentTimeMillis()}.json")
+                                    }
+                                ) { Text("导出JSON") }
+                            }
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showShareDialog = false }) { Text("关闭") }
                     }
                 )
             }

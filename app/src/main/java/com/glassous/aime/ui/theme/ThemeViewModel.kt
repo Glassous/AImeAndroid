@@ -52,6 +52,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _chatFullscreen = MutableStateFlow(false)
     val chatFullscreen: StateFlow<Boolean> = _chatFullscreen.asStateFlow()
 
+    private val _hideImportSharedButton = MutableStateFlow(false)
+    val hideImportSharedButton: StateFlow<Boolean> = _hideImportSharedButton.asStateFlow()
+
     // 新增：极简模式配置
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
@@ -113,6 +116,11 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.chatFullscreen.collect { enabled ->
                 _chatFullscreen.value = enabled
+            }
+        }
+        viewModelScope.launch {
+            themePreferences.hideImportSharedButton.collect { enabled ->
+                _hideImportSharedButton.value = enabled
             }
         }
         // 收集极简模式配置
@@ -195,6 +203,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setChatFullscreen(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setChatFullscreen(enabled)
+        }
+    }
+
+    fun setHideImportSharedButton(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setHideImportSharedButton(enabled)
         }
     }
 }
