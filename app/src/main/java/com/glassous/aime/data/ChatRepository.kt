@@ -140,6 +140,10 @@ class ChatRepository(
                 "购买黄金", "投资黄金", "金饰", "贵金属"
             )
             val isGoldIntent = goldKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            val hsKeywords = listOf(
+                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
+            )
+            val isHsIntent = hsKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -209,16 +213,43 @@ class ChatRepository(
                     )
                 )
             )
+            val hsTicketTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "hs_ticket_query",
+                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "from" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "出发城市或车站中文名称"
+                            ),
+                            "to" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "目的城市或车站中文名称"
+                            ),
+                            "date" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
+                            )
+                        ),
+                        required = listOf("from", "to")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
                 selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
+                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 isAutoMode -> when {
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool)
-                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool)
                 }
                 else -> null
             }
@@ -245,6 +276,14 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isHsIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
                     )
                 )
             }
@@ -293,6 +332,7 @@ class ChatRepository(
                     "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
                     "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
                     "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
+                    "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                     else -> {}
                 }
                             if (!preLabelAdded) {
@@ -1624,6 +1664,81 @@ class ChatRepository(
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.toIntOrNull()?.let { return it }
 
         return default
+    }
+
+    private fun safeExtractFrom(arguments: String?): String? {
+        if (arguments.isNullOrBlank()) return null
+        val raw = arguments.trim()
+        val gson = Gson()
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                (map["from"] as? String)?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) { null }
+        }
+        tryParse(raw)?.let { return it }
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+        val regexQuoted = Regex("""(?i)\"?from\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
+        )
+        val regexUnquoted = Regex("""(?i)\"?from\"?\s*[:=]\s*([^,}\n\r]+)"""
+        )
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        return null
+    }
+
+    private fun safeExtractTo(arguments: String?): String? {
+        if (arguments.isNullOrBlank()) return null
+        val raw = arguments.trim()
+        val gson = Gson()
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                (map["to"] as? String)?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) { null }
+        }
+        tryParse(raw)?.let { return it }
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+        val regexQuoted = Regex("""(?i)\"?to\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
+        )
+        val regexUnquoted = Regex("""(?i)\"?to\"?\s*[:=]\s*([^,}\n\r]+)"""
+        )
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        return null
+    }
+
+    private fun safeExtractDate(arguments: String?): String? {
+        if (arguments.isNullOrBlank()) return null
+        val raw = arguments.trim()
+        val gson = Gson()
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                (map["date"] as? String)?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) { null }
+        }
+        tryParse(raw)?.let { return it }
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+        val regexQuoted = Regex("""(?i)\"?date\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
+        )
+        val regexUnquoted = Regex("""(?i)\"?date\"?\s*[:=]\s*([^,}\n\r]+)"""
+        )
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        return null
     }
 
     // 统一的流式调用，失败时自动回调至豆包（Ark）

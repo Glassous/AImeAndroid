@@ -33,6 +33,11 @@ enum class ToolType(
         displayName = "黄金价格查询",
         icon = Icons.Default.TrendingUp,
         description = "查询银行金条、回收价格与品牌贵金属价格"
+    ),
+    HIGH_SPEED_TICKET(
+        displayName = "高铁动车车票查询",
+        icon = Icons.Default.Search,
+        description = "查询高铁/动车的车次、时间与价格（默认当天）"
     );
     
     companion object {
