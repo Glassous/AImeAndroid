@@ -148,6 +148,13 @@ class ChatRepository(
                 "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
             )
             val isTikuIntent = tikuKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            val lotteryKeywords = listOf(
+                "彩票", "彩票开奖", "开奖", "开奖公告", "开奖时间", "开奖号码", "中奖号码", "中奖",
+                "快乐8", "双色球", "大乐透", "福彩3D", "排列3", "排列5", "七乐彩", "7星彩", "七星彩", "胜负彩", "进球彩", "半全场",
+                "kl8", "ssq", "dlt", "fc3d", "pl3", "pl5", "qlc", "qxc", "sfc", "jqc", "bqc",
+                "第"
+            )
+            val isLotteryIntent = lotteryKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -259,20 +266,43 @@ class ChatRepository(
                     )
                 )
             )
+            val lotteryTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "lottery_query",
+                    description = "查询指定彩种的最近开奖信息。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "get" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "彩种缩写：kl8、ssq、dlt、fc3d、pl3、pl5、qlc、qxc、sfc、jqc、bqc"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "查询天数（1-100），默认5"
+                            )
+                        ),
+                        required = listOf("get")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
                 selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
+                selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
                     isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
                     isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -315,6 +345,14 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
+                    )
+                )
+            }
+            if (isAutoMode && isLotteryIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及彩票开奖，请优先考虑调用工具 lottery_query 进行查询。若未明确彩种或期数，请礼貌询问或根据上下文推测。"
                     )
                 )
             }
@@ -365,6 +403,7 @@ class ChatRepository(
                     "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                     "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                     "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
+                    "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                     else -> {}
                 }
                             if (!preLabelAdded) {
@@ -636,6 +675,62 @@ class ChatRepository(
                                     }
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n题库工具暂时不可用：${e.message}\n\n")
+                                }
+                            } else if (toolCall.function?.name == "lottery_query") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    if (arguments != null) {
+                                        val getVal = safeExtractGet(arguments, message)
+                                        val numVal = safeExtractNum(arguments, 5).coerceIn(1, 100)
+                                        val lot = LotteryService().query(getVal.ifBlank { "ssq" }, numVal)
+                                        val md = LotteryService().formatAsMarkdown(lot)
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append(md)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+
+                                        val messagesWithLottery = messages.toMutableList()
+                                        val summary = if (lot.success && lot.items.isNotEmpty()) {
+                                            val first = lot.items.first()
+                                            val firstIssue = first.issue ?: ""
+                                            val firstDraw = first.drawnumber ?: ""
+                                            "彩种：${lot.name}；最新期号：${firstIssue}；开奖号码：${firstDraw}。请据此简洁回答。"
+                                        } else {
+                                            "彩票开奖查询失败：${lot.message}，请基于已有信息回复用户。"
+                                        }
+                                        messagesWithLottery.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = summary
+                                            )
+                                        )
+
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
+                                            messages = messagesWithLottery,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n\n\n")
+                                                    postLabelAdded = true
+                                                }
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
+                                            },
+                                            onToolCall = { }
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n彩票开奖工具暂时不可用：${e.message}\n\n")
                                 }
                             }
                             onToolCallEnd?.invoke()
@@ -1830,6 +1925,61 @@ class ChatRepository(
         regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
         return raw
+    }
+
+    private fun safeExtractGet(arguments: String?, defaultText: String): String {
+        if (!arguments.isNullOrBlank()) {
+            val raw = arguments.trim()
+            val gson = Gson()
+            fun tryParse(text: String): String? {
+                return try {
+                    val reader = JsonReader(StringReader(text))
+                    reader.isLenient = true
+                    val type = object : TypeToken<Map<String, Any?>>() {}.type
+                    val map: Map<String, Any?> = gson.fromJson(reader, type)
+                    (map["get"] as? String)?.lowercase()?.takeIf { it.isNotBlank() }
+                } catch (_: Exception) { null }
+            }
+            tryParse(raw)?.let { return it }
+            val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+            tryParse(normalizedSingleQuotes)?.let { return it }
+            val regexQuoted = Regex("""(?i)\"?get\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
+            )
+            val regexUnquoted = Regex("""(?i)\"?get\"?\s*[:=]\s*([^,}\n\r]+)"""
+            )
+            regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.lowercase()?.takeIf { it.isNotBlank() }?.let { return it }
+            regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.lowercase()?.takeIf { it.isNotBlank() }?.let { return it }
+        }
+        val text = defaultText.lowercase()
+        val mapping = listOf(
+            "快乐8" to "kl8",
+            "kl8" to "kl8",
+            "双色球" to "ssq",
+            "ssq" to "ssq",
+            "大乐透" to "dlt",
+            "dlt" to "dlt",
+            "福彩3d" to "fc3d",
+            "fc3d" to "fc3d",
+            "排列3" to "pl3",
+            "pl3" to "pl3",
+            "排列5" to "pl5",
+            "pl5" to "pl5",
+            "七乐彩" to "qlc",
+            "qlc" to "qlc",
+            "7星彩" to "qxc",
+            "七星彩" to "qxc",
+            "qxc" to "qxc",
+            "胜负彩" to "sfc",
+            "sfc" to "sfc",
+            "进球彩" to "jqc",
+            "jqc" to "jqc",
+            "半全场" to "bqc",
+            "bqc" to "bqc"
+        )
+        for ((k, v) in mapping) {
+            if (text.contains(k)) return v
+        }
+        return "ssq"
     }
 
     private fun safeExtractFrom(arguments: String?): String? {

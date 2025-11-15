@@ -39,6 +39,11 @@ enum class ToolType(
         icon = Icons.Default.Search,
         description = "查询高铁/动车的车次、时间与价格（默认当天）"
     ),
+    LOTTERY_QUERY(
+        displayName = "彩票开奖查询",
+        icon = Icons.Default.Search,
+        description = "查询指定彩种的最近开奖信息"
+    ),
     BAIDU_TIKU(
         displayName = "百度题库搜索",
         icon = Icons.Default.Search,
