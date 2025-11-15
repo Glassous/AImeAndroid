@@ -856,6 +856,26 @@ class ChatRepository(
                 "300", "600", "SH", "SZ", "同花顺", "东财", "收盘", "开盘", "历史"
             )
             val isStockIntent = stockKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
+            val goldKeywords = listOf(
+                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
+                "购买黄金", "投资黄金", "金饰", "贵金属"
+            )
+            val isGoldIntent = goldKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
+            val hsKeywords = listOf(
+                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
+            )
+            val isHsIntent = hsKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
+            val tikuKeywords = listOf(
+                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
+            )
+            val isTikuIntent = tikuKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
+            val lotteryKeywords = listOf(
+                "彩票", "彩票开奖", "开奖", "开奖公告", "开奖时间", "开奖号码", "中奖号码", "中奖",
+                "快乐8", "双色球", "大乐透", "福彩3D", "排列3", "排列5", "七乐彩", "7星彩", "七星彩", "胜负彩", "进球彩", "半全场",
+                "kl8", "ssq", "dlt", "fc3d", "pl3", "pl5", "qlc", "qxc", "sfc", "jqc", "bqc",
+                "第"
+            )
+            val isLotteryIntent = lotteryKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
 
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -913,14 +933,97 @@ class ChatRepository(
                     )
                 )
             )
+            val goldPriceTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "gold_price",
+                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = emptyMap(),
+                        required = null
+                    )
+                )
+            )
+            val hsTicketTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "hs_ticket_query",
+                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "from" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "出发城市或车站中文名称"
+                            ),
+                            "to" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "目的城市或车站中文名称"
+                            ),
+                            "date" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
+                            )
+                        ),
+                        required = listOf("from", "to")
+                    )
+                )
+            )
+            val baiduTikuTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "baidu_tiku",
+                    description = "检索题库并返回题干/选项/答案。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "question" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "完整题干文本"
+                            )
+                        ),
+                        required = listOf("question")
+                    )
+                )
+            )
+            val lotteryTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "lottery_query",
+                    description = "查询指定彩种的最近开奖信息。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "get" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "彩种缩写：kl8、ssq、dlt、fc3d、pl3、pl5、qlc、qxc、sfc、jqc、bqc"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "查询天数（1-100），默认5"
+                            )
+                        ),
+                        required = listOf("get")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
+                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
+                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
+                selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
-                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -972,7 +1075,10 @@ class ChatRepository(
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
                             "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                            "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
+                            "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                             "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
+                            "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                             else -> {}
                         }
                         if (!preLabelAdded) {
@@ -1376,6 +1482,26 @@ class ChatRepository(
                 "最低", "板块", "龙头", "代码", "证券代码", "指数"
             )
             val isStockIntent = stockKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+            val goldKeywords = listOf(
+                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
+                "购买黄金", "投资黄金", "金饰", "贵金属"
+            )
+            val isGoldIntent = goldKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+            val hsKeywords = listOf(
+                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
+            )
+            val isHsIntent = hsKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+            val tikuKeywords = listOf(
+                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
+            )
+            val isTikuIntent = tikuKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
+            val lotteryKeywords = listOf(
+                "彩票", "彩票开奖", "开奖", "开奖公告", "开奖时间", "开奖号码", "中奖号码", "中奖",
+                "快乐8", "双色球", "大乐透", "福彩3D", "排列3", "排列5", "七乐彩", "7星彩", "七星彩", "胜负彩", "进球彩", "半全场",
+                "kl8", "ssq", "dlt", "fc3d", "pl3", "pl5", "qlc", "qxc", "sfc", "jqc", "bqc",
+                "第"
+            )
+            val isLotteryIntent = lotteryKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
 
             var preLabelAdded = false
             var postLabelAdded = false
@@ -1479,6 +1605,38 @@ class ChatRepository(
                     )
                 )
             }
+            if (isAutoMode && isGoldIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isHsIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isTikuIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
+                    )
+                )
+            }
+            if (isAutoMode && isLotteryIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮编辑后的用户消息涉及彩票开奖，请优先考虑调用工具 lottery_query 进行查询。若未明确彩种或期数，请礼貌询问或根据上下文推测。"
+                    )
+                )
+            }
 
             withContext(Dispatchers.IO) {
                 streamWithFallback(
@@ -1503,6 +1661,10 @@ class ChatRepository(
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
                             "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                            "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
+                            "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
+                            "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
+                            "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                             else -> {}
                         }
                         if (!preLabelAdded) {
@@ -1682,6 +1844,213 @@ class ChatRepository(
                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n股票工具暂时不可用：${e.message}\n\n")
+                            }
+                        } else if (toolCall.function?.name == "baidu_tiku") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                if (arguments != null) {
+                                    val question = safeExtractQuestion(arguments, trimmed)
+                                    val tikuResult = BaiduTikuService().query(question)
+                                    val md = BaiduTikuService().formatAsMarkdown(tikuResult)
+                                    aggregated.append("\n\n\n")
+                                    aggregated.append(md)
+                                    aggregated.append("\n\n\n")
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
+
+                                    val messagesWithTiku = contextMessages.toMutableList()
+                                    val summary = if (tikuResult.success) {
+                                        val ans = tikuResult.answer.ifBlank { "暂无" }
+                                        "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
+                                    } else {
+                                        "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
+                                    }
+                                    messagesWithTiku.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = summary
+                                        )
+                                    )
+
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
+                                        messages = messagesWithTiku,
+                                        tools = null,
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n\n\n")
+                                                postLabelAdded = true
+                                            }
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        },
+                                        onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n题库工具暂时不可用：${e.message}\n\n")
+                            }
+                        } else if (toolCall.function?.name == "lottery_query") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                if (arguments != null) {
+                                    val getVal = safeExtractGet(arguments, trimmed)
+                                    val numVal = safeExtractNum(arguments, 5).coerceIn(1, 100)
+                                    val lot = LotteryService().query(getVal.ifBlank { "ssq" }, numVal)
+                                    val md = LotteryService().formatAsMarkdown(lot)
+                                    aggregated.append("\n\n\n")
+                                    aggregated.append(md)
+                                    aggregated.append("\n\n\n")
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
+
+                                    val messagesWithLottery = contextMessages.toMutableList()
+                                    val summary = if (lot.success && lot.items.isNotEmpty()) {
+                                        val first = lot.items.first()
+                                        val firstIssue = first.issue ?: ""
+                                        val firstDraw = first.drawnumber ?: ""
+                                        "彩种：${lot.name}；最新期号：${firstIssue}；开奖号码：${firstDraw}。请据此简洁回答。"
+                                    } else {
+                                        "彩票开奖查询失败：${lot.message}，请基于已有信息回复用户。"
+                                    }
+                                    messagesWithLottery.add(
+                                        OpenAiChatMessage(
+                                            role = "system",
+                                            content = summary
+                                        )
+                                    )
+
+                                    streamWithFallback(
+                                        primaryGroup = group,
+                                        primaryModel = model,
+                                        messages = messagesWithLottery,
+                                        tools = null,
+                                        toolChoice = null,
+                                        onDelta = { delta ->
+                                            if (!postLabelAdded) {
+                                                aggregated.append("\n\n\n")
+                                                postLabelAdded = true
+                                            }
+                                            aggregated.append(delta)
+                                            val currentTime = System.currentTimeMillis()
+                                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                                chatDao.updateMessage(updated)
+                                                lastUpdateTime = currentTime
+                                            }
+                                        },
+                                        onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n彩票开奖工具暂时不可用：${e.message}\n\n")
+                            }
+                        } else if (toolCall.function?.name == "gold_price") {
+                            try {
+                                val goldResult = GoldPriceService().query()
+                                val md = GoldPriceService().formatAsMarkdownParagraphs(goldResult)
+                                aggregated.append("\n\n\n")
+                                aggregated.append(md)
+                                aggregated.append("\n\n\n")
+                                postLabelAdded = true
+                                val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                chatDao.updateMessage(updatedBeforeOfficial)
+
+                                val messagesWithGold = contextMessages.toMutableList()
+                                messagesWithGold.add(
+                                    OpenAiChatMessage(
+                                        role = "system",
+                                        content = md
+                                    )
+                                )
+                                messagesWithGold.add(
+                                    OpenAiChatMessage(
+                                        role = "system",
+                                        content = "已获取黄金价格数据，请结合用户需求给出购买建议（如购买金条/首饰或回收差价等），并提示价格波动与风险。"
+                                    )
+                                )
+                                streamWithFallback(
+                                    primaryGroup = group,
+                                    primaryModel = model,
+                                    messages = messagesWithGold,
+                                    tools = null,
+                                    toolChoice = null,
+                                    onDelta = { delta ->
+                                        if (!postLabelAdded) {
+                                            aggregated.append("\n\n\n")
+                                            postLabelAdded = true
+                                        }
+                                        aggregated.append(delta)
+                                        val currentTime = System.currentTimeMillis()
+                                        if (currentTime - lastUpdateTime >= updateInterval) {
+                                            val updated = assistantMessage.copy(content = aggregated.toString())
+                                            chatDao.updateMessage(updated)
+                                            lastUpdateTime = currentTime
+                                        }
+                                    },
+                                    onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                )
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n黄金价格工具暂时不可用：${e.message}\n\n")
+                            }
+                        } else if (toolCall.function?.name == "hs_ticket_query") {
+                            try {
+                                val arguments = toolCall.function.arguments
+                                if (arguments != null) {
+                                    val from = safeExtractFrom(arguments) ?: ""
+                                    val to = safeExtractTo(arguments) ?: ""
+                                    val date = safeExtractDate(arguments)
+                                    if (from.isNotEmpty() && to.isNotEmpty()) {
+                                        val payload = HighSpeedTicketService().query(from, to, date)
+                                        val summaryText = HighSpeedTicketService().formatCondensed(payload)
+                                        aggregated.append("\n\n\n")
+                                        aggregated.append(summaryText)
+                                        aggregated.append("\n\n\n")
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+
+                                        val messagesWithHs = contextMessages.toMutableList()
+                                        messagesWithHs.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = summaryText
+                                            )
+                                        )
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
+                                            messages = messagesWithHs,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n\n\n")
+                                                    postLabelAdded = true
+                                                }
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
+                                            },
+                                            onToolCall = { /* 不处理工具调用，避免循环 */ }
+                                        )
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                aggregated.append("\n\n高铁车票工具暂时不可用：${e.message}\n\n")
                             }
                         }
                         onToolCallEnd?.invoke()
