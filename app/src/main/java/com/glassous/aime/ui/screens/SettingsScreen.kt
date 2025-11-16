@@ -9,6 +9,8 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +35,11 @@ import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
 import com.glassous.aime.data.preferences.OssPreferences
 import kotlinx.coroutines.launch
 import com.glassous.aime.data.preferences.AutoSyncPreferences
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -68,6 +75,7 @@ fun SettingsScreen(
     val topBarModelTextAlpha by themeViewModel.topBarModelTextAlpha.collectAsState()
     val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
     val hideImportSharedButton by themeViewModel.hideImportSharedButton.collectAsState()
+    val themeAdvancedExpanded by themeViewModel.themeAdvancedExpanded.collectAsState()
     
     var showFontSizeDialog by remember { mutableStateOf(false) }
     var showTransparencyDialog by remember { mutableStateOf(false) }
@@ -208,98 +216,117 @@ fun SettingsScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { showMinimalModeConfigDialog = true },
+                            .clickable { themeViewModel.setThemeAdvancedExpanded(!themeAdvancedExpanded) },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "极简模式",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "点击配置隐藏的界面元素",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = minimalMode,
-                            onCheckedChange = { themeViewModel.setMinimalMode(it) }
+                        Text(
+                            text = "更多主题选项",
+                            style = MaterialTheme.typography.titleSmall
+                        )
+                        Icon(
+                            imageVector = if (themeAdvancedExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = null
                         )
                     }
 
+                    AnimatedVisibility(
+                        visible = themeAdvancedExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showMinimalModeConfigDialog = true },
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "极简模式",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "点击配置隐藏的界面元素",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = minimalMode,
+                                    onCheckedChange = { themeViewModel.setMinimalMode(it) }
+                                )
+                            }
 
-                    // 新增：启用回复气泡开关
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "启用回复气泡",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        }
-                        Switch(
-                            checked = replyBubbleEnabled,
-                            onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "是否显示“获取分享对话”按钮",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                        }
-                        Switch(
-                            checked = hideImportSharedButton,
-                            onCheckedChange = { themeViewModel.setHideImportSharedButton(it) }
-                        )
-                    }
-                    
-                    // 新增：聊天字体大小设置
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showFontSizeDialog = true }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "修改聊天字体大小",
-                                style = MaterialTheme.typography.titleSmall
-                            )
-                            Text(
-                                text = "${chatFontSize.toInt()}sp",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // 新增：聊天页面顶部栏透明度设置
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { showTransparencyDialog = true }
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                text = "修改聊天页面组件透明度",
-                                style = MaterialTheme.typography.titleSmall
-                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "启用回复气泡",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                }
+                                Switch(
+                                    checked = replyBubbleEnabled,
+                                    onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "是否显示“获取分享对话”按钮",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                }
+                                Switch(
+                                    checked = hideImportSharedButton,
+                                    onCheckedChange = { themeViewModel.setHideImportSharedButton(it) }
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showFontSizeDialog = true }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "修改聊天字体大小",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "${chatFontSize.toInt()}sp",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showTransparencyDialog = true }
+                                    .padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = "修改聊天页面组件透明度",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                }
+                            }
                         }
                     }
 

@@ -55,6 +55,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _hideImportSharedButton = MutableStateFlow(false)
     val hideImportSharedButton: StateFlow<Boolean> = _hideImportSharedButton.asStateFlow()
 
+    private val _themeAdvancedExpanded = MutableStateFlow(true)
+    val themeAdvancedExpanded: StateFlow<Boolean> = _themeAdvancedExpanded.asStateFlow()
+
     // 新增：极简模式配置
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
@@ -121,6 +124,11 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.hideImportSharedButton.collect { enabled ->
                 _hideImportSharedButton.value = enabled
+            }
+        }
+        viewModelScope.launch {
+            themePreferences.themeAdvancedExpanded.collect { expanded ->
+                _themeAdvancedExpanded.value = expanded
             }
         }
         // 收集极简模式配置
@@ -209,6 +217,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     fun setHideImportSharedButton(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setHideImportSharedButton(enabled)
+        }
+    }
+
+    fun setThemeAdvancedExpanded(expanded: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setThemeAdvancedExpanded(expanded)
         }
     }
 }

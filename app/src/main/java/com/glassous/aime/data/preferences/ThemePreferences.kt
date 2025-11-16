@@ -44,6 +44,7 @@ class ThemePreferences(private val context: Context) {
         // 新增：聊天页面单独全屏显示
         private val CHAT_FULLSCREEN = booleanPreferencesKey("chat_fullscreen")
         private val HIDE_IMPORT_SHARED_BUTTON = booleanPreferencesKey("hide_import_shared_button")
+        private val THEME_ADVANCED_EXPANDED = booleanPreferencesKey("theme_advanced_expanded")
     }
     
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -107,6 +108,11 @@ class ThemePreferences(private val context: Context) {
     val hideImportSharedButton: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[HIDE_IMPORT_SHARED_BUTTON] ?: false
+        }
+
+    val themeAdvancedExpanded: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[THEME_ADVANCED_EXPANDED] ?: true
         }
 
     // 新增：极简模式详细配置
@@ -195,6 +201,12 @@ class ThemePreferences(private val context: Context) {
     suspend fun setHideImportSharedButton(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[HIDE_IMPORT_SHARED_BUTTON] = enabled
+        }
+    }
+
+    suspend fun setThemeAdvancedExpanded(expanded: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_ADVANCED_EXPANDED] = expanded
         }
     }
 
