@@ -66,25 +66,64 @@ fun NavigationDrawer(
                 modifier = Modifier.padding(bottom = 16.dp)
             )
 
-            // New Conversation Button
-            FilledTonalButton(
-                onClick = onNewConversation,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "新建对话",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("新建对话")
-            }
-
             var showImportDialog by remember { mutableStateOf(false) }
             var importCode by remember { mutableStateOf("") }
+            // New + Import buttons in one row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (hideImportSharedButton) {
+                    FilledTonalButton(
+                        onClick = onNewConversation,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "新建对话",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("新建对话")
+                    }
+                } else {
+                    FilledTonalButton(
+                        onClick = onNewConversation,
+                        modifier = Modifier
+                            .weight(3f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "新建对话",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("新建对话")
+                    }
+                    OutlinedButton(
+                        onClick = { showImportDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "获取分享的对话",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+
+            // moved declarations above
             val context = LocalContext.current
             val importJsonLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) {
@@ -94,36 +133,13 @@ fun NavigationDrawer(
                 }
             }
 
-            if (!hideImportSharedButton) {
-                OutlinedButton(
-                    onClick = { showImportDialog = true },
-                modifier = Modifier
-                    .fillMaxWidth()
-                        .padding(bottom = 12.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "获取分享的对话",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("获取分享的对话")
-                }
-            }
+            // Removed standalone import button; now combined with new button row above
 
             // Conversations List
             if (conversations.isNotEmpty()) {
-                Text(
-                    text = "对话历史",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     items(conversations) { conversation ->
                         ConversationItem(
@@ -156,10 +172,7 @@ fun NavigationDrawer(
             }
 
             // Settings Button
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 16.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
+            Spacer(modifier = Modifier.height(6.dp))
 
             OutlinedButton(
                 onClick = onNavigateToSettings,
