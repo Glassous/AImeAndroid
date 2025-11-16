@@ -92,6 +92,19 @@ fun NavigationDrawer(
                         Text("新建对话")
                     }
                 } else {
+                    OutlinedButton(
+                        onClick = { showImportDialog = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "获取分享的对话",
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                     FilledTonalButton(
                         onClick = onNewConversation,
                         modifier = Modifier
@@ -106,19 +119,6 @@ fun NavigationDrawer(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("新建对话")
-                    }
-                    OutlinedButton(
-                        onClick = { showImportDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "获取分享的对话",
-                            modifier = Modifier.size(18.dp)
-                        )
                     }
                 }
             }

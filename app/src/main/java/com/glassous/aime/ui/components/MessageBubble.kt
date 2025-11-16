@@ -69,68 +69,70 @@ fun MessageBubble(
         horizontalArrangement = if (message.isFromUser) Arrangement.End else Arrangement.Start
     ) {
         if (useBubble) {
-            // 维持原有气泡样式，实现自适应宽度
-            Surface(
-                modifier = Modifier
-                    .wrapContentWidth()
-                    .widthIn(max = 300.dp)
-                    .testTag("bubble-${message.id}"),
-                shape = RoundedCornerShape(
-                    topStart = 16.dp,
-                    topEnd = 16.dp,
-                    bottomStart = if (message.isFromUser) 16.dp else 4.dp,
-                    bottomEnd = if (message.isFromUser) 4.dp else 16.dp
-                ),
-                color = when {
-                    message.isError -> MaterialTheme.colorScheme.errorContainer
-                    message.isFromUser -> MaterialTheme.colorScheme.primary
-                    else -> MaterialTheme.colorScheme.surfaceContainer
-                },
-                tonalElevation = 1.dp
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
+            BoxWithConstraints {
+                val maxBubbleWidth = maxWidth
+                Surface(
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .widthIn(max = maxBubbleWidth)
+                        .testTag("bubble-${message.id}"),
+                    shape = RoundedCornerShape(
+                        topStart = 16.dp,
+                        topEnd = 16.dp,
+                        bottomStart = if (message.isFromUser) 16.dp else 4.dp,
+                        bottomEnd = if (message.isFromUser) 4.dp else 16.dp
+                    ),
+                    color = when {
+                        message.isError -> MaterialTheme.colorScheme.errorContainer
+                        message.isFromUser -> MaterialTheme.colorScheme.primary
+                        else -> MaterialTheme.colorScheme.surfaceContainer
+                    },
+                    tonalElevation = 1.dp
                 ) {
-                    val textColor = when {
-                        message.isError -> MaterialTheme.colorScheme.onErrorContainer
-                        message.isFromUser -> MaterialTheme.colorScheme.onPrimary
-                        else -> MaterialTheme.colorScheme.onSurface
-                    }
-                    val textSizeSp = chatFontSize
+                    Column(
+                        modifier = Modifier.padding(12.dp)
+                    ) {
+                        val textColor = when {
+                            message.isError -> MaterialTheme.colorScheme.onErrorContainer
+                            message.isFromUser -> MaterialTheme.colorScheme.onPrimary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                        val textSizeSp = chatFontSize
 
-                    // 识别特殊两段格式，使用可折叠框渲染
-                    val hasTwoPartReply = !message.isFromUser && (
-                        message.content.contains("【前置回复】") ||
-                        message.content.contains("【第一次回复】")
-                    )
+                        val hasTwoPartReply = !message.isFromUser && (
+                            message.content.contains("【前置回复】") ||
+                            message.content.contains("【第一次回复】")
+                        )
 
-                    if (hasTwoPartReply) {
-                        ExpandableReplyBox(
-                            content = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            isStreaming = isStreaming,
-                            onLongClick = { showDialog = true }
-                        )
-                    } else {
-                        // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                        StreamingMarkdownRenderer(
-                            markdown = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            onLongClick = { showDialog = true },
-                            isStreaming = isStreaming
-                        )
+                        if (hasTwoPartReply) {
+                            ExpandableReplyBox(
+                                content = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                isStreaming = isStreaming,
+                                onLongClick = { showDialog = true }
+                            )
+                        } else {
+                            StreamingMarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true },
+                                isStreaming = isStreaming
+                            )
+                        }
                     }
                 }
             }
         } else {
             // 新增：AI 回复直接在页面背景渲染（无气泡）
-            Column(
-                modifier = Modifier
-                    .widthIn(max = 500.dp)
-                    .testTag("bubble-${message.id}")
-            ) {
+            BoxWithConstraints {
+                val maxBubbleWidth = maxWidth
+                Column(
+                    modifier = Modifier
+                        .widthIn(max = maxBubbleWidth)
+                        .testTag("bubble-${message.id}")
+                ) {
                 val textColor = MaterialTheme.colorScheme.onSurface
                 val textSizeSp = chatFontSize
                 // 为了与截图风格更接近，增加左右留白与分段
@@ -163,6 +165,7 @@ fun MessageBubble(
                             isStreaming = isStreaming
                         )
                     }
+                }
                 }
             }
         }
