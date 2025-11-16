@@ -34,17 +34,20 @@ fun MarkdownRenderer(
     textColor: androidx.compose.ui.graphics.Color,
     textSizeSp: Float,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enableTables: Boolean = true
 ) {
     val context = LocalContext.current
     val blocks = remember(markdown) { parseMarkdownBlocks(markdown) }
     
     // 创建不包含代码块处理的Markwon实例，用于渲染普通文本
-    val markwon = remember(context) { 
-        Markwon.builder(context)
+    val markwon = remember(context, enableTables) { 
+        val builder = Markwon.builder(context)
             .usePlugin(JLatexMathPlugin.create(44f))
-            .usePlugin(TablePlugin.create(context))
-            .build() 
+        if (enableTables) {
+            builder.usePlugin(TablePlugin.create(context))
+        }
+        builder.build()
     }
 
     Column(modifier = modifier) {

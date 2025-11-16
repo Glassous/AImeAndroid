@@ -308,6 +308,7 @@ class ChatRepository(
                     )
                 )
             )
+            val hasIntent = isLotteryIntent || isTikuIntent || isWeatherIntent || isStockIntent || isGoldIntent || isHsIntent
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
@@ -316,7 +317,7 @@ class ChatRepository(
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
-                isAutoMode -> when {
+                isAutoMode || hasIntent -> when {
                     isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
                     isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
                     isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
@@ -759,9 +760,9 @@ class ChatRepository(
                     )
                 }
 
-                // 最终一次写入完整文本
-                val finalUpdated = assistantMessage.copy(content = aggregated.toString())
-                chatDao.updateMessage(finalUpdated)
+            // 最终一次写入完整文本
+            val finalUpdated = assistantMessage.copy(content = if (aggregated.isEmpty()) "生成失败或内容为空" else aggregated.toString())
+            chatDao.updateMessage(finalUpdated)
 
                 // Update conversation (assistant side)
                 updateConversationAfterMessage(conversationId, message)
@@ -857,9 +858,6 @@ class ChatRepository(
                 }
             val contextMessages = limitContext(contextMessagesBase)
             val messagesWithBias = contextMessages.toMutableList()
-
-            // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-            buildUserProfileSystemMessage()?.let { messagesWithBias.add(it) }
 
             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
             buildUserProfileSystemMessage()?.let { messagesWithBias.add(it) }
@@ -1117,7 +1115,7 @@ class ChatRepository(
                         if (toolCall.function?.name == "web_search") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val query = safeExtractQuery(arguments, "")
+                                val query = safeExtractQuery(arguments, userTextForIntent)
                                 
                                 if (query.isNotEmpty()) {
                                     val searchResponse = webSearchService.search(query)
@@ -1173,7 +1171,7 @@ class ChatRepository(
                         } else if (toolCall.function?.name == "city_weather") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val city = safeExtractCity(arguments, "")
+                                val city = safeExtractCity(arguments, userTextForIntent)
                                 
                                 if (city.isNotEmpty()) {
                                     val weatherResult = weatherService.query(city)
@@ -1220,7 +1218,7 @@ class ChatRepository(
                         } else if (toolCall.function?.name == "stock_query") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val secid = safeExtractSecId(arguments, "")
+                                val secid = safeExtractSecId(arguments, userTextForIntent)
                                 val numRaw = safeExtractNum(arguments, 30)
                                 val num = minOf(numRaw, 15)
                                 
@@ -1262,7 +1260,7 @@ class ChatRepository(
                         } else if (toolCall.function?.name == "baidu_tiku") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val question = safeExtractQuestion(arguments, "")
+                                val question = safeExtractQuestion(arguments, userTextForIntent)
                                 if (question.isNotEmpty()) {
                                     val tikuResult = BaiduTikuService().query(question)
                                     val md = BaiduTikuService().formatAsMarkdown(tikuResult)
@@ -1642,14 +1640,97 @@ class ChatRepository(
                     )
                 )
             )
+            val goldPriceTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "gold_price",
+                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = emptyMap(),
+                        required = null
+                    )
+                )
+            )
+            val hsTicketTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "hs_ticket_query",
+                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "from" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "出发城市或车站中文名称"
+                            ),
+                            "to" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "目的城市或车站中文名称"
+                            ),
+                            "date" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
+                            )
+                        ),
+                        required = listOf("from", "to")
+                    )
+                )
+            )
+            val baiduTikuTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "baidu_tiku",
+                    description = "检索题库并返回题干/选项/答案。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "question" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "完整题干文本"
+                            )
+                        ),
+                        required = listOf("question")
+                    )
+                )
+            )
+            val lotteryTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "lottery_query",
+                    description = "查询指定彩种的最近开奖信息。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "get" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "彩种缩写：kl8、ssq、dlt、fc3d、pl3、pl5、qlc、qxc、sfc、jqc、bqc"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "查询天数（1-100），默认5"
+                            )
+                        ),
+                        required = listOf("get")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
+                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
+                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
+                selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool)
-                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -2125,7 +2206,8 @@ class ChatRepository(
             }
 
             // 最终写入完整文本并刷新会话元数据
-            chatDao.updateMessage(assistantMessage.copy(content = aggregated.toString()))
+            val finalText = if (aggregated.isEmpty()) "生成失败或内容为空" else aggregated.toString()
+            chatDao.updateMessage(assistantMessage.copy(content = finalText))
             refreshConversationMetadata(conversationId)
             
             // 如果启用了自动同步，则自动上传

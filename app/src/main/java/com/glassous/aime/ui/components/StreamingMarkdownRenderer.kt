@@ -31,7 +31,8 @@ fun StreamingMarkdownRenderer(
             markdown = markdown,
             textColor = textColor,
             textSizeSp = textSizeSp,
-            onLongClick = onLongClick
+            onLongClick = onLongClick,
+            enableTables = !isStreaming
         )
         if (isStreaming) {
             val transition = rememberInfiniteTransition(label = "cursor")
