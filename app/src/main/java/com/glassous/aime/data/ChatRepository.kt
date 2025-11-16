@@ -390,7 +390,7 @@ class ChatRepository(
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
-            val updateInterval = 300L // 限制更新频率为每300ms一次，减少频繁重组引发的抖动
+            val updateInterval = 0L
             var preLabelAdded = false
             var postLabelAdded = false
             
@@ -1069,7 +1069,7 @@ class ChatRepository(
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
-            val updateInterval = 300L
+            val updateInterval = 0L
             var preLabelAdded = false
             var postLabelAdded = false
 
@@ -1584,7 +1584,7 @@ class ChatRepository(
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
-            val updateInterval = 300L
+            val updateInterval = 0L
 
             // 定义工具（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(

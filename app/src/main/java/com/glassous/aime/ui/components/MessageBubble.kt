@@ -74,7 +74,6 @@ fun MessageBubble(
                 modifier = Modifier
                     .wrapContentWidth()
                     .widthIn(max = 300.dp)
-                    .animateContentSize()
                     .testTag("bubble-${message.id}"),
                 shape = RoundedCornerShape(
                     topStart = 16.dp,
@@ -115,23 +114,13 @@ fun MessageBubble(
                         )
                     } else {
                         // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                        if (!message.isFromUser && enableTypewriterEffect) {
-                            TypewriterMarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true },
-                                isStreaming = isStreaming,
-                                typingDelayMs = 30L
-                            )
-                        } else {
-                            MarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true }
-                            )
-                        }
+                        StreamingMarkdownRenderer(
+                            markdown = message.content,
+                            textColor = textColor,
+                            textSizeSp = textSizeSp,
+                            onLongClick = { showDialog = true },
+                            isStreaming = isStreaming
+                        )
                     }
                 }
             }
@@ -166,23 +155,13 @@ fun MessageBubble(
                         )
                     } else {
                         // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                        if (!message.isFromUser && enableTypewriterEffect) {
-                            TypewriterMarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true },
-                                isStreaming = isStreaming,
-                                typingDelayMs = 30L
-                            )
-                        } else {
-                            MarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true }
-                            )
-                        }
+                        StreamingMarkdownRenderer(
+                            markdown = message.content,
+                            textColor = textColor,
+                            textSizeSp = textSizeSp,
+                            onLongClick = { showDialog = true },
+                            isStreaming = isStreaming
+                        )
                     }
                 }
             }

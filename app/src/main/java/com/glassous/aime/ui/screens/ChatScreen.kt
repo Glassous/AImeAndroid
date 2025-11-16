@@ -223,41 +223,12 @@ fun ChatScreen(
         }
     }
 
-    // 记录AI生成开始时的滚动状态
-    var wasAtBottomWhenGenerationStarted by remember { mutableStateOf(false) }
-    
-    // 监听AI生成状态变化
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            // AI生成开始时，记录当前是否在底部
-            wasAtBottomWhenGenerationStarted = !showScrollToBottomButton
-        } else {
-            // AI生成结束时，重置状态
-            wasAtBottomWhenGenerationStarted = false
-        }
-    }
-    
-    // 当AI生成进行中且用户原本在底部时，保持在底部
-    LaunchedEffect(currentMessages.size) {
-        if (isLoading && wasAtBottomWhenGenerationStarted && currentMessages.isNotEmpty()) {
-            // 使用协程延迟一小段时间，避免频繁滚动
-            kotlinx.coroutines.delay(50)
-            // 检查是否仍在生成中且用户没有手动滚动
-            if (isLoading && wasAtBottomWhenGenerationStarted) {
-                listState.animateScrollToItem(
-                    index = currentMessages.size,
-                    scrollOffset = 0
-                )
-            }
-        }
-    }
+    // 移除生成期间的自动保持底部机制，仅保留回到底部按钮
 
-    // 新增：当进入聊天记录时，自动滚动到最新消息
-    LaunchedEffect(currentMessages.size, currentConversationId) {
+    // 进入对话时滚动到最新消息（仅在对话切换时触发）
+    LaunchedEffect(currentConversationId) {
         if (currentMessages.isNotEmpty()) {
-            // 延迟一小段时间确保UI完全渲染
             kotlinx.coroutines.delay(100)
-            // 滚动到最新消息（最后一条消息）
             listState.animateScrollToItem(
                 index = currentMessages.size - 1,
                 scrollOffset = 0

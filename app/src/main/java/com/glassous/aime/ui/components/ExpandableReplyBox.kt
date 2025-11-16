@@ -113,11 +113,7 @@ fun ExpandableReplyBox(
                 }
             }
 
-            AnimatedVisibility(
-                visible = expanded && preText.isNotEmpty(),
-                enter = expandVertically(),
-                exit = shrinkVertically()
-            ) {
+            if (expanded && preText.isNotEmpty()) {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     MarkdownRenderer(
                         markdown = preText,
@@ -126,7 +122,6 @@ fun ExpandableReplyBox(
                         onLongClick = onLongClick,
                         modifier = Modifier.fillMaxWidth()
                     )
-                    // 将 40dp 间距移动到折叠容器内部，折叠时一并隐藏
                     if (toolText != null && toolText.isNotEmpty()) {
                         Spacer(modifier = Modifier.height(40.dp))
                     }
@@ -134,26 +129,23 @@ fun ExpandableReplyBox(
             }
             // 中间：工具调用结果区域（无标题、无折叠），与正式回复视觉一致
             if (toolText != null && toolText.isNotEmpty()) {
-                TypewriterMarkdownRenderer(
+                MarkdownRenderer(
                     markdown = toolText,
                     textColor = textColor,
                     textSizeSp = textSizeSp,
                     onLongClick = onLongClick,
-                    isStreaming = false,
-                    typingDelayMs = 30L,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
             // 正式回复：正常渲染，不折叠
             if (officialText != null && officialText.isNotEmpty()) {
-                TypewriterMarkdownRenderer(
+                StreamingMarkdownRenderer(
                     markdown = officialText,
                     textColor = textColor,
                     textSizeSp = textSizeSp,
                     onLongClick = onLongClick,
-                    isStreaming = isStreaming,
-                    typingDelayMs = 30L
+                    isStreaming = isStreaming
                 )
             } else {
                 Text(
