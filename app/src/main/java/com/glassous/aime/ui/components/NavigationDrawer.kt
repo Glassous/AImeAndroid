@@ -30,6 +30,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.core.content.FileProvider
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -252,7 +254,6 @@ private fun ConversationItem(
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
     var shareCode by remember { mutableStateOf<String?>(null) }
-    var isLongShare by remember { mutableStateOf(false) }
     var shareJson by remember { mutableStateOf<String>("") }
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
@@ -426,17 +427,14 @@ private fun ConversationItem(
                         onClick = {
                             onShare(conversation.id) { code ->
                                 shareCode = code
-                                isLongShare = (code?.length ?: 0) > 3000
-                                if (isLongShare) {
-                                    if (code != null) {
-                                        try {
-                                            shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
-                                        } catch (_: Exception) {
-                                            shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
-                                        }
-                                    } else {
-                                        shareJson = ""
+                                if (code != null) {
+                                    try {
+                                        shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
+                                    } catch (_: Exception) {
+                                        shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
                                     }
+                                } else {
+                                    shareJson = ""
                                 }
                                 showShareDialog = true
                                 isExpanded = false
@@ -495,7 +493,7 @@ private fun ConversationItem(
                                     .verticalScroll(scrollState)
                             ) {
                                 Text(
-                                    text = if (isLongShare) "分享码较长，请导出为JSON文件" else (shareCode ?: "正在生成分享码…"),
+                                    text = conversation.title,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -504,34 +502,27 @@ private fun ConversationItem(
                     },
                     confirmButton = {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (!isLongShare) {
-                                TextButton(
-                                    onClick = {
-                                        shareCode?.let { code ->
-                                            clipboard.setText(androidx.compose.ui.text.AnnotatedString(code))
-                                            showShareDialog = false
-                                        }
+                            TextButton(
+                                onClick = {
+                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                                    exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                                }
+                            ) { Text("导出JSON") }
+                            TextButton(
+                                onClick = {
+                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                                    val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                                    cacheFile.writeText(shareJson, Charsets.UTF_8)
+                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                                     }
-                                ) { Text("复制分享码") }
-                                TextButton(
-                                    onClick = {
-                                        shareCode?.let { code ->
-                                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                                type = "text/plain"
-                                                putExtra(Intent.EXTRA_TEXT, code)
-                                            }
-                                            context.startActivity(Intent.createChooser(intent, "分享对话"))
-                                            showShareDialog = false
-                                        }
-                                    }
-                                ) { Text("系统分享") }
-                            } else {
-                                TextButton(
-                                    onClick = {
-                                        exportLauncher.launch("shared-conversation-${System.currentTimeMillis()}.json")
-                                    }
-                                ) { Text("导出JSON") }
-                            }
+                                    context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
+                                    showShareDialog = false
+                                }
+                            ) { Text("分享") }
                         }
                     },
                     dismissButton = {
