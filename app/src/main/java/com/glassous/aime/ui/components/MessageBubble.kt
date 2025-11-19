@@ -74,7 +74,7 @@ fun MessageBubble(
                 Surface(
                     modifier = Modifier
                         .wrapContentWidth()
-                        .widthIn(max = maxBubbleWidth)
+                        .widthIn(max = if (message.isFromUser) 300.dp else maxBubbleWidth)
                         .testTag("bubble-${message.id}"),
                     shape = RoundedCornerShape(
                         topStart = 16.dp,
