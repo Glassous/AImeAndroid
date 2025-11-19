@@ -230,7 +230,7 @@ fun ChatScreen(
         if (currentMessages.isNotEmpty()) {
             kotlinx.coroutines.delay(100)
             listState.animateScrollToItem(
-                index = currentMessages.size - 1,
+                index = currentMessages.size + 1,
                 scrollOffset = 0
             )
         }
