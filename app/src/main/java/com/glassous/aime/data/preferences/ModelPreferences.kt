@@ -24,10 +24,11 @@ class ModelPreferences(private val context: Context) {
 
     suspend fun setSelectedModelId(modelId: String?) {
         context.dataStore.edit { preferences ->
+            val current = preferences[SELECTED_MODEL_ID]
             if (modelId == null) {
-                preferences.remove(SELECTED_MODEL_ID)
+                if (current != null) preferences.remove(SELECTED_MODEL_ID)
             } else {
-                preferences[SELECTED_MODEL_ID] = modelId
+                if (current != modelId) preferences[SELECTED_MODEL_ID] = modelId
             }
         }
     }

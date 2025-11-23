@@ -230,7 +230,10 @@ class CloudSyncManager(
             modelDao.insertModel(rm)
         }
         remote.selectedModelId?.let { sel ->
-            try { modelPreferences.setSelectedModelId(sel) } catch (_: Exception) { }
+            val localSel = try { modelPreferences.selectedModelId.first() } catch (_: Exception) { null }
+            if (localSel != sel) {
+                try { modelPreferences.setSelectedModelId(sel) } catch (_: Exception) { }
+            }
         }
 
         remote.conversations.forEach { rc ->
