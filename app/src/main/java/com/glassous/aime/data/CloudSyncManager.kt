@@ -49,31 +49,38 @@ class CloudSyncManager(
     }
 
     suspend fun syncOnce() {
+        val token = authPreferences.accessToken.first() ?: return
+        kotlinx.coroutines.withContext(Dispatchers.IO) {
         mutex.withLock {
-            val token = authPreferences.accessToken.first() ?: return
             val localBackup = collectLocalBackup()
 
             val (okDownload, _, remoteJson) = supabaseService.downloadBackup(token)
+            var remoteBefore: BackupData? = null
             if (okDownload && !remoteJson.isNullOrBlank()) {
-                val remote = try { gson.fromJson(remoteJson, BackupData::class.java) } catch (_: Exception) { null }
-                if (remote != null) {
+                remoteBefore = try { gson.fromJson(remoteJson, BackupData::class.java) } catch (_: Exception) { null }
+                remoteBefore = remoteBefore?.let { deduplicateRemote(it) }
+                if (remoteBefore != null) {
                     val isLocalEmpty = localBackup.modelGroups.isEmpty() && localBackup.conversations.isEmpty()
                     if (isLocalEmpty) {
-                        importRemoteIntoLocal(remote)
+                        importRemoteIntoLocal(remoteBefore)
                     } else {
-                        mergeRemoteIntoLocal(remote)
+                        mergeRemoteIntoLocal(remoteBefore)
                     }
                 }
             }
-            val localBackupJson = gson.toJson(collectLocalBackup())
+            val localAfterMerge = collectLocalBackup()
+            val adjustedForUpload = if (remoteBefore != null) adjustConversationsForUpload(localAfterMerge, remoteBefore) else localAfterMerge
+            val localBackupJson = gson.toJson(adjustedForUpload)
             val uploadHistory = syncPreferences.uploadHistoryEnabled.first()
             val uploadModelConfig = syncPreferences.uploadModelConfigEnabled.first()
+            val uploadSelectedModel = syncPreferences.uploadSelectedModelEnabled.first()
             val uploadApiKey = syncPreferences.uploadApiKeyEnabled.first()
             val (okUpload, uploadMsg) = supabaseService.uploadBackup(
                 token = token,
                 backupDataJson = localBackupJson,
                 syncHistory = uploadHistory,
                 syncModelConfig = uploadModelConfig,
+                syncSelectedModel = uploadSelectedModel,
                 syncApiKey = uploadApiKey
             )
             if (!okUpload) throw IllegalStateException(uploadMsg)
@@ -82,8 +89,10 @@ class CloudSyncManager(
             if (!okDownloadAfter || remoteJsonAfter.isNullOrBlank()) {
                 throw IllegalStateException("下载失败：远端数据为空或会话无效")
             }
-            val remoteFinal = try { gson.fromJson(remoteJsonAfter, BackupData::class.java) } catch (e: Exception) { throw IllegalStateException("下载数据解析失败：" + (e.message ?: "未知错误")) }
+            var remoteFinal = try { gson.fromJson(remoteJsonAfter, BackupData::class.java) } catch (e: Exception) { throw IllegalStateException("下载数据解析失败：" + (e.message ?: "未知错误")) }
+            remoteFinal = deduplicateRemote(remoteFinal)
             overwriteLocalWithRemote(remoteFinal)
+        }
         }
     }
 
@@ -257,6 +266,42 @@ class CloudSyncManager(
                 )
             }
         }
+    }
+
+    private fun deduplicateRemote(remote: BackupData): BackupData {
+        val convByTitle = mutableMapOf<String, MutableList<BackupConversation>>()
+        remote.conversations.forEach { c ->
+            convByTitle.getOrPut(c.title) { mutableListOf() }.add(c)
+        }
+        val mergedConversations = mutableListOf<BackupConversation>()
+        convByTitle.forEach { (title, list) ->
+            val latest = list.maxByOrNull { it.lastMessageTime } ?: list.first()
+            val allMessages = list.flatMap { it.messages }
+            val uniq = mutableListOf<BackupMessage>()
+            allMessages.forEach { m ->
+                val exists = uniq.any { u -> u.content == m.content && kotlin.math.abs(u.timestamp - m.timestamp) < 2000 }
+                if (!exists) uniq.add(m)
+            }
+            mergedConversations.add(
+                BackupConversation(
+                    title = title,
+                    lastMessage = latest.lastMessage,
+                    lastMessageTime = latest.lastMessageTime,
+                    messageCount = uniq.size,
+                    messages = uniq
+                )
+            )
+        }
+        return remote.copy(conversations = mergedConversations)
+    }
+
+    private fun adjustConversationsForUpload(local: BackupData, remote: BackupData): BackupData {
+        val remoteTimeByTitle = remote.conversations.associateBy({ it.title }, { it.lastMessageTime })
+        val adjustedConvs = local.conversations.map { c ->
+            val remoteTime = remoteTimeByTitle[c.title]
+            if (remoteTime != null) c.copy(lastMessageTime = remoteTime) else c
+        }
+        return local.copy(conversations = adjustedConvs)
     }
 
     private suspend fun overwriteLocalWithRemote(remote: BackupData) {

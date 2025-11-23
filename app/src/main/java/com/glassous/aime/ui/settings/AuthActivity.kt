@@ -74,6 +74,7 @@ class AuthActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 val uploadHistoryEnabled by app.syncPreferences.uploadHistoryEnabled.collectAsState(initial = true)
                 val uploadModelConfigEnabled by app.syncPreferences.uploadModelConfigEnabled.collectAsState(initial = true)
+                val uploadSelectedModelEnabled by app.syncPreferences.uploadSelectedModelEnabled.collectAsState(initial = true)
                 val uploadApiKeyEnabled by app.syncPreferences.uploadApiKeyEnabled.collectAsState(initial = false)
                 var isSyncing by remember { mutableStateOf(false) }
 
@@ -176,6 +177,34 @@ class AuthActivity : ComponentActivity() {
                                             onCheckedChange = { v ->
                                                 scope.launch {
                                                     app.syncPreferences.setUploadModelConfigEnabled(v)
+                                                    if (v && !isSyncing) {
+                                                        isSyncing = true
+                                                        try {
+                                                            app.cloudSyncManager.syncOnce()
+                                                            snackbarHostState.showSnackbar("已触发完整同步")
+                                                        } catch (e: Exception) {
+                                                            val detail = e.stackTraceToString().take(500)
+                                                            snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                                        } finally {
+                                                            isSyncing = false
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("上传模型选择", style = MaterialTheme.typography.titleSmall)
+                                        Switch(
+                                            checked = uploadSelectedModelEnabled,
+                                            onCheckedChange = { v ->
+                                                scope.launch {
+                                                    app.syncPreferences.setUploadSelectedModelEnabled(v)
                                                     if (v && !isSyncing) {
                                                         isSyncing = true
                                                         try {

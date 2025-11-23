@@ -128,6 +128,7 @@ class SupabaseAuthService(
         backupDataJson: String,
         syncHistory: Boolean = true,
         syncModelConfig: Boolean = true,
+        syncSelectedModel: Boolean = true,
         syncApiKey: Boolean = false
     ): Pair<Boolean, String> {
         val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_upload_backup"
@@ -144,6 +145,9 @@ class SupabaseAuthService(
             append(',')
             append("\"p_sync_model_config\":")
             append(if (syncModelConfig) "true" else "false")
+            append(',')
+            append("\"p_sync_selected_model\":")
+            append(if (syncSelectedModel) "true" else "false")
             append(',')
             append("\"p_sync_api_key\":")
             append(if (syncApiKey) "true" else "false")

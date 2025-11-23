@@ -11,8 +11,14 @@ import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 class ModelConfigRepository(
-    private val modelConfigDao: ModelConfigDao
+    private val modelConfigDao: ModelConfigDao,
+    private val cloudSyncManager: com.glassous.aime.data.CloudSyncManager
 ) {
+    private suspend fun triggerSync() {
+        try {
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { cloudSyncManager.syncOnce() }
+        } catch (_: Exception) { }
+    }
     
     // 获取所有分组
     fun getAllGroups(): Flow<List<ModelGroup>> = modelConfigDao.getAllGroups()
@@ -44,25 +50,21 @@ class ModelConfigRepository(
             providerUrl = providerUrl
         )
         modelConfigDao.insertGroup(group)
-        
-        
-        
+        triggerSync()
         return groupId
     }
     
     // 更新分组
     suspend fun updateGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.updateGroup(group)
-        
-        
+        triggerSync()
     }
     
     // 删除分组（同时删除组内所有模型）
     suspend fun deleteGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.deleteModelsByGroupId(group.id)
         modelConfigDao.deleteGroup(group)
-        
-        
+        triggerSync()
     }
     
     // 添加模型到分组
@@ -76,22 +78,20 @@ class ModelConfigRepository(
             remark = remark
         )
         modelConfigDao.insertModel(model)
-        
-        
-        
+        triggerSync()
         return modelId
     }
     
     // 更新模型
     suspend fun updateModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.updateModel(model)
-        
+        triggerSync()
     }
     
     // 删除模型
     suspend fun deleteModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.deleteModel(model)
-        
+        triggerSync()
     }
     
     // 获取分组详情

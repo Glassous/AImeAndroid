@@ -18,18 +18,25 @@ import com.google.gson.stream.JsonReader
 import java.io.StringReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.glassous.aime.data.CloudSyncManager
 
 class ChatRepository(
     private val chatDao: ChatDao,
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
     private val contextPreferences: ContextPreferences,
+    private val cloudSyncManager: CloudSyncManager,
     private val openAiService: OpenAiService = OpenAiService(),
     private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
     private val weatherService: WeatherService = WeatherService(),
     private val stockService: StockService = StockService()
 ) {
+    private suspend fun triggerSync() {
+        try {
+            withContext(Dispatchers.IO) { cloudSyncManager.syncOnce() }
+        } catch (_: Exception) { }
+    }
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>> {
         return chatDao.getMessagesForConversation(conversationId)
     }
@@ -79,6 +86,7 @@ class ChatRepository(
 
             // Update conversation (user side)
             updateConversationAfterMessage(conversationId, message)
+            triggerSync()
 
             // Resolve selected model config
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -1313,6 +1321,7 @@ class ChatRepository(
             // 最终写入完整文本
             chatDao.updateMessage(target.copy(content = aggregated.toString()))
             refreshConversationMetadata(conversationId)
+            triggerSync()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -1327,6 +1336,7 @@ class ChatRepository(
             messageCount = 0
         )
         val conversationId = chatDao.insertConversation(conversation)
+        triggerSync()
         return conversation.copy(id = conversationId)
     }
 
@@ -1364,6 +1374,7 @@ class ChatRepository(
             }
 
             refreshConversationMetadata(newId)
+            triggerSync()
 
             
 
@@ -1376,6 +1387,7 @@ class ChatRepository(
         if (conversation != null) {
             val updatedConversation = conversation.copy(title = newTitle)
             chatDao.updateConversation(updatedConversation)
+            triggerSync()
             
             
         }
@@ -1418,6 +1430,7 @@ class ChatRepository(
         if (conversation != null) {
             chatDao.deleteMessagesForConversation(conversationId)
             chatDao.deleteConversation(conversation)
+            triggerSync()
             
         
         }
