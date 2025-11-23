@@ -61,6 +61,7 @@ class AuthActivity : ComponentActivity() {
                 val authViewModel: AuthViewModel = viewModel(
                     factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
                 )
+                val app = context.applicationContext as com.glassous.aime.AIMeApplication
                 val isLoggedIn by authViewModel.isLoggedIn.collectAsState(initial = false)
                 val userEmail by authViewModel.email.collectAsState(initial = null)
                 var email by remember { mutableStateOf("") }
@@ -68,8 +69,13 @@ class AuthActivity : ComponentActivity() {
                 var showPassword by remember { mutableStateOf(false) }
                 var isLoggingIn by remember { mutableStateOf(false) }
                 var showLogoutConfirm by remember { mutableStateOf(false) }
+                var clearLocalOnLogout by remember { mutableStateOf(false) }
                 val snackbarHostState = remember { SnackbarHostState() }
                 val scope = rememberCoroutineScope()
+                val uploadHistoryEnabled by app.syncPreferences.uploadHistoryEnabled.collectAsState(initial = true)
+                val uploadModelConfigEnabled by app.syncPreferences.uploadModelConfigEnabled.collectAsState(initial = true)
+                val uploadApiKeyEnabled by app.syncPreferences.uploadApiKeyEnabled.collectAsState(initial = false)
+                var isSyncing by remember { mutableStateOf(false) }
 
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -125,6 +131,129 @@ class AuthActivity : ComponentActivity() {
                                         onClick = { showLogoutConfirm = true },
                                         modifier = Modifier.fillMaxWidth()
                                     ) { Text("退出登录") }
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    Text(
+                                        text = "云端同步设置",
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("上传聊天记录", style = MaterialTheme.typography.titleSmall)
+                                        Switch(
+                                            checked = uploadHistoryEnabled,
+                                            onCheckedChange = { v ->
+                                                scope.launch {
+                                                    app.syncPreferences.setUploadHistoryEnabled(v)
+                                                    if (v && !isSyncing) {
+                                                        isSyncing = true
+                                                        try {
+                                                            app.cloudSyncManager.syncOnce()
+                                                            snackbarHostState.showSnackbar("已触发完整同步")
+                                                        } catch (e: Exception) {
+                                                            val detail = e.stackTraceToString().take(500)
+                                                            snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                                        } finally {
+                                                            isSyncing = false
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("上传模型配置", style = MaterialTheme.typography.titleSmall)
+                                        Switch(
+                                            checked = uploadModelConfigEnabled,
+                                            onCheckedChange = { v ->
+                                                scope.launch {
+                                                    app.syncPreferences.setUploadModelConfigEnabled(v)
+                                                    if (v && !isSyncing) {
+                                                        isSyncing = true
+                                                        try {
+                                                            app.cloudSyncManager.syncOnce()
+                                                            snackbarHostState.showSnackbar("已触发完整同步")
+                                                        } catch (e: Exception) {
+                                                            val detail = e.stackTraceToString().take(500)
+                                                            snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                                        } finally {
+                                                            isSyncing = false
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Column(Modifier.weight(1f)) {
+                                            Text("上传 API Key", style = MaterialTheme.typography.titleSmall)
+                                            Text(
+                                                text = "开启后可能暴露隐私，请谨慎",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Switch(
+                                            checked = uploadApiKeyEnabled,
+                                            onCheckedChange = { v ->
+                                                scope.launch {
+                                                    app.syncPreferences.setUploadApiKeyEnabled(v)
+                                                    if (v && !isSyncing) {
+                                                        isSyncing = true
+                                                        try {
+                                                            app.cloudSyncManager.syncOnce()
+                                                            snackbarHostState.showSnackbar("已触发完整同步")
+                                                        } catch (e: Exception) {
+                                                            val detail = e.stackTraceToString().take(500)
+                                                            snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                                        } finally {
+                                                            isSyncing = false
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    Button(
+                                        onClick = {
+                                            scope.launch {
+                                                if (!isSyncing) {
+                                                    isSyncing = true
+                                                    try {
+                                                        app.cloudSyncManager.syncOnce()
+                                                        snackbarHostState.showSnackbar("同步完成")
+                                                    } catch (e: Exception) {
+                                                        val detail = e.stackTraceToString().take(500)
+                                                        snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                                    } finally {
+                                                        isSyncing = false
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        enabled = !isSyncing,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        if (isSyncing) {
+                                            CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                        } else {
+                                            Text("立即同步")
+                                        }
+                                    }
                                 } else {
                                     OutlinedTextField(
                                         value = email,
@@ -213,13 +342,27 @@ class AuthActivity : ComponentActivity() {
                     AlertDialog(
                         onDismissRequest = { showLogoutConfirm = false },
                         title = { Text("确认退出登录") },
-                        text = { Text("是否确认退出当前账号？") },
+                        text = {
+                            Column {
+                                Text("是否确认退出当前账号？")
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(checked = clearLocalOnLogout, onCheckedChange = { clearLocalOnLogout = it })
+                                    Text("同时清除本地数据（会话、消息、模型配置）")
+                                }
+                            }
+                        },
                         confirmButton = {
                             TextButton(onClick = {
                                 showLogoutConfirm = false
                                 scope.launch {
                                     authViewModel.logout { ok, msg ->
                                         scope.launch { snackbarHostState.showSnackbar(msg) }
+                                        if (clearLocalOnLogout) {
+                                            authViewModel.clearLocalData { ok2, msg2 ->
+                                                scope.launch { snackbarHostState.showSnackbar(msg2) }
+                                            }
+                                        }
                                         finish()
                                     }
                                 }

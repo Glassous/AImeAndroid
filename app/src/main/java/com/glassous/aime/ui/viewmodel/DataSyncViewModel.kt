@@ -172,7 +172,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                                 content = bm.content,
                                 isFromUser = bm.isFromUser,
                                 timestamp = Date(bm.timestamp),
-                                isError = bm.isError
+                                isError = bm.isError ?: false
                             )
                         )
                     }

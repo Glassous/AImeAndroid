@@ -74,6 +74,23 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             onResult(ok, msg)
         }
     }
+
+    fun clearLocalData(onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val chatDao = app.database.chatDao()
+                val modelDao = app.database.modelConfigDao()
+                chatDao.deleteAllMessages()
+                chatDao.deleteAllConversations()
+                modelDao.deleteAllModels()
+                modelDao.deleteAllGroups()
+                app.modelPreferences.setSelectedModelId(null)
+                onResult(true, "已清除本地数据")
+            } catch (e: Exception) {
+                onResult(false, "清除失败：${e.message}")
+            }
+        }
+    }
 }
 
 class AuthViewModelFactory(private val application: Application) : ViewModelProvider.Factory {

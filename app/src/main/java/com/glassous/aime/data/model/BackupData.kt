@@ -25,5 +25,5 @@ data class BackupMessage(
     val content: String,
     val isFromUser: Boolean,
     val timestamp: Long,
-    val isError: Boolean
+    val isError: Boolean?
 )

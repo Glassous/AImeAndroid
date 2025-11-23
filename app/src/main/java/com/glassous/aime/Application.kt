@@ -9,6 +9,8 @@ import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.AuthPreferences
+import com.glassous.aime.data.CloudSyncManager
+import com.glassous.aime.data.preferences.SyncPreferences
  
  
 
@@ -32,8 +34,17 @@ class AIMeApplication : Application() {
 
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
     val authPreferences by lazy { AuthPreferences(this) }
+    val syncPreferences by lazy { SyncPreferences(this) }
 
-    
+    val cloudSyncManager by lazy {
+        CloudSyncManager(
+            chatDao = database.chatDao(),
+            modelDao = database.modelConfigDao(),
+            modelPreferences = modelPreferences,
+            authPreferences = authPreferences,
+            syncPreferences = syncPreferences
+        )
+    }
 
     // Repository instance
     val repository by lazy { 
@@ -54,6 +65,16 @@ class AIMeApplication : Application() {
             } catch (_: Exception) {
                 // 忽略预设插入失败，不影响应用启动
             }
+        }
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                authPreferences.accessToken.collect { token ->
+                    cloudSyncManager.onTokenChanged(token)
+                    if (!token.isNullOrBlank()) {
+                        try { cloudSyncManager.syncOnce() } catch (_: Exception) { }
+                    }
+                }
+            } catch (_: Exception) { }
         }
     }
 }
