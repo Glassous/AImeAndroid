@@ -36,11 +36,21 @@
             </intent-filter>
         </activity>
 
-        <!-- 用户设置页面 -->
+        
         <activity
-            android:name=".ui.settings.UserSettingsActivity"
+            android:name=".ui.settings.AuthActivity"
             android:exported="false"
-            android:label="用户设置"
+            android:label="账号登录"
+            android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.settings.ForgotPasswordActivity"
+            android:exported="false"
+            android:label="找回密码"
+            android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.settings.RegisterActivity"
+            android:exported="false"
+            android:label="账号注册"
             android:theme="@style/Theme.AIme" />
     </application>
 

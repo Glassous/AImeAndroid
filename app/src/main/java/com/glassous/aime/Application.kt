@@ -8,8 +8,8 @@ import com.glassous.aime.data.ChatDatabase
 import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.AuthPreferences
  
-import com.glassous.aime.data.preferences.UserProfilePreferences
  
 
 
@@ -30,11 +30,8 @@ class AIMeApplication : Application() {
 
     
 
-    // User profile preferences instance
-    val userProfilePreferences by lazy { UserProfilePreferences(this) }
-
-    // Context limit preferences instance
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
+    val authPreferences by lazy { AuthPreferences(this) }
 
     
 
@@ -44,8 +41,7 @@ class AIMeApplication : Application() {
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,
-            contextPreferences = contextPreferences,
-            userProfilePreferences = userProfilePreferences
+            contextPreferences = contextPreferences
         )
     }
 

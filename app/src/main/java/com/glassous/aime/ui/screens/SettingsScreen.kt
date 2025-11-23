@@ -30,6 +30,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.viewmodel.DataSyncViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModelFactory
+import com.glassous.aime.ui.viewmodel.AuthViewModel
+import com.glassous.aime.ui.viewmodel.AuthViewModelFactory
  
 import kotlinx.coroutines.launch
  
@@ -59,7 +61,6 @@ import java.net.URL
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToModelConfig: () -> Unit,
-    onNavigateToUserSettings: () -> Unit,
     themeViewModel: ThemeViewModel
 ) {
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
@@ -84,6 +85,11 @@ fun SettingsScreen(
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    val authViewModel: AuthViewModel = viewModel(factory = AuthViewModelFactory(context.applicationContext as android.app.Application))
+    val isLoggedIn by authViewModel.isLoggedIn.collectAsState(initial = false)
+    val userEmail by authViewModel.email.collectAsState(initial = null)
+    var inputEmail by remember { mutableStateOf("") }
+    var inputPassword by remember { mutableStateOf("") }
     
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -140,6 +146,34 @@ fun SettingsScreen(
                 ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "用户账号",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = if (isLoggedIn) ("已登录：" + (userEmail ?: "")) else "未登录",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = {
+                            val intent = android.content.Intent(context, com.glassous.aime.ui.settings.AuthActivity::class.java)
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("打开账号管理") }
+                }
+            }
             // 主题设置卡片（移到上方）
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -353,40 +387,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 用户设置卡片（位于模型配置与最大上下文限制之间）
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "用户设置",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = "编辑昵称、城市、语言、年龄等个人资料",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-                    Button(
-                        onClick = onNavigateToUserSettings,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(Icons.Filled.Settings, contentDescription = "用户设置")
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("打开用户设置")
-                    }
-                }
-            }
+            
 
             // 最大上下文限制卡片（位于模型配置下、云端同步上方）
             Card(

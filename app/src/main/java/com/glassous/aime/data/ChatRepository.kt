@@ -7,10 +7,10 @@ import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.ContextPreferences
-import com.glassous.aime.data.preferences.UserProfilePreferences
+ 
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
-import com.glassous.aime.data.model.UserProfile
+ 
 import com.google.gson.Gson
 import java.util.Date
 import com.google.gson.reflect.TypeToken
@@ -24,7 +24,6 @@ class ChatRepository(
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
     private val contextPreferences: ContextPreferences,
-    private val userProfilePreferences: UserProfilePreferences,
     private val openAiService: OpenAiService = OpenAiService(),
     private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
@@ -135,7 +134,7 @@ class ChatRepository(
             val messages = limitContext(baseMessages).toMutableList()
 
             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-            buildUserProfileSystemMessage()?.let { messages.add(it) }
+            
 
             // 关键词偏好：提升天气工具的选择概率
             val weatherKeywords = listOf(
@@ -856,7 +855,7 @@ class ChatRepository(
             val messagesWithBias = contextMessages.toMutableList()
 
             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-            buildUserProfileSystemMessage()?.let { messagesWithBias.add(it) }
+            
 
             // 关键词偏好：提升天气/股票工具的选择概率（根据关联的用户消息内容）
             val weatherKeywords = listOf(
@@ -1839,7 +1838,7 @@ class ChatRepository(
                                     // 将搜索结果作为系统消息添加到消息列表中
                                     val messagesWithSearch = contextMessages.toMutableList()
                                     // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-                                    buildUserProfileSystemMessage()?.let { messagesWithSearch.add(it) }
+                                    
                                     messagesWithSearch.add(
                                         OpenAiChatMessage(
                                             role = "system",
@@ -1891,7 +1890,7 @@ class ChatRepository(
                                     
                                     val messagesWithWeather = contextMessages.toMutableList()
                                     // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-                                    buildUserProfileSystemMessage()?.let { messagesWithWeather.add(it) }
+                                    
                                     messagesWithWeather.add(
                                         OpenAiChatMessage(
                                             role = "system",
@@ -1948,7 +1947,7 @@ class ChatRepository(
                                         messages = buildList {
                                             addAll(contextMessages)
                                             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
-                                            buildUserProfileSystemMessage()?.let { add(it) }
+                                            
                                         },
                                         tools = null,
                                         toolChoice = null,
@@ -2204,53 +2203,7 @@ class ChatRepository(
         return if (limit <= 0) messages else messages.takeLast(limit)
     }
 
-    // 构建“非必要的用户背景”系统消息。仅在存在已填写字段时返回。
-    private suspend fun buildUserProfileSystemMessage(): OpenAiChatMessage? {
-        val profile = try { userProfilePreferences.profile.first() } catch (_: Exception) { UserProfile() }
-        val parts = mutableListOf<String>()
-
-        fun add(label: String, raw: String?) {
-            val v = raw?.trim()
-            if (!v.isNullOrEmpty()) parts.add("$label：$v")
-        }
-        fun addInt(label: String, raw: Int?) {
-            val v = raw ?: return
-            if (v > 0) parts.add("$label：$v")
-        }
-
-        add("昵称", profile.nickname)
-        add("城市", profile.city)
-        add("语言偏好", profile.preferredLanguage)
-        addInt("年龄", profile.age)
-        add("性别", profile.gender)
-        add("生日", profile.birthday)
-        add("职业", profile.occupation)
-        add("公司", profile.company)
-        add("时区", profile.timezone)
-        add("网站", profile.website)
-        add("地址", profile.address)
-        add("爱好", profile.hobbies)
-        add("简介", profile.bio)
-        add("邮箱", profile.email)
-        add("电话", profile.phone)
-
-        if (profile.customFields.isNotEmpty()) {
-            val customJoined = profile.customFields.entries
-                .filter { it.value.isNotBlank() }
-                .joinToString(
-                    separator = ", ",
-                    transform = { "${it.key}=${it.value}" }
-                )
-            if (customJoined.isNotBlank()) parts.add("其他：$customJoined")
-        }
-
-        if (parts.isEmpty()) return null
-        val content = buildString {
-            append("以下是用户的背景资料（非必要信息，若与当前任务无关请忽略）：")
-            append(parts.joinToString("；"))
-        }
-        return OpenAiChatMessage(role = "system", content = content)
-    }
+    
 
     private fun safeExtractQuery(arguments: String?, default: String): String {
         if (arguments.isNullOrBlank()) return default

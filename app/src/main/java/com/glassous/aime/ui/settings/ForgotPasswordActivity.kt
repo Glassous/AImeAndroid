@@ -1,0 +1,199 @@
+@file:OptIn(ExperimentalMaterial3Api::class)
+package com.glassous.aime.ui.settings
+
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.core.view.WindowCompat
+import android.view.WindowManager
+import com.glassous.aime.ui.theme.AImeTheme
+import com.glassous.aime.ui.theme.ThemeViewModel
+import com.glassous.aime.ui.viewmodel.AuthViewModel
+import com.glassous.aime.ui.viewmodel.AuthViewModelFactory
+import kotlinx.coroutines.launch
+
+class ForgotPasswordActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
+
+        setContent {
+            val themeViewModel: ThemeViewModel = viewModel()
+            val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val darkTheme = when (selectedTheme) {
+                com.glassous.aime.data.preferences.ThemePreferences.THEME_LIGHT -> false
+                com.glassous.aime.data.preferences.ThemePreferences.THEME_DARK -> true
+                else -> androidx.compose.foundation.isSystemInDarkTheme()
+            }
+            AImeTheme(darkTheme = darkTheme) {
+                val context = LocalContext.current
+                val authViewModel: AuthViewModel = viewModel(
+                    factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
+                )
+                var email by remember { mutableStateOf("") }
+                var newPassword by remember { mutableStateOf("") }
+                var showPassword by remember { mutableStateOf(false) }
+                var isResetting by remember { mutableStateOf(false) }
+                var showInvalid by remember { mutableStateOf<String?>(null) }
+                var showSuccess by remember { mutableStateOf(false) }
+                val snackbarHostState = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
+
+                Scaffold(
+                    topBar = {
+                        TopAppBar(
+                            title = { Text("找回密码") },
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                                navigationIconContentColor = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                    },
+                    snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets(0, 0, 0, 0)
+                ) { paddingValues ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(paddingValues)
+                            .verticalScroll(rememberScrollState())
+                            .padding(
+                                start = 16.dp,
+                                end = 16.dp,
+                                top = 16.dp,
+                                bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                            ),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                OutlinedTextField(
+                                    value = email,
+                                    onValueChange = { email = it },
+                                    label = { Text("邮箱") },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(24.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = newPassword,
+                                    onValueChange = { newPassword = it },
+                                    label = { Text("新密码") },
+                                    singleLine = true,
+                                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                                    trailingIcon = {
+                                        IconButton(onClick = { showPassword = !showPassword }) {
+                                            if (showPassword) {
+                                                Icon(Icons.Filled.VisibilityOff, contentDescription = "隐藏密码")
+                                            } else {
+                                                Icon(Icons.Filled.Visibility, contentDescription = "显示密码")
+                                            }
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(24.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "密码规则：仅支持英文字母、数字和符号",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Button(
+                                    onClick = {
+                                        val e = email.trim()
+                                        val p = newPassword.trim()
+                                        if (e.isNotEmpty() && p.isNotEmpty()) {
+                                            val valid = p.matches(Regex("^[A-Za-z\\d\\p{Punct}]+$"))
+                                            if (!valid) {
+                                                showInvalid = "密码只能包含英文字母、数字和符号"
+                                            } else {
+                                                scope.launch {
+                                                    isResetting = true
+                                                    authViewModel.resetPassword(e, p) { ok, msg ->
+                                                        isResetting = false
+                                                        scope.launch { snackbarHostState.showSnackbar(msg) }
+                                                        if (ok) showSuccess = true
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    },
+                                    enabled = !isResetting,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (isResetting) {
+                                        CircularProgressIndicator(modifier = Modifier.size(18.dp))
+                                    } else {
+                                        Text("重置密码")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                showInvalid?.let { msg ->
+                    AlertDialog(
+                        onDismissRequest = { showInvalid = null },
+                        title = { Text("提示") },
+                        text = { Text(msg) },
+                        confirmButton = { TextButton(onClick = { showInvalid = null }) { Text("确定") } }
+                    )
+                }
+                if (showSuccess) {
+                    AlertDialog(
+                        onDismissRequest = { showSuccess = false },
+                        title = { Text("成功") },
+                        text = { Text("密码已重置") },
+                        confirmButton = { TextButton(onClick = { showSuccess = false; finish() }) { Text("确定") } }
+                    )
+                }
+            }
+        }
+    }
+}

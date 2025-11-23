@@ -28,3 +28,4 @@
 /app/src/main/res/values/release/
 
 docs
+.env.local
