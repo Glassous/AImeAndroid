@@ -70,6 +70,10 @@ class ForgotPasswordActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 val scope = rememberCoroutineScope()
 
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -176,6 +180,7 @@ class ForgotPasswordActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
                 showInvalid?.let { msg ->
                     AlertDialog(

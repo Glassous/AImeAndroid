@@ -70,6 +70,10 @@ class RegisterActivity : ComponentActivity() {
                 val snackbarHostState = remember { SnackbarHostState() }
                 val scope = rememberCoroutineScope()
 
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
                 Scaffold(
                     topBar = {
                         TopAppBar(
@@ -198,6 +202,7 @@ class RegisterActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
                 }
                 showInvalid?.let { msg ->
                     AlertDialog(
