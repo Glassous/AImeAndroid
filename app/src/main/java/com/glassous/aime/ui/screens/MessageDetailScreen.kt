@@ -22,15 +22,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.ChatMessage
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
+ 
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MessageDetailScreen(
     messageId: Long,
-    onNavigateBack: () -> Unit,
-    cloudSyncViewModel: CloudSyncViewModel
+    onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
@@ -56,11 +55,7 @@ fun MessageDetailScreen(
                     message = updatedMessage
                     isEditing = false
                     
-                    // 触发自动上传
-                    cloudSyncViewModel.uploadBackup { success, uploadMessage ->
-                        // 这里可以添加成功/失败的处理逻辑
-                        // 例如显示Toast或Snackbar
-                    }
+                    
                 } catch (e: Exception) {
                     // 处理保存失败的情况
                 }

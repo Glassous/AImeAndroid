@@ -8,10 +8,9 @@ import com.glassous.aime.data.ChatDatabase
 import com.glassous.aime.data.ChatRepository
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
-import com.glassous.aime.data.preferences.OssPreferences
-import com.glassous.aime.data.preferences.AutoSyncPreferences
+ 
 import com.glassous.aime.data.preferences.UserProfilePreferences
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
+ 
 
 
 class AIMeApplication : Application() {
@@ -22,20 +21,14 @@ class AIMeApplication : Application() {
     // Model config repository instance
     val modelConfigRepository by lazy {
         ModelConfigRepository(
-            modelConfigDao = database.modelConfigDao(),
-            autoSyncPreferences = autoSyncPreferences,
-            cloudSyncViewModel = cloudSyncViewModel
+            modelConfigDao = database.modelConfigDao()
         )
     }
 
     // Model preferences instance
     val modelPreferences by lazy { ModelPreferences(this) }
 
-    // OSS preferences instance
-    val ossPreferences by lazy { OssPreferences(this) }
-
-    // Auto sync preferences instance
-    val autoSyncPreferences by lazy { AutoSyncPreferences(this) }
+    
 
     // User profile preferences instance
     val userProfilePreferences by lazy { UserProfilePreferences(this) }
@@ -43,8 +36,7 @@ class AIMeApplication : Application() {
     // Context limit preferences instance
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
 
-    // Cloud sync view model instance
-    val cloudSyncViewModel by lazy { CloudSyncViewModel(this) }
+    
 
     // Repository instance
     val repository by lazy { 
@@ -52,8 +44,6 @@ class AIMeApplication : Application() {
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,
-            autoSyncPreferences = autoSyncPreferences,
-            cloudSyncViewModel = cloudSyncViewModel,
             contextPreferences = contextPreferences,
             userProfilePreferences = userProfilePreferences
         )

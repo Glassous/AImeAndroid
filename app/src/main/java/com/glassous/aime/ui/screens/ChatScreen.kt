@@ -8,12 +8,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Close
+ 
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -37,15 +35,14 @@ import com.glassous.aime.ui.components.NavigationDrawer
 import com.glassous.aime.ui.components.LocalDialogBlurState
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.ui.viewmodel.ToolSelectionViewModel
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
+ 
 import com.glassous.aime.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Calendar
-import com.glassous.aime.data.preferences.OssPreferences
+ 
 import com.glassous.aime.data.preferences.ThemePreferences
-import com.glassous.aime.data.preferences.AutoSyncPreferences
+ 
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
@@ -73,9 +70,6 @@ fun ChatScreen(
     val chatViewModel: ChatViewModel = viewModel()
     val toolSelectionViewModel: ToolSelectionViewModel = viewModel()
     val context = LocalContext.current
-    val cloudSyncViewModel: CloudSyncViewModel = viewModel(
-        factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application)
-    )
 
     val conversations by chatViewModel.conversations.collectAsState()
     val currentMessages by chatViewModel.currentMessages.collectAsState()
@@ -97,19 +91,7 @@ fun ChatScreen(
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
     val currentToolType by chatViewModel.currentToolType.collectAsState()
 
-    // 读取 OSS 配置以控制云端上传/下载按钮显示
-    val ossPreferences = remember { OssPreferences(context) }
-    val endpoint by ossPreferences.endpoint.collectAsState(initial = null)
-    val bucket by ossPreferences.bucket.collectAsState(initial = null)
-    val ak by ossPreferences.accessKeyId.collectAsState(initial = null)
-    val sk by ossPreferences.accessKeySecret.collectAsState(initial = null)
-    val isOssConfigured = !endpoint.isNullOrBlank() && !bucket.isNullOrBlank() && !ak.isNullOrBlank() && !sk.isNullOrBlank()
-
-    val autoSyncPreferences = remember { AutoSyncPreferences(context) }
-    var autoSyncEnabled by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) {
-        autoSyncPreferences.autoSyncEnabled.collect { autoSyncEnabled = it }
-    }
+    
 
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
@@ -176,22 +158,7 @@ fun ChatScreen(
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
-    var syncSuccessType by remember { mutableStateOf<String?>(null) }
-    var syncErrorType by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(syncSuccessType) {
-        if (syncSuccessType != null) {
-            delay(3000)
-            syncSuccessType = null
-        }
-    }
-
-    LaunchedEffect(syncErrorType) {
-        if (syncErrorType != null) {
-            delay(3000)
-            syncErrorType = null
-        }
-    }
+    
 
     // 当抽屉打开时，拦截系统返回键，优先关闭抽屉而不是退出到桌面
     BackHandler(enabled = drawerState.isOpen) {
@@ -236,72 +203,11 @@ fun ChatScreen(
         }
     }
 
-    // 云端获取按钮显示状态
-    var showCloudSyncButton by remember { mutableStateOf(false) }
+    
 
-    // 监听消息列表变化，控制云端获取按钮显示
-    LaunchedEffect(currentMessages.isEmpty()) {
-        if (currentMessages.isEmpty()) {
-            showCloudSyncButton = true
-            // 10秒后自动隐藏
-            delay(10000)
-            showCloudSyncButton = false
-        } else {
-            // 有消息时立即隐藏
-            showCloudSyncButton = false
-        }
-    }
+    
 
-    // 监听输入文本变化，发送消息时隐藏按钮
-    LaunchedEffect(inputText) {
-        if (inputText.isNotBlank() && showCloudSyncButton) {
-            showCloudSyncButton = false
-        }
-    }
-
-    // 应用启动时（进入主页）自动从云端获取一次（仅当开启自动同步且配置完整）
-    var initialAutoDownloadDone by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(autoSyncEnabled, isOssConfigured) {
-        if (autoSyncEnabled == true && isOssConfigured && !initialAutoDownloadDone) {
-            cloudSyncViewModel.downloadAndImport { success, message ->
-                scope.launch {
-                    if (success) {
-                        syncSuccessType = "download"
-                        syncErrorType = null
-                    } else {
-                        syncErrorType = "download"
-                        syncSuccessType = null
-                        snackbarHostState.showSnackbar(message)
-                    }
-                }
-            }
-            initialAutoDownloadDone = true
-        }
-    }
-
-    // 在AI生成结束时自动上传一次（仅在自动同步开启且配置完整时）
-    var didStartGeneration by remember { mutableStateOf(false) }
-    LaunchedEffect(isLoading) {
-        if (isLoading) {
-            didStartGeneration = true
-        } else if (didStartGeneration) {
-            didStartGeneration = false
-            if (autoSyncEnabled == true && isOssConfigured && currentMessages.isNotEmpty()) {
-                cloudSyncViewModel.uploadBackup { success, message ->
-                    scope.launch {
-                        if (success) {
-                            syncSuccessType = "upload"
-                            syncErrorType = null
-                        } else {
-                            syncErrorType = "upload"
-                            syncSuccessType = null
-                            snackbarHostState.showSnackbar(message)
-                        }
-                    }
-                }
-            }
-        }
-    }
+    
 
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
         ModalNavigationDrawer(
@@ -319,34 +225,10 @@ fun ChatScreen(
                         scope.launch { drawerState.close() }
                     },
                     onDeleteConversation = { conversationId ->
-                        chatViewModel.deleteConversation(conversationId) { success, message ->
-                            if (success) {
-                                syncSuccessType = "upload"
-                            } else {
-                                syncErrorType = "upload"
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "同步失败: $message",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
-                            }
-                        }
+                        chatViewModel.deleteConversation(conversationId)
                     },
                     onEditConversationTitle = { conversationId, newTitle ->
-                        chatViewModel.updateConversationTitle(conversationId, newTitle) { success, message ->
-                            if (success) {
-                                syncSuccessType = "upload"
-                            } else {
-                                syncErrorType = "upload"
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "同步失败: $message",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
-                            }
-                        }
+                        chatViewModel.updateConversationTitle(conversationId, newTitle)
                     },
                     onGenerateShareCode = { convId, onResult ->
                         chatViewModel.generateShareCode(convId) { code ->
@@ -360,16 +242,7 @@ fun ChatScreen(
                                 chatViewModel.selectConversation(newId)
                                 scope.launch { drawerState.close() }
                             }
-                        }) { success, message ->
-                            if (!success) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(
-                                        message = "同步失败: $message",
-                                        duration = SnackbarDuration.Short
-                                    )
-                                }
-                            }
-                        }
+                        })
                     },
                     hideImportSharedButton = hideImportSharedButton,
                     onNavigateToSettings = onNavigateToSettings
@@ -517,43 +390,7 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        actions = {
-                            // 显示同步成功图标（仅在非极简模式或未隐藏同步状态时显示）
-                            if (!(minimalMode && minimalModeConfig.hideSyncStatusIndicator)) {
-                                when (syncSuccessType) {
-                                    "download" -> {
-                                        Icon(
-                                            imageVector = Icons.Filled.CloudDownload,
-                                            contentDescription = "获取成功",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(end = 12.dp)
-                                        )
-                                    }
-                                    "upload" -> {
-                                        Icon(
-                                            imageVector = Icons.Filled.CloudUpload,
-                                            contentDescription = "上传成功",
-                                            tint = MaterialTheme.colorScheme.tertiary,
-                                            modifier = Modifier.padding(end = 12.dp)
-                                        )
-                                    }
-                                    else -> {}
-                                }
-
-                                // 显示同步失败图标
-                                when (syncErrorType) {
-                                    "download", "upload" -> {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = "同步失败",
-                                            tint = MaterialTheme.colorScheme.error,
-                                            modifier = Modifier.padding(end = 12.dp)
-                                        )
-                                    }
-                                    else -> {}
-                                }
-                            }
-                        },
+                        actions = {},
                         colors = TopAppBarDefaults.topAppBarColors(
                             containerColor = MaterialTheme.colorScheme.background.copy(alpha = chatUiOverlayAlpha),
                             scrolledContainerColor = MaterialTheme.colorScheme.background.copy(alpha = chatUiOverlayAlpha),
@@ -582,38 +419,7 @@ fun ChatScreen(
                         hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
                         hideInputPlaceholder = minimalModeConfig.hideInputPlaceholder,
                         // 内嵌按钮配置
-                        showUploadButton = !(minimalMode && minimalModeConfig.hideCloudUploadButton) && currentMessages.isNotEmpty() && isOssConfigured && autoSyncEnabled != true,
-                        showDownloadButton = !(minimalMode && minimalModeConfig.hideCloudDownloadButton) && showCloudSyncButton && isOssConfigured && autoSyncEnabled != true,
                         showScrollToBottomButton = !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
-                        onUploadClick = {
-                            cloudSyncViewModel.uploadBackup { success, message ->
-                                scope.launch {
-                                    if (success) {
-                                        syncSuccessType = "upload"
-                                        syncErrorType = null
-                                    } else {
-                                        syncErrorType = "upload"
-                                        syncSuccessType = null
-                                        snackbarHostState.showSnackbar(message)
-                                    }
-                                }
-                            }
-                        },
-                        onDownloadClick = {
-                            cloudSyncViewModel.downloadAndImport { success, message ->
-                                scope.launch {
-                                    if (success) {
-                                        syncSuccessType = "download"
-                                        syncErrorType = null
-                                        showCloudSyncButton = false
-                                    } else {
-                                        syncErrorType = "download"
-                                        syncSuccessType = null
-                                        snackbarHostState.showSnackbar(message)
-                                    }
-                                }
-                            }
-                        },
                         onScrollToBottomClick = {
                             scope.launch {
                                 if (currentMessages.isNotEmpty()) {
@@ -781,19 +587,7 @@ fun ChatScreen(
                                         text,
                                         selectedTool,
                                         isAutoMode = isAutoSelected
-                                    ) { success, message ->
-                                        if (success) {
-                                            syncSuccessType = "upload"
-                                        } else {
-                                            syncErrorType = "upload"
-                                            scope.launch {
-                                                snackbarHostState.showSnackbar(
-                                                    message = "同步失败: $message",
-                                                    duration = SnackbarDuration.Short
-                                                )
-                                            }
-                                        }
-                                    }
+                                    )
                                 },
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
@@ -815,18 +609,7 @@ fun ChatScreen(
             ModelSelectionBottomSheet(
                 viewModel = modelSelectionViewModel,
                 onDismiss = { modelSelectionViewModel.hideBottomSheet() },
-                onSyncResult = { success, message ->
-                    scope.launch {
-                        if (success) {
-                            syncSuccessType = "upload"
-                            syncErrorType = null
-                        } else {
-                            syncErrorType = "upload"
-                            syncSuccessType = null
-                            snackbarHostState.showSnackbar(message)
-                        }
-                    }
-                },
+                
                 selectedTool = selectedTool,
                 onToolSelectionClick = {
                     toolSelectionViewModel.showBottomSheet()

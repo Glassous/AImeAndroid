@@ -21,14 +21,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 app.userProfilePreferences.setUserProfile(updated)
-                val autoSyncEnabled = app.autoSyncPreferences.autoSyncEnabled.first() ?: false
-                if (autoSyncEnabled) {
-                    app.cloudSyncViewModel.uploadUserProfileOnly { ok, msg ->
-                        onResult(ok, if (ok) "已保存并云端同步" else "已保存；云端同步失败：$msg")
-                    }
-                } else {
-                    onResult(true, "已保存")
-                }
+                onResult(true, "已保存")
             } catch (e: Exception) {
                 onResult(false, "保存失败：${e.message}")
             }
@@ -39,14 +32,7 @@ class UserProfileViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 app.userProfilePreferences.clearUserProfile()
-                val autoSyncEnabled = app.autoSyncPreferences.autoSyncEnabled.first() ?: false
-                if (autoSyncEnabled) {
-                    app.cloudSyncViewModel.uploadUserProfileOnly { ok, msg ->
-                        onResult(ok, if (ok) "已清空并云端同步" else "已清空；云端同步失败：$msg")
-                    }
-                } else {
-                    onResult(true, "已清空")
-                }
+                onResult(true, "已清空")
             } catch (e: Exception) {
                 onResult(false, "清空失败：${e.message}")
             }

@@ -4,17 +4,14 @@ import com.glassous.aime.data.dao.ModelConfigDao
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.model.ModelConfigInfo
-import com.glassous.aime.data.preferences.AutoSyncPreferences
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
+ 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import java.util.UUID
 
 class ModelConfigRepository(
-    private val modelConfigDao: ModelConfigDao,
-    private val autoSyncPreferences: AutoSyncPreferences,
-    private val cloudSyncViewModel: CloudSyncViewModel
+    private val modelConfigDao: ModelConfigDao
 ) {
     
     // 获取所有分组
@@ -48,12 +45,7 @@ class ModelConfigRepository(
         )
         modelConfigDao.insertGroup(group)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
+        
         
         return groupId
     }
@@ -62,12 +54,7 @@ class ModelConfigRepository(
     suspend fun updateGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.updateGroup(group)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
+        
     }
     
     // 删除分组（同时删除组内所有模型）
@@ -75,12 +62,7 @@ class ModelConfigRepository(
         modelConfigDao.deleteModelsByGroupId(group.id)
         modelConfigDao.deleteGroup(group)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
+        
     }
     
     // 添加模型到分组
@@ -95,12 +77,7 @@ class ModelConfigRepository(
         )
         modelConfigDao.insertModel(model)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
+        
         
         return modelId
     }
@@ -109,24 +86,12 @@ class ModelConfigRepository(
     suspend fun updateModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.updateModel(model)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
     }
     
     // 删除模型
     suspend fun deleteModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         modelConfigDao.deleteModel(model)
         
-        // 如果开启了自动同步，触发上传
-        if (autoSyncPreferences.isAutoSyncEnabled()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                onSyncResult?.invoke(success, message)
-            }
-        }
     }
     
     // 获取分组详情

@@ -16,8 +16,7 @@ import com.glassous.aime.ui.screens.MessageDetailScreen
 import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModelFactory
-import com.glassous.aime.ui.settings.OssConfigScreen
-import com.glassous.aime.data.preferences.OssPreferences
+ 
 import com.glassous.aime.ui.settings.UserSettingsScreen
 import com.glassous.aime.ui.viewmodel.UserProfileViewModel
 import com.glassous.aime.ui.viewmodel.UserProfileViewModelFactory
@@ -26,7 +25,6 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object Settings : Screen("settings")
     object ModelConfig : Screen("model_config")
-    object OssConfig : Screen("oss_config")
     object UserSettings : Screen("user_settings")
     object MessageDetail : Screen("message_detail")
 }
@@ -42,13 +40,9 @@ fun AppNavigation() {
     val modelSelectionViewModel: ModelSelectionViewModel = viewModel(
         factory = ModelSelectionViewModelFactory(
             application.modelConfigRepository,
-            application.modelPreferences,
-            application.autoSyncPreferences,
-            application.ossPreferences,
-            application.cloudSyncViewModel
+            application.modelPreferences
         )
     )
-    val ossPreferences = OssPreferences(context)
     
     NavHost(
         navController = navController,
@@ -75,9 +69,6 @@ fun AppNavigation() {
                 onNavigateToModelConfig = {
                     navController.navigate(Screen.ModelConfig.route)
                 },
-                onNavigateToOssConfig = {
-                    navController.navigate(Screen.OssConfig.route)
-                },
                 onNavigateToUserSettings = {
                     navController.navigate(Screen.UserSettings.route)
                 },
@@ -93,12 +84,7 @@ fun AppNavigation() {
             )
         }
 
-        composable(Screen.OssConfig.route) {
-            OssConfigScreen(
-                ossPreferences = ossPreferences,
-                onBack = { navController.popBackStack() }
-            )
-        }
+        
 
         composable(Screen.UserSettings.route) {
             val userProfileViewModel: UserProfileViewModel = viewModel(
@@ -117,8 +103,7 @@ fun AppNavigation() {
             val messageId = backStackEntry.arguments?.getLong("messageId") ?: 0L
             MessageDetailScreen(
                 messageId = messageId,
-                onNavigateBack = { navController.popBackStack() },
-                cloudSyncViewModel = application.cloudSyncViewModel
+                onNavigateBack = { navController.popBackStack() }
             )
         }
     }

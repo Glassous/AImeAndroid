@@ -70,29 +70,25 @@ fun MinimalModeConfigDialog(
                          )
                      }
                      
-                     items(getMinimalModeItems(config)) { item ->
-                         MinimalModeConfigItem(
-                             item = item,
-                             onToggle = { enabled ->
-                                 val newConfig = when (item.id) {
-                                     "navigation_menu" -> config.copy(hideNavigationMenu = enabled)
-                                     "tool_icon" -> config.copy(hideToolIcon = enabled)
-                                     "welcome_text" -> config.copy(hideWelcomeText = enabled)
-                                     "cloud_download" -> config.copy(hideCloudDownloadButton = enabled)
-                                     "cloud_upload" -> config.copy(hideCloudUploadButton = enabled)
-                                     "scroll_to_bottom" -> config.copy(hideScrollToBottomButton = enabled)
-                                     "input_border" -> config.copy(hideInputBorder = enabled)
-                                     "send_button_bg" -> config.copy(hideSendButtonBackground = enabled)
-                                     // 新增配置项处理
-                                     "sync_status" -> config.copy(hideSyncStatusIndicator = enabled)
-                                     "model_selection_text" -> config.copy(hideModelSelectionText = enabled)
-                                     "input_placeholder" -> config.copy(hideInputPlaceholder = enabled)
-                                     else -> config
-                                 }
-                                 onConfigChange(newConfig)
-                             }
-                         )
-                     }
+                    items(getMinimalModeItems(config)) { item ->
+                        MinimalModeConfigItem(
+                            item = item,
+                            onToggle = { enabled ->
+                                val newConfig = when (item.id) {
+                                    "navigation_menu" -> config.copy(hideNavigationMenu = enabled)
+                                    "tool_icon" -> config.copy(hideToolIcon = enabled)
+                                    "welcome_text" -> config.copy(hideWelcomeText = enabled)
+                                    "scroll_to_bottom" -> config.copy(hideScrollToBottomButton = enabled)
+                                    "input_border" -> config.copy(hideInputBorder = enabled)
+                                    "send_button_bg" -> config.copy(hideSendButtonBackground = enabled)
+                                    "model_selection_text" -> config.copy(hideModelSelectionText = enabled)
+                                    "input_placeholder" -> config.copy(hideInputPlaceholder = enabled)
+                                    else -> config
+                                }
+                                onConfigChange(newConfig)
+                            }
+                        )
+                    }
                  }
             }
         },

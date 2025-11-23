@@ -7,8 +7,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Send
-import androidx.compose.material.icons.filled.CloudUpload
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -42,12 +40,7 @@ fun ChatInput(
     hideInputBorder: Boolean = false,
     hideSendButtonBackground: Boolean = false,
     hideInputPlaceholder: Boolean = false, // 新增参数：隐藏输入框占位符
-    // 新增参数：内嵌按钮
-    showUploadButton: Boolean = false,
-    showDownloadButton: Boolean = false,
     showScrollToBottomButton: Boolean = false,
-    onUploadClick: () -> Unit = {},
-    onDownloadClick: () -> Unit = {},
     onScrollToBottomClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     overlayAlpha: Float = 0.5f,
@@ -103,42 +96,10 @@ fun ChatInput(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = inputContainerAlpha)
                 ),
                 trailingIcon = {
-                    // 内嵌按钮行
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 上传按钮
-                        if (showUploadButton) {
-                            IconButton(
-                                onClick = onUploadClick,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CloudUpload,
-                                    contentDescription = "上传",
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        
-                        // 下载按钮
-                        if (showDownloadButton) {
-                            IconButton(
-                                onClick = onDownloadClick,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.CloudDownload,
-                                    contentDescription = "下载",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                        
-                        // 回到底部按钮
                         if (showScrollToBottomButton) {
                             IconButton(
                                 onClick = onScrollToBottomClick,

@@ -89,8 +89,7 @@ dependencies {
     // SplashScreen
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    // Alibaba Cloud OSS SDK
-    implementation("com.aliyun.dpa:oss-android-sdk:2.9.21")
+    
 
     // Markdown rendering
     // Markwon dependencies

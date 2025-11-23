@@ -6,10 +6,8 @@ import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.preferences.ModelPreferences
-import com.glassous.aime.data.preferences.AutoSyncPreferences
 import com.glassous.aime.data.preferences.ContextPreferences
 import com.glassous.aime.data.preferences.UserProfilePreferences
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
 import com.glassous.aime.data.model.UserProfile
@@ -25,8 +23,6 @@ class ChatRepository(
     private val chatDao: ChatDao,
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
-    private val autoSyncPreferences: AutoSyncPreferences,
-    private val cloudSyncViewModel: CloudSyncViewModel,
     private val contextPreferences: ContextPreferences,
     private val userProfilePreferences: UserProfilePreferences,
     private val openAiService: OpenAiService = OpenAiService(),
@@ -1370,11 +1366,7 @@ class ChatRepository(
 
             refreshConversationMetadata(newId)
 
-            if (autoSyncPreferences.autoSyncEnabled.first()) {
-                cloudSyncViewModel.uploadBackup { success, message ->
-                    onSyncResult?.invoke(success, message)
-                }
-            }
+            
 
             newId
         }
@@ -1386,13 +1378,7 @@ class ChatRepository(
             val updatedConversation = conversation.copy(title = newTitle)
             chatDao.updateConversation(updatedConversation)
             
-            // 如果启用了自动同步，则自动上传
-            if (autoSyncPreferences.autoSyncEnabled.first()) {
-                cloudSyncViewModel.uploadBackup { success, message ->
-                    // 通知UI更新同步状态
-                    onSyncResult?.invoke(success, message)
-                }
-            }
+            
         }
     }
 
@@ -1434,13 +1420,7 @@ class ChatRepository(
             chatDao.deleteMessagesForConversation(conversationId)
             chatDao.deleteConversation(conversation)
             
-            // 如果启用了自动同步，则自动上传
-        if (autoSyncPreferences.autoSyncEnabled.first()) {
-            cloudSyncViewModel.uploadBackup { success, message ->
-                // 通知UI更新同步状态
-                onSyncResult?.invoke(success, message)
-            }
-        }
+        
         }
     }
 
@@ -2210,13 +2190,7 @@ class ChatRepository(
             chatDao.updateMessage(assistantMessage.copy(content = finalText))
             refreshConversationMetadata(conversationId)
             
-            // 如果启用了自动同步，则自动上传
-            if (autoSyncPreferences.autoSyncEnabled.first()) {
-                cloudSyncViewModel.uploadBackup { success, message ->
-                    // 通知UI更新同步状态
-                    onSyncResult?.invoke(success, message)
-                }
-            }
+            
             
             Result.success(Unit)
         } catch (e: Exception) {

@@ -30,11 +30,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.viewmodel.DataSyncViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModelFactory
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModel
-import com.glassous.aime.ui.viewmodel.CloudSyncViewModelFactory
-import com.glassous.aime.data.preferences.OssPreferences
+ 
 import kotlinx.coroutines.launch
-import com.glassous.aime.data.preferences.AutoSyncPreferences
+ 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
@@ -61,7 +59,6 @@ import java.net.URL
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onNavigateToModelConfig: () -> Unit,
-    onNavigateToOssConfig: () -> Unit,
     onNavigateToUserSettings: () -> Unit,
     themeViewModel: ThemeViewModel
 ) {
@@ -85,14 +82,9 @@ fun SettingsScreen(
     val app = context.applicationContext as AIMeApplication
     val contextLimit by app.contextPreferences.maxContextMessages.collectAsState(initial = 5)
     val dataSyncViewModel: DataSyncViewModel = viewModel(factory = DataSyncViewModelFactory(context.applicationContext as android.app.Application))
-    val cloudSyncViewModel: CloudSyncViewModel = viewModel(factory = CloudSyncViewModelFactory(context.applicationContext as android.app.Application))
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val autoSyncPreferences = remember { AutoSyncPreferences(context) }
-    var autoSyncEnabled by remember { mutableStateOf<Boolean?>(null) }
-    LaunchedEffect(Unit) {
-        autoSyncPreferences.autoSyncEnabled.collect { autoSyncEnabled = it }
-    }
+    
 
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -110,13 +102,7 @@ fun SettingsScreen(
         }
     }
 
-    val cloudDownloadLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) {
-            cloudSyncViewModel.downloadToUri(uri) { ok, msg ->
-                scope.launch { snackbarHostState.showSnackbar(msg) }
-            }
-        }
-    }
+    
 
 
 
@@ -453,88 +439,7 @@ fun SettingsScreen(
                 }
             }
 
-            // 云端同步卡片
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp)
-                ) {
-                    Text(
-                        text = "云端同步",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    Text(
-                        text = "阿里云 OSS 配置与云端上传/下载",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    if (autoSyncEnabled != null) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text("自动同步")
-                            Switch(
-                                checked = autoSyncEnabled == true,
-                                onCheckedChange = { enabled ->
-                                    autoSyncEnabled = enabled
-                                    scope.launch { autoSyncPreferences.setAutoSyncEnabled(enabled) }
-                                }
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 阿里云OSS配置独占一行
-                    Button(
-                        onClick = onNavigateToOssConfig,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text("配置阿里云 OSS")
-                    }
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // 从云端下载和上传到云端两个按钮占一行
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                cloudSyncViewModel.downloadAndImport { ok, msg ->
-                                    scope.launch { snackbarHostState.showSnackbar(msg) }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("从云端导入")
-                        }
-                        Button(
-                            onClick = {
-                                cloudSyncViewModel.uploadBackup { ok, msg ->
-                                    scope.launch { snackbarHostState.showSnackbar(msg) }
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("上传到云端")
-                        }
-                    }
-                }
-            }
+            
 
             // 本地同步卡片
             Card(
