@@ -99,10 +99,12 @@ fun MessageBubble(
                         }
                         val textSizeSp = chatFontSize
 
+                        // 【关键修改】增加了对 <think> 标签的检测
                         val hasTwoPartReply = !message.isFromUser && (
-                            message.content.contains("【前置回复】") ||
-                            message.content.contains("【第一次回复】")
-                        )
+                                message.content.contains("【前置回复】") ||
+                                        message.content.contains("【第一次回复】") ||
+                                        message.content.contains("<think>")
+                                )
 
                         if (hasTwoPartReply) {
                             ExpandableReplyBox(
@@ -133,39 +135,40 @@ fun MessageBubble(
                         .widthIn(max = maxBubbleWidth)
                         .testTag("bubble-${message.id}")
                 ) {
-                val textColor = MaterialTheme.colorScheme.onSurface
-                val textSizeSp = chatFontSize
-                // 为了与截图风格更接近，增加左右留白与分段
-                Box(modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp)
-                ) {
-                    // 识别特殊两段格式，使用可折叠框渲染
-                    val hasTwoPartReply = !message.isFromUser && (
-                        message.content.contains("【前置回复】") ||
-                        message.content.contains("【第一次回复】")
-                    )
+                    val textColor = MaterialTheme.colorScheme.onSurface
+                    val textSizeSp = chatFontSize
+                    // 为了与截图风格更接近，增加左右留白与分段
+                    Box(modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                    ) {
+                        // 【关键修改】同样增加了对 <think> 标签的检测
+                        val hasTwoPartReply = !message.isFromUser && (
+                                message.content.contains("【前置回复】") ||
+                                        message.content.contains("【第一次回复】") ||
+                                        message.content.contains("<think>")
+                                )
 
-                    if (hasTwoPartReply) {
-                        ExpandableReplyBox(
-                            content = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            isStreaming = isStreaming,
-                            onLongClick = { showDialog = true },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                        StreamingMarkdownRenderer(
-                            markdown = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            onLongClick = { showDialog = true },
-                            isStreaming = isStreaming
-                        )
+                        if (hasTwoPartReply) {
+                            ExpandableReplyBox(
+                                content = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                isStreaming = isStreaming,
+                                onLongClick = { showDialog = true },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        } else {
+                            // 根据是否为AI回复且启用打字机效果来选择渲染组件
+                            StreamingMarkdownRenderer(
+                                markdown = message.content,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                onLongClick = { showDialog = true },
+                                isStreaming = isStreaming
+                            )
+                        }
                     }
-                }
                 }
             }
         }
