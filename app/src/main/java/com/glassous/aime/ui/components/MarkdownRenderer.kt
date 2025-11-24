@@ -37,11 +37,20 @@ fun MarkdownRenderer(
     modifier: Modifier = Modifier,
     enableTables: Boolean = true
 ) {
+    // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
+    val displayMarkdown = remember(markdown) {
+        markdown
+            .replace("<think>", "&lt;think&gt;")
+            .replace("</think>", "&lt;/think&gt;")
+    }
+    // 【修改结束】
+
     val context = LocalContext.current
-    val blocks = remember(markdown) { parseMarkdownBlocks(markdown) }
-    
+    // 使用处理过的 displayMarkdown 进行解析
+    val blocks = remember(displayMarkdown) { parseMarkdownBlocks(displayMarkdown) }
+
     // 创建不包含代码块处理的Markwon实例，用于渲染普通文本
-    val markwon = remember(context, enableTables) { 
+    val markwon = remember(context, enableTables) {
         val builder = Markwon.builder(context)
             .usePlugin(JLatexMathPlugin.create(44f))
         if (enableTables) {
@@ -102,9 +111,9 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
     val codeBlockPattern = Pattern.compile("```(\\w+)?\\n([\\s\\S]*?)```", Pattern.MULTILINE)
     val matcher = codeBlockPattern.matcher(markdown)
-    
+
     var lastEnd = 0
-    
+
     while (matcher.find()) {
         // 添加代码块前的文本
         if (matcher.start() > lastEnd) {
@@ -113,15 +122,15 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 blocks.add(MarkdownBlock(BlockType.TEXT, textContent))
             }
         }
-        
+
         // 添加代码块
         val language = matcher.group(1)
         val code = matcher.group(2) ?: ""
         blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
-        
+
         lastEnd = matcher.end()
     }
-    
+
     // 添加最后剩余的文本
     if (lastEnd < markdown.length) {
         val textContent = markdown.substring(lastEnd).trim()
@@ -129,11 +138,11 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
             blocks.add(MarkdownBlock(BlockType.TEXT, textContent))
         }
     }
-    
+
     // 如果没有找到代码块，整个内容作为文本块
     if (blocks.isEmpty()) {
         blocks.add(MarkdownBlock(BlockType.TEXT, markdown))
     }
-    
+
     return blocks
 }
