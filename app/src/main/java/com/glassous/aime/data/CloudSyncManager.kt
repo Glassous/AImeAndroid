@@ -187,6 +187,10 @@ class CloudSyncManager(
         val localConversations = chatDao.getAllConversations().first().toMutableList()
         
         remote.conversations.forEach { rc ->
+            // 跳过云端备份中“空会话”（无任何消息且计数为0），避免应用启动时产生空白对话记录
+            if (rc.messageCount == 0 && rc.messages.isEmpty()) {
+                return@forEach
+            }
             // 尝试通过标题和最后消息时间模糊匹配找到本地对应的会话
             val matched = localConversations.firstOrNull { lc ->
                 // 匹配规则：标题相同，或者（如果标题是默认的）内容高度重叠
