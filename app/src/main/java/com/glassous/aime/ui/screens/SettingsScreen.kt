@@ -1,6 +1,7 @@
 package com.glassous.aime.ui.screens
 
 import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -28,7 +29,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
+import com.glassous.aime.BuildConfig
 import com.glassous.aime.R
+import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.ui.components.FontSizeSettingDialog
@@ -42,6 +45,9 @@ import com.glassous.aime.ui.viewmodel.DataSyncViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModelFactory
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
+import com.glassous.aime.ui.viewmodel.UpdateCheckState
+import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
+import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +70,9 @@ fun SettingsScreen(
     )
     val modelViewModel: ModelConfigViewModel = viewModel(
         factory = ModelConfigViewModelFactory(application.modelConfigRepository)
+    )
+    val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
+        factory = VersionUpdateViewModelFactory(GitHubReleaseService())
     )
 
     // States
@@ -91,6 +100,9 @@ fun SettingsScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
+    
+    // Version Update States
+    val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
 
     // Data Sync Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -418,6 +430,192 @@ fun SettingsScreen(
                             onClick = { importLauncher.launch(arrayOf("application/json")) },
                             modifier = Modifier.weight(1f)
                         ) { Text("导入") }
+                    }
+                }
+            }
+
+            // --- 版本更新 ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "版本信息",
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                        Text(
+                            text = "v${BuildConfig.VERSION_NAME}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    when (val state = updateCheckState) {
+                        is UpdateCheckState.Idle -> {
+                            Button(
+                                onClick = { versionUpdateViewModel.checkForUpdates() },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Filled.Refresh, contentDescription = "检查更新")
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("检查更新")
+                            }
+                        }
+                        
+                        is UpdateCheckState.Checking -> {
+                            Button(
+                                onClick = { },
+                                enabled = false,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("检查中...")
+                            }
+                        }
+                        
+                        is UpdateCheckState.Success -> {
+                            val updateInfo = state.updateInfo
+                            
+                            if (updateInfo.hasUpdate) {
+                                // 有新版本
+                                Column {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "发现新版本",
+                                                style = MaterialTheme.typography.titleSmall,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = "${updateInfo.latestVersion}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    
+                                    if (updateInfo.releaseNotes?.isNotBlank() == true) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            text = "更新说明:",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = updateInfo.releaseNotes.take(150) + if (updateInfo.releaseNotes.length > 150) "..." else "",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (updateInfo.downloadUrl != null) {
+                                            Button(
+                                                onClick = {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
+                                                    context.startActivity(intent)
+                                                },
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Text("下载更新")
+                                            }
+                                        }
+                                        
+                                        OutlinedButton(
+                                            onClick = {
+                                                updateInfo.releaseUrl?.let { url ->
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    context.startActivity(intent)
+                                                }
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("查看详情")
+                                        }
+                                    }
+                                    
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    
+                                    TextButton(
+                                        onClick = { versionUpdateViewModel.resetState() },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("关闭")
+                                    }
+                                }
+                            } else {
+                                // 已是最新版本
+                                Column {
+                                    Text(
+                                        text = "当前已是最新版本",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    
+                                    Spacer(modifier = Modifier.height(12.dp))
+                                    
+                                    OutlinedButton(
+                                        onClick = { versionUpdateViewModel.resetState() },
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("确定")
+                                    }
+                                }
+                            }
+                        }
+                        
+                        is UpdateCheckState.Error -> {
+                            Column {
+                                Text(
+                                    text = "检查更新失败",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Text(
+                                    text = state.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                
+                                Spacer(modifier = Modifier.height(12.dp))
+                                
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    OutlinedButton(
+                                        onClick = { versionUpdateViewModel.checkForUpdates() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("重试")
+                                    }
+                                    
+                                    OutlinedButton(
+                                        onClick = { versionUpdateViewModel.resetState() },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("关闭")
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

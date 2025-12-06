@@ -13,16 +13,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.ui.components.UpdateDialog
 import com.glassous.aime.ui.navigation.AppNavigation
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
+import com.glassous.aime.ui.viewmodel.UpdateCheckState
+import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
+import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
 import android.view.View
 import android.view.WindowManager
+import android.content.Intent
+import android.net.Uri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -44,7 +54,7 @@ class MainActivity : ComponentActivity() {
         
         // 支持显示刘海屏区域
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes.layoutInDisplayCutoutMode = 
+            window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         
@@ -54,10 +64,42 @@ class MainActivity : ComponentActivity() {
             val minimalMode by themeViewModel.minimalMode.collectAsState()
             val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
             
+            // 版本更新ViewModel
+            val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
+                factory = VersionUpdateViewModelFactory(GitHubReleaseService())
+            )
+            val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
+            
+            // 对话框显示状态
+            var showUpdateDialog by remember { mutableStateOf(false) }
+            var updateInfo by remember { mutableStateOf<com.glassous.aime.data.model.VersionUpdateInfo?>(null) }
+            
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
                 ThemePreferences.THEME_DARK -> true
                 else -> isSystemInDarkTheme() // THEME_SYSTEM
+            }
+            
+            // 应用启动时自动检查更新（延迟执行，避免影响启动速度）
+            LaunchedEffect(Unit) {
+                // 延迟2秒检查，让应用先启动完成
+                kotlinx.coroutines.delay(2000)
+                versionUpdateViewModel.checkForUpdates()
+            }
+            
+            // 监听更新检查结果
+            LaunchedEffect(updateCheckState) {
+                when (val state = updateCheckState) {
+                    is UpdateCheckState.Success -> {
+                        if (state.updateInfo.hasUpdate) {
+                            updateInfo = state.updateInfo
+                            showUpdateDialog = true
+                        }
+                    }
+                    else -> {
+                        // 其他状态不处理
+                    }
+                }
             }
             
             AImeTheme(darkTheme = darkTheme) {
@@ -89,6 +131,21 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AppNavigation()
+                    
+                    // 显示更新对话框
+                    if (showUpdateDialog && updateInfo != null) {
+                        UpdateDialog(
+                            updateInfo = updateInfo!!,
+                            onDismiss = {
+                                showUpdateDialog = false
+                                versionUpdateViewModel.resetState()
+                            },
+                            onDownload = { downloadUrl ->
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+                                startActivity(intent)
+                            }
+                        )
+                    }
                 }
             }
         }
