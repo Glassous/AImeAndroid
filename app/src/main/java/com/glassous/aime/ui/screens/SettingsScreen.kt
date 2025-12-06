@@ -1,7 +1,6 @@
 package com.glassous.aime.ui.screens
 
 import android.content.Intent
-import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -14,7 +13,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -23,17 +21,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
-import com.glassous.aime.BuildConfig
 import com.glassous.aime.R
 import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.ui.components.ContextLimitSettingDialog
@@ -68,7 +62,6 @@ fun SettingsScreen(
     val syncViewModel: DataSyncViewModel = viewModel(
         factory = DataSyncViewModelFactory(application)
     )
-    // 修复 1: 传入 repository 而不是 application
     val modelViewModel: ModelConfigViewModel = viewModel(
         factory = ModelConfigViewModelFactory(application.modelConfigRepository)
     )
@@ -96,8 +89,6 @@ fun SettingsScreen(
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     var showContextLimitDialog by remember { mutableStateOf(false) }
     var showClearDataDialog by remember { mutableStateOf(false) }
-    var showLogoutDialog by remember { mutableStateOf(false) }
-    var showSecurityQuestionDialog by remember { mutableStateOf(false) } // 新增：安全问题弹窗
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
@@ -179,17 +170,6 @@ fun SettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("打开账号管理") }
-
-                        // 新增：安全设置入口
-                        Spacer(modifier = Modifier.height(8.dp))
-                        OutlinedButton(
-                            onClick = { showSecurityQuestionDialog = true },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Filled.Security, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("设置/修改安全问题")
-                        }
                     } else {
                         Button(
                             onClick = {
@@ -198,61 +178,6 @@ fun SettingsScreen(
                             },
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("登录 / 注册") }
-                    }
-                }
-            }
-
-            // --- 云同步 ---
-            if (isLoggedIn) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "云同步",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "同步聊天记录和模型配置到云端",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // 手动同步按钮
-                        Button(
-                            onClick = {
-                                authViewModel.manualSync { success, message ->
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(message)
-                                    }
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Filled.Sync, contentDescription = null)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("立即同步")
-                        }
-
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "同步设置",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // 这里可以添加同步设置开关，但需要先实现SyncPreferences的Flow
-                        // 暂时显示一个提示
-                        Text(
-                            text = "同步设置可在账号管理页面配置",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
                 }
             }
@@ -515,7 +440,6 @@ fun SettingsScreen(
 
     // --- Dialogs ---
 
-    // 修复 2: 补充 FontSizeSettingDialog 缺失参数
     if (showFontSizeDialog) {
         FontSizeSettingDialog(
             currentFontSize = chatFontSize,
@@ -526,7 +450,6 @@ fun SettingsScreen(
         )
     }
 
-    // 修复 3: 补充 TransparencySettingDialog 缺失参数
     if (showTransparencyDialog) {
         TransparencySettingDialog(
             currentAlpha = chatUiOverlayAlpha,
@@ -542,7 +465,6 @@ fun SettingsScreen(
         )
     }
 
-    // 修复 4: 补充 ContextLimitSettingDialog 缺失参数
     if (showContextLimitDialog) {
         ContextLimitSettingDialog(
             currentLimit = contextLimit,
@@ -555,7 +477,6 @@ fun SettingsScreen(
         )
     }
 
-    // 修复 5: 补充 MinimalModeConfigDialog 缺失参数
     if (showMinimalModeConfigDialog) {
         MinimalModeConfigDialog(
             config = minimalModeConfig,
@@ -587,89 +508,4 @@ fun SettingsScreen(
             }
         )
     }
-
-    // 安全问题设置弹窗
-    if (showSecurityQuestionDialog) {
-        SecurityQuestionDialog(
-            onDismiss = { showSecurityQuestionDialog = false },
-            onConfirm = { pwd, q, a ->
-                // 修复 6: 调用 AuthViewModel 中新增的方法
-                authViewModel.updateSecurityQuestion(pwd, q, a) { ok, msg ->
-                    scope.launch {
-                        snackbarHostState.showSnackbar(msg)
-                        if (ok) showSecurityQuestionDialog = false
-                    }
-                }
-            }
-        )
-    }
-}
-
-// 安全问题设置弹窗组件
-@Composable
-fun SecurityQuestionDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (String, String, String) -> Unit
-) {
-    var password by remember { mutableStateOf("") }
-    var question by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf("") }
-    var isSubmitting by remember { mutableStateOf(false) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("设置安全问题") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "为了保护您的账号安全，请验证密码并设置新的安全问题。",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                OutlinedTextField(
-                    value = password,
-                    onValueChange = { password = it },
-                    label = { Text("当前登录密码") },
-                    singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = question,
-                    onValueChange = { question = it },
-                    label = { Text("新安全问题") },
-                    placeholder = { Text("例如：我的出生地是？") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = answer,
-                    onValueChange = { answer = it },
-                    label = { Text("问题答案") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    if (password.isNotBlank() && question.isNotBlank() && answer.isNotBlank()) {
-                        isSubmitting = true
-                        onConfirm(password, question, answer)
-                    }
-                },
-                enabled = !isSubmitting && password.isNotBlank() && question.isNotBlank() && answer.isNotBlank()
-            ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                } else {
-                    Text("保存")
-                }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("取消") }
-        }
-    )
 }
