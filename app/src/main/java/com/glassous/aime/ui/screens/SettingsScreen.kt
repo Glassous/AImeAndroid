@@ -88,7 +88,6 @@ fun SettingsScreen(
     var showTransparencyDialog by remember { mutableStateOf(false) }
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     var showContextLimitDialog by remember { mutableStateOf(false) }
-    var showClearDataDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
@@ -292,8 +291,8 @@ fun SettingsScreen(
                                     Text(text = "显示“获取分享对话”按钮", style = MaterialTheme.typography.titleSmall)
                                 }
                                 Switch(
-                                    checked = hideImportSharedButton,
-                                    onCheckedChange = { themeViewModel.setHideImportSharedButton(it) }
+                                    checked = !hideImportSharedButton,
+                                    onCheckedChange = { themeViewModel.setHideImportSharedButton(!it) }
                                 )
                             }
                             // 字体设置入口
@@ -423,17 +422,6 @@ fun SettingsScreen(
                 }
             }
 
-            // --- 清除数据 ---
-            OutlinedButton(
-                onClick = { showClearDataDialog = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-            ) {
-                Icon(Icons.Filled.DeleteForever, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("清除本地数据")
-            }
-
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -487,25 +475,4 @@ fun SettingsScreen(
         )
     }
 
-    if (showClearDataDialog) {
-        AlertDialog(
-            onDismissRequest = { showClearDataDialog = false },
-            title = { Text("清除数据") },
-            text = { Text("确定要删除所有本地聊天记录和配置吗？此操作无法撤销。") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        authViewModel.clearLocalData { ok, msg ->
-                            scope.launch { snackbarHostState.showSnackbar(msg) }
-                        }
-                        showClearDataDialog = false
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) { Text("清除") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showClearDataDialog = false }) { Text("取消") }
-            }
-        )
-    }
 }
