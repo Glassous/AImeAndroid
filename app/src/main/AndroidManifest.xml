@@ -52,6 +52,11 @@
             android:exported="false"
             android:label="账号注册"
             android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.settings.SettingsActivity"
+            android:exported="false"
+            android:label="设置"
+            android:theme="@style/Theme.AIme" />
     </application>
 
 </manifest>

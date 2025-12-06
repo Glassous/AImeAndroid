@@ -42,6 +42,8 @@ import kotlinx.coroutines.delay
 import java.util.Calendar
  
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.ui.settings.SettingsActivity
+import android.content.Intent
  
 
 import androidx.compose.foundation.layout.WindowInsets
@@ -62,7 +64,6 @@ import com.glassous.aime.data.model.ModelGroup
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(
-    onNavigateToSettings: () -> Unit,
     onNavigateToMessageDetail: (Long) -> Unit,
     modelSelectionViewModel: ModelSelectionViewModel,
     themeViewModel: ThemeViewModel = viewModel()
@@ -245,7 +246,7 @@ fun ChatScreen(
                         })
                     },
                     hideImportSharedButton = hideImportSharedButton,
-                    onNavigateToSettings = onNavigateToSettings
+                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
                 )
             }
         ) {
@@ -640,7 +641,7 @@ fun ChatScreen(
                 autoToolSelector = autoToolSelector,
                 onAutoNavigate = { route ->
                     when (route) {
-                        "settings" -> onNavigateToSettings()
+                        "settings" -> context.startActivity(Intent(context, SettingsActivity::class.java))
                         // chat 或未知路由：保持在当前聊天页
                         else -> {}
                     }
