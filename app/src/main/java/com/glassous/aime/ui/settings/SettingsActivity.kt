@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -34,7 +35,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
-import android.view.WindowManager
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.BuildConfig
@@ -45,6 +45,7 @@ import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
+import com.glassous.aime.ui.screens.ModelConfigScreen // 确保导入这个
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.AuthViewModel
@@ -73,13 +74,31 @@ class SettingsActivity : ComponentActivity() {
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
+
+            // 简单的导航状态：是否显示模型配置页
+            var showModelConfig by remember { mutableStateOf(false) }
+
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
                 ThemePreferences.THEME_DARK -> true
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
-            AImeTheme(darkTheme = darkTheme) {
-                SettingsContent(themeViewModel)
+            AImeTheme(
+                darkTheme = darkTheme,
+                isMonochrome = monochromeTheme
+            ) {
+                // 根据状态显示不同内容
+                if (showModelConfig) {
+                    ModelConfigScreen(
+                        onNavigateBack = { showModelConfig = false }
+                    )
+                } else {
+                    SettingsContent(
+                        themeViewModel = themeViewModel,
+                        onNavigateToModelConfig = { showModelConfig = true }
+                    )
+                }
             }
         }
     }
@@ -87,7 +106,8 @@ class SettingsActivity : ComponentActivity() {
 
 @Composable
 fun SettingsContent(
-    themeViewModel: ThemeViewModel
+    themeViewModel: ThemeViewModel,
+    onNavigateToModelConfig: () -> Unit // 新增参数
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
@@ -109,7 +129,7 @@ fun SettingsContent(
 
     // States
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
-    val selectedThemeStyle by themeViewModel.selectedThemeStyle.collectAsState()
+    val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
     val minimalMode by themeViewModel.minimalMode.collectAsState()
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
@@ -133,7 +153,7 @@ fun SettingsContent(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
-    
+
     // Version Update States
     val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
 
@@ -272,36 +292,28 @@ fun SettingsContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // 主题样式设置
+                    // --- 新增：黑白主题开关 ---
                     Row(
-                        modifier = Modifier.fillMaxWidth().selectableGroup(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        val themeStyleOptions = listOf(
-                            ThemePreferences.THEME_STYLE_MATERIAL_YOU to "Material You",
-                            ThemePreferences.THEME_STYLE_BW to "黑白"
-                        )
-
-                        themeStyleOptions.forEach { (value, label) ->
-                            val isSelected = selectedThemeStyle == value
-                            FilterChip(
-                                onClick = { themeViewModel.setThemeStyle(value) },
-                                label = { Text(text = label, style = MaterialTheme.typography.labelMedium) },
-                                selected = isSelected,
-                                modifier = Modifier.weight(1f).selectable(
-                                    selected = isSelected,
-                                    onClick = { themeViewModel.setThemeStyle(value) },
-                                    role = Role.RadioButton
-                                ),
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                                )
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "黑白主题", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "使用纯黑/白高对比度配色，禁用动态取色",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                        Switch(
+                            checked = monochromeTheme,
+                            onCheckedChange = { themeViewModel.setMonochromeTheme(it) }
+                        )
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { themeViewModel.setThemeAdvancedExpanded(!themeAdvancedExpanded) },
@@ -364,7 +376,7 @@ fun SettingsContent(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Column(Modifier.weight(1f)) {
-                                    Text(text = "显示\"获取分享对话\"按钮", style = MaterialTheme.typography.titleSmall)
+                                    Text(text = "显示“获取分享对话”按钮", style = MaterialTheme.typography.titleSmall)
                                 }
                                 Switch(
                                     checked = !hideImportSharedButton,
@@ -418,10 +430,7 @@ fun SettingsContent(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     Button(
-                        onClick = {
-                            // 这里需要导航到模型配置页面，暂时使用 TODO
-                            // onNavigateToModelConfig()
-                        },
+                        onClick = onNavigateToModelConfig, // 这里现在正确引用了参数
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Filled.Settings, contentDescription = "模型设置")
@@ -523,9 +532,9 @@ fun SettingsContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    
+
                     Spacer(modifier = Modifier.height(16.dp))
-                    
+
                     when (val state = updateCheckState) {
                         is UpdateCheckState.Idle -> {
                             Button(
@@ -537,7 +546,7 @@ fun SettingsContent(
                                 Text("检查更新")
                             }
                         }
-                        
+
                         is UpdateCheckState.Checking -> {
                             Button(
                                 onClick = { },
@@ -547,10 +556,10 @@ fun SettingsContent(
                                 Text("检查中...")
                             }
                         }
-                        
+
                         is UpdateCheckState.Success -> {
                             val updateInfo = state.updateInfo
-                            
+
                             if (updateInfo.hasUpdate) {
                                 // 有新版本
                                 Column {
@@ -572,7 +581,7 @@ fun SettingsContent(
                                             )
                                         }
                                     }
-                                    
+
                                     if (updateInfo.releaseNotes?.isNotBlank() == true) {
                                         Spacer(modifier = Modifier.height(8.dp))
                                         Text(
@@ -586,9 +595,9 @@ fun SettingsContent(
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
-                                    
+
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    
+
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -596,7 +605,7 @@ fun SettingsContent(
                                         if (updateInfo.downloadUrl != null) {
                                             Button(
                                                 onClick = {
-                                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(updateInfo.downloadUrl))
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(updateInfo.downloadUrl))
                                                     context.startActivity(intent)
                                                 },
                                                 modifier = Modifier.weight(1f)
@@ -604,11 +613,11 @@ fun SettingsContent(
                                                 Text("下载更新")
                                             }
                                         }
-                                        
+
                                         OutlinedButton(
                                             onClick = {
                                                 updateInfo.releaseUrl?.let { url ->
-                                                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                                                     context.startActivity(intent)
                                                 }
                                             },
@@ -617,9 +626,9 @@ fun SettingsContent(
                                             Text("查看详情")
                                         }
                                     }
-                                    
+
                                     Spacer(modifier = Modifier.height(8.dp))
-                                    
+
                                     TextButton(
                                         onClick = { versionUpdateViewModel.resetState() },
                                         modifier = Modifier.fillMaxWidth()
@@ -635,9 +644,9 @@ fun SettingsContent(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                    
+
                                     Spacer(modifier = Modifier.height(12.dp))
-                                    
+
                                     OutlinedButton(
                                         onClick = { versionUpdateViewModel.resetState() },
                                         modifier = Modifier.fillMaxWidth()
@@ -647,7 +656,7 @@ fun SettingsContent(
                                 }
                             }
                         }
-                        
+
                         is UpdateCheckState.Error -> {
                             Column {
                                 Text(
@@ -660,9 +669,9 @@ fun SettingsContent(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                
+
                                 Spacer(modifier = Modifier.height(12.dp))
-                                
+
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -673,7 +682,7 @@ fun SettingsContent(
                                     ) {
                                         Text("重试")
                                     }
-                                    
+
                                     OutlinedButton(
                                         onClick = { versionUpdateViewModel.resetState() },
                                         modifier = Modifier.weight(1f)
@@ -697,8 +706,8 @@ fun SettingsContent(
         FontSizeSettingDialog(
             currentFontSize = chatFontSize,
             onDismiss = { showFontSizeDialog = false },
-            onConfirm = {
-                themeViewModel.setChatFontSize(it)
+            onConfirm = { newSize ->
+                themeViewModel.setChatFontSize(newSize)
             }
         )
     }
@@ -722,9 +731,9 @@ fun SettingsContent(
         ContextLimitSettingDialog(
             currentLimit = contextLimit,
             onDismiss = { showContextLimitDialog = false },
-            onConfirm = {
+            onConfirm = { newLimit ->
                 scope.launch {
-                    application.contextPreferences.setMaxContextMessages(it)
+                    application.contextPreferences.setMaxContextMessages(newLimit)
                 }
             }
         )
@@ -739,4 +748,5 @@ fun SettingsContent(
             onFullscreenChange = { themeViewModel.setMinimalModeFullscreen(it) }
         )
     }
+
 }

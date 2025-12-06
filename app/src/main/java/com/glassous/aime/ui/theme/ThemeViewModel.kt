@@ -17,6 +17,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _selectedTheme = MutableStateFlow(ThemePreferences.THEME_SYSTEM)
     val selectedTheme: StateFlow<String> = _selectedTheme.asStateFlow()
 
+    // --- 新增：黑白主题状态 ---
+    private val _monochromeTheme = MutableStateFlow(false)
+    val monochromeTheme: StateFlow<Boolean> = _monochromeTheme.asStateFlow()
+
     private val _minimalMode = MutableStateFlow(false)
     val minimalMode: StateFlow<Boolean> = _minimalMode.asStateFlow()
 
@@ -50,15 +54,16 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeAdvancedExpanded = MutableStateFlow(true)
     val themeAdvancedExpanded: StateFlow<Boolean> = _themeAdvancedExpanded.asStateFlow()
 
-    private val _selectedThemeStyle = MutableStateFlow(ThemePreferences.THEME_STYLE_MATERIAL_YOU)
-    val selectedThemeStyle: StateFlow<String> = _selectedThemeStyle.asStateFlow()
-
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
 
     init {
         viewModelScope.launch {
             themePreferences.selectedTheme.collect { theme -> _selectedTheme.value = theme }
+        }
+        // --- 新增：收集黑白主题状态 ---
+        viewModelScope.launch {
+            themePreferences.monochromeTheme.collect { enabled -> _monochromeTheme.value = enabled }
         }
         viewModelScope.launch {
             themePreferences.minimalMode.collect { enabled -> _minimalMode.value = enabled }
@@ -96,9 +101,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.minimalModeConfig.collect { config -> _minimalModeConfig.value = config }
         }
-        viewModelScope.launch {
-            themePreferences.selectedThemeStyle.collect { style -> _selectedThemeStyle.value = style }
-        }
     }
 
     fun setTheme(theme: String) {
@@ -107,7 +109,13 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 修复：添加 toggleTheme 方法
+    // --- 新增：设置黑白主题 ---
+    fun setMonochromeTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            themePreferences.setMonochromeTheme(enabled)
+        }
+    }
+
     fun toggleTheme() {
         val current = _selectedTheme.value
         val next = when (current) {
@@ -165,9 +173,5 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setThemeAdvancedExpanded(expanded: Boolean) {
         viewModelScope.launch { themePreferences.setThemeAdvancedExpanded(expanded) }
-    }
-
-    fun setThemeStyle(style: String) {
-        viewModelScope.launch { themePreferences.setThemeStyle(style) }
     }
 }

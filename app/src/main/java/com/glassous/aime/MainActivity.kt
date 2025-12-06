@@ -42,51 +42,54 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        
+
         // 设置透明导航栏
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             window.isNavigationBarContrastEnforced = false
         }
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        
+
         // 关键：设置窗口不适应系统窗口，这对全屏显示很重要
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        
+
         // 支持显示刘海屏区域
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             window.attributes.layoutInDisplayCutoutMode =
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
-        
+
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            // --- 新增：获取黑白主题状态 ---
+            val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
+
             val minimalMode by themeViewModel.minimalMode.collectAsState()
             val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
-            
+
             // 版本更新ViewModel
             val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
                 factory = VersionUpdateViewModelFactory(GitHubReleaseService())
             )
             val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
-            
+
             // 对话框显示状态
             var showUpdateDialog by remember { mutableStateOf(false) }
             var updateInfo by remember { mutableStateOf<com.glassous.aime.data.model.VersionUpdateInfo?>(null) }
-            
+
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
                 ThemePreferences.THEME_DARK -> true
                 else -> isSystemInDarkTheme() // THEME_SYSTEM
             }
-            
+
             // 应用启动时自动检查更新（延迟执行，避免影响启动速度）
             LaunchedEffect(Unit) {
                 // 延迟2秒检查，让应用先启动完成
                 kotlinx.coroutines.delay(2000)
                 versionUpdateViewModel.checkForUpdates()
             }
-            
+
             // 监听更新检查结果
             LaunchedEffect(updateCheckState) {
                 when (val state = updateCheckState) {
@@ -101,8 +104,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
-            
-            AImeTheme(darkTheme = darkTheme) {
+
+            // --- 修改：传递 isMonochrome 参数 ---
+            AImeTheme(
+                darkTheme = darkTheme,
+                isMonochrome = monochromeTheme
+            ) {
                 // 根据极简模式与全屏显示设置动态隐藏系统UI
                 LaunchedEffect(minimalMode, minimalModeFullscreen) {
                     val controller = WindowCompat.getInsetsController(window, window.decorView)
@@ -111,7 +118,7 @@ class MainActivity : ComponentActivity() {
                             // 设置全屏模式 - 隐藏状态栏和导航栏
                             insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
                             insetsController.hide(WindowInsetsCompat.Type.systemBars())
-                            
+
                             // 额外设置窗口标志以确保全屏效果
                             window.setFlags(
                                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -120,7 +127,7 @@ class MainActivity : ComponentActivity() {
                         } else {
                             // 恢复正常模式 - 显示状态栏和导航栏
                             insetsController.show(WindowInsetsCompat.Type.systemBars())
-                            
+
                             // 清除全屏标志
                             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
                         }
@@ -131,7 +138,7 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     AppNavigation()
-                    
+
                     // 显示更新对话框
                     if (showUpdateDialog && updateInfo != null) {
                         UpdateDialog(
