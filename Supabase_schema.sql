@@ -329,7 +329,7 @@ begin
   end if;
 
   if p_sync_selected_model then
-    select 
+    select
       (m->>'name')::text as model_name,
       (select (gg->>'name')::text from jsonb_array_elements(p_data->'modelGroups') gg where gg->>'id' = m->>'groupId' limit 1) as group_name
     into sel_model_name, sel_group_name
@@ -453,3 +453,147 @@ create table if not exists public.user_settings (
   selected_model_name text,
   updated_at timestamptz default now()
 );
+
+-- 1. 修改 accounts 表，增加安全问题相关字段
+alter table public.accounts
+add column if not exists security_question text,
+add column if not exists security_answer_hash text;
+
+-- 2. 更新注册函数，支持安全问题
+drop function if exists public.accounts_register(text, text); -- 删除旧签名
+drop function if exists public.accounts_register(text, text, text, text);
+
+create or replace function public.accounts_register(
+  p_email text,
+  p_password text,
+  p_question text,
+  p_answer text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  uid uuid;
+  tok text;
+begin
+  select id into uid from public.accounts where email = p_email;
+  if uid is not null then
+    return jsonb_build_object('ok', false, 'message', '邮箱已存在');
+  end if;
+
+  -- 插入数据，同时存储问题的答案哈希
+  insert into public.accounts(email, password_hash, security_question, security_answer_hash)
+  values (
+    p_email,
+    extensions.crypt(p_password, extensions.gen_salt('bf')),
+    p_question,
+    extensions.crypt(p_answer, extensions.gen_salt('bf'))
+  )
+  returning id into uid;
+
+  tok := encode(gen_random_bytes(32), 'hex');
+  insert into public.account_sessions(token, user_id) values (tok, uid);
+
+  return jsonb_build_object('ok', true, 'user_id', uid, 'email', p_email, 'session_token', tok, 'message', '注册并登录成功');
+end;
+$$;
+grant execute on function public.accounts_register(text, text, text, text) to anon, authenticated;
+
+-- 3. 新增函数：根据邮箱获取安全问题
+create or replace function public.accounts_get_security_question(p_email text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  q text;
+begin
+  select security_question into q from public.accounts where email = p_email;
+
+  if q is null then
+    return jsonb_build_object('ok', false, 'message', '账户不存在或未设置安全问题');
+  end if;
+
+  return jsonb_build_object('ok', true, 'question', q);
+end;
+$$;
+grant execute on function public.accounts_get_security_question(text) to anon, authenticated;
+
+-- 4. 新增函数：验证安全问题并重置密码
+create or replace function public.accounts_reset_password_with_answer(
+  p_email text,
+  p_answer text,
+  p_new_password text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  rec record;
+begin
+  select id, security_answer_hash into rec from public.accounts where email = p_email;
+
+  if rec.id is null then
+    return jsonb_build_object('ok', false, 'message', '账户不存在');
+  end if;
+
+  if rec.security_answer_hash is null then
+     return jsonb_build_object('ok', false, 'message', '该账户未设置安全问题，无法通过此方式找回');
+  end if;
+
+  -- 验证问题的答案
+  if rec.security_answer_hash <> extensions.crypt(p_answer, rec.security_answer_hash) then
+    return jsonb_build_object('ok', false, 'message', '安全问题回答错误');
+  end if;
+
+  -- 验证通过，重置密码
+  update public.accounts
+  set password_hash = extensions.crypt(p_new_password, extensions.gen_salt('bf'))
+  where id = rec.id;
+
+  return jsonb_build_object('ok', true, 'message', '密码已重置，请使用新密码登录');
+end;
+$$;
+grant execute on function public.accounts_reset_password_with_answer(text, text, text) to anon, authenticated;
+
+-- 5. 新增函数：验证密码并更新安全问题（用于老用户设置或修改问题）
+create or replace function public.accounts_update_security_question(
+  p_email text,
+  p_password text,
+  p_new_question text,
+  p_new_answer text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, extensions
+as $$
+declare
+  rec record;
+begin
+  select id, password_hash into rec from public.accounts where email = p_email;
+
+  if rec.id is null then
+    return jsonb_build_object('ok', false, 'message', '账户不存在');
+  end if;
+
+  -- 验证密码
+  if rec.password_hash <> extensions.crypt(p_password, rec.password_hash) then
+    return jsonb_build_object('ok', false, 'message', '密码错误，无法修改安全设置');
+  end if;
+
+  -- 更新问题和答案
+  update public.accounts
+  set security_question = p_new_question,
+      security_answer_hash = extensions.crypt(p_new_answer, extensions.gen_salt('bf'))
+  where id = rec.id;
+
+  return jsonb_build_object('ok', true, 'message', '安全问题已设置成功');
+end;
+$$;
+grant execute on function public.accounts_update_security_question(text, text, text, text) to anon, authenticated;
