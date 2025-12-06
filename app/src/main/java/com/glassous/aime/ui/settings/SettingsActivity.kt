@@ -109,6 +109,7 @@ fun SettingsContent(
 
     // States
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+    val selectedThemeStyle by themeViewModel.selectedThemeStyle.collectAsState()
     val minimalMode by themeViewModel.minimalMode.collectAsState()
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
@@ -259,6 +260,37 @@ fun SettingsContent(
                                 modifier = Modifier.weight(1f).selectable(
                                     selected = isSelected,
                                     onClick = { themeViewModel.setTheme(value) },
+                                    role = Role.RadioButton
+                                ),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // 主题样式设置
+                    Row(
+                        modifier = Modifier.fillMaxWidth().selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val themeStyleOptions = listOf(
+                            ThemePreferences.THEME_STYLE_MATERIAL_YOU to "Material You",
+                            ThemePreferences.THEME_STYLE_BW to "黑白"
+                        )
+
+                        themeStyleOptions.forEach { (value, label) ->
+                            val isSelected = selectedThemeStyle == value
+                            FilterChip(
+                                onClick = { themeViewModel.setThemeStyle(value) },
+                                label = { Text(text = label, style = MaterialTheme.typography.labelMedium) },
+                                selected = isSelected,
+                                modifier = Modifier.weight(1f).selectable(
+                                    selected = isSelected,
+                                    onClick = { themeViewModel.setThemeStyle(value) },
                                     role = Role.RadioButton
                                 ),
                                 colors = FilterChipDefaults.filterChipColors(

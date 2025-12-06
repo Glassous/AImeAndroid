@@ -24,6 +24,10 @@ class ThemePreferences(private val context: Context) {
         const val THEME_SYSTEM = "system"
         const val THEME_LIGHT = "light"
         const val THEME_DARK = "dark"
+        // 新增：主题样式相关
+        private val THEME_STYLE_KEY = stringPreferencesKey("selected_theme_style")
+        const val THEME_STYLE_MATERIAL_YOU = "material_you"
+        const val THEME_STYLE_BW = "black_white"
         private val MINIMAL_MODE = booleanPreferencesKey("minimal_mode")
         // 新增：极简模式详细配置
         private val MINIMAL_MODE_CONFIG = stringPreferencesKey("minimal_mode_config")
@@ -113,6 +117,12 @@ class ThemePreferences(private val context: Context) {
     val themeAdvancedExpanded: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[THEME_ADVANCED_EXPANDED] ?: true
+        }
+
+    // 新增：主题样式
+    val selectedThemeStyle: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[THEME_STYLE_KEY] ?: THEME_STYLE_MATERIAL_YOU
         }
 
     // 新增：极简模式详细配置
@@ -207,6 +217,13 @@ class ThemePreferences(private val context: Context) {
     suspend fun setThemeAdvancedExpanded(expanded: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[THEME_ADVANCED_EXPANDED] = expanded
+        }
+    }
+
+    // 新增：设置主题样式
+    suspend fun setThemeStyle(style: String) {
+        context.dataStore.edit { preferences ->
+            preferences[THEME_STYLE_KEY] = style
         }
     }
 

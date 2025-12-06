@@ -50,6 +50,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeAdvancedExpanded = MutableStateFlow(true)
     val themeAdvancedExpanded: StateFlow<Boolean> = _themeAdvancedExpanded.asStateFlow()
 
+    private val _selectedThemeStyle = MutableStateFlow(ThemePreferences.THEME_STYLE_MATERIAL_YOU)
+    val selectedThemeStyle: StateFlow<String> = _selectedThemeStyle.asStateFlow()
+
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
 
@@ -92,6 +95,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             themePreferences.minimalModeConfig.collect { config -> _minimalModeConfig.value = config }
+        }
+        viewModelScope.launch {
+            themePreferences.selectedThemeStyle.collect { style -> _selectedThemeStyle.value = style }
         }
     }
 
@@ -159,5 +165,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setThemeAdvancedExpanded(expanded: Boolean) {
         viewModelScope.launch { themePreferences.setThemeAdvancedExpanded(expanded) }
+    }
+
+    fun setThemeStyle(style: String) {
+        viewModelScope.launch { themePreferences.setThemeStyle(style) }
     }
 }
