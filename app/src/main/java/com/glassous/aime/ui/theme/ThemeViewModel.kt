@@ -8,16 +8,20 @@ import com.glassous.aime.data.model.MinimalModeConfig
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val themePreferences = ThemePreferences(application)
 
+    // --- 新增：初始化完成状态 ---
+    private val _isReady = MutableStateFlow(false)
+    val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
+
     private val _selectedTheme = MutableStateFlow(ThemePreferences.THEME_SYSTEM)
     val selectedTheme: StateFlow<String> = _selectedTheme.asStateFlow()
 
-    // --- 新增：黑白主题状态 ---
     private val _monochromeTheme = MutableStateFlow(false)
     val monochromeTheme: StateFlow<Boolean> = _monochromeTheme.asStateFlow()
 
@@ -58,13 +62,24 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     val minimalModeConfig: StateFlow<MinimalModeConfig> = _minimalModeConfig.asStateFlow()
 
     init {
+        // --- 修改：优先加载外观相关的关键配置 ---
+        // 使用 combine 确保 Theme 和 Monochrome 状态都已从 DataStore 获取到最新值
         viewModelScope.launch {
-            themePreferences.selectedTheme.collect { theme -> _selectedTheme.value = theme }
+            combine(
+                themePreferences.selectedTheme,
+                themePreferences.monochromeTheme
+            ) { theme, mono ->
+                _selectedTheme.value = theme
+                _monochromeTheme.value = mono
+                true // 标记为已加载
+            }.collect {
+                // 只有当数据真正发射出来后，才设置 ready
+                _isReady.value = true
+            }
         }
-        // --- 新增：收集黑白主题状态 ---
-        viewModelScope.launch {
-            themePreferences.monochromeTheme.collect { enabled -> _monochromeTheme.value = enabled }
-        }
+
+        // 其他非阻塞性的配置可以单独加载，或者为了防止布局跳动，也可以考虑合并进去
+        // 这里保持原样以简化逻辑，主要解决颜色闪烁
         viewModelScope.launch {
             themePreferences.minimalMode.collect { enabled -> _minimalMode.value = enabled }
         }
@@ -109,7 +124,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // --- 新增：设置黑白主题 ---
     fun setMonochromeTheme(enabled: Boolean) {
         viewModelScope.launch {
             themePreferences.setMonochromeTheme(enabled)

@@ -50,12 +50,18 @@ class RegisterActivity : ComponentActivity() {
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val monochromeTheme by themeViewModel.monochromeTheme.collectAsState() // 新增
+
             val darkTheme = when (selectedTheme) {
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_LIGHT -> false
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_DARK -> true
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
-            AImeTheme(darkTheme = darkTheme) {
+
+            AImeTheme(
+                darkTheme = darkTheme,
+                isMonochrome = monochromeTheme // 传递参数
+            ) {
                 val context = LocalContext.current
                 val authViewModel: AuthViewModel = viewModel(
                     factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
@@ -63,7 +69,6 @@ class RegisterActivity : ComponentActivity() {
                 var email by remember { mutableStateOf("") }
                 var password by remember { mutableStateOf("") }
                 var confirm by remember { mutableStateOf("") }
-                // 新增：安全问题和答案
                 var securityQuestion by remember { mutableStateOf("") }
                 var securityAnswer by remember { mutableStateOf("") }
 
@@ -95,7 +100,7 @@ class RegisterActivity : ComponentActivity() {
                             )
                         },
                         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                        containerColor = Color.Transparent,
+                        containerColor = MaterialTheme.colorScheme.background, // 确保背景色
                         contentWindowInsets = WindowInsets(0, 0, 0, 0)
                     ) { paddingValues ->
                         Column(

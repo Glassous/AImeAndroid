@@ -52,12 +52,18 @@ class ForgotPasswordActivity : ComponentActivity() {
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val monochromeTheme by themeViewModel.monochromeTheme.collectAsState() // 新增
+
             val darkTheme = when (selectedTheme) {
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_LIGHT -> false
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_DARK -> true
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
-            AImeTheme(darkTheme = darkTheme) {
+
+            AImeTheme(
+                darkTheme = darkTheme,
+                isMonochrome = monochromeTheme // 传递参数
+            ) {
                 val context = LocalContext.current
                 val authViewModel: AuthViewModel = viewModel(
                     factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
@@ -104,7 +110,7 @@ class ForgotPasswordActivity : ComponentActivity() {
                             )
                         },
                         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                        containerColor = Color.Transparent,
+                        containerColor = MaterialTheme.colorScheme.background, // 确保背景色
                         contentWindowInsets = WindowInsets(0, 0, 0, 0)
                     ) { paddingValues ->
                         Column(

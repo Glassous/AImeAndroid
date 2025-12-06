@@ -52,13 +52,13 @@ fun ModelConfigScreen(
     val viewModel: ModelConfigViewModel = viewModel(
         factory = ModelConfigViewModelFactory(application.modelConfigRepository)
     )
-    
+
     val uiState by viewModel.uiState.collectAsState()
     val groups by viewModel.groups.collectAsState()
-    
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    
+
     // 沉浸式UI设置
     val view = LocalView.current
     LaunchedEffect(Unit) {
@@ -70,77 +70,79 @@ fun ModelConfigScreen(
             decorView.systemUiVisibility = decorView.systemUiVisibility or
                     View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION or
                     View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-            
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 it.window.isNavigationBarContrastEnforced = false
             }
             it.window.navigationBarColor = android.graphics.Color.TRANSPARENT
         }
     }
-    
+
     // 云端同步结果回调
     val onSyncResult: (Boolean, String) -> Unit = { success, message ->
         scope.launch {
             snackbarHostState.showSnackbar(message)
         }
     }
-    
+
     Scaffold(
-            topBar = {
-                TopAppBar(
-                    title = { Text("模型配置") },
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
-                            Icon(Icons.Filled.Add, contentDescription = "添加分组")
-                        }
+        topBar = {
+            TopAppBar(
+                title = { Text("模型配置") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                     }
-                )
-            },
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            containerColor = androidx.compose.ui.graphics.Color.Transparent,
-            contentWindowInsets = WindowInsets(0, 0, 0, 0)
-        ) { paddingValues ->
-            Box {
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues),
-                    contentPadding = PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top = 16.dp,
-                        bottom = 6.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                    ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-            if (groups.isEmpty()) {
-                item {
-                    EmptyStateCard(
-                        onCreateGroup = { viewModel.showCreateGroupDialog() }
-                    )
+                },
+                actions = {
+                    IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
+                        Icon(Icons.Filled.Add, contentDescription = "添加分组")
+                    }
                 }
-            } else {
-                items(groups) { group ->
-                    ModelGroupCard(
-                        group = group,
-                        onAddModel = { viewModel.showAddModelDialog(group.id) },
-                        onDeleteGroup = { viewModel.deleteGroup(group, onSyncResult) },
-                        onDeleteModel = { viewModel.deleteModel(it, onSyncResult) },
-                        onEditGroup = { viewModel.showEditGroupDialog(it) },
-                        onEditModel = { viewModel.showEditModelDialog(it) },
-                        viewModel = viewModel
-                    )
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        // 修复：使用 MaterialTheme.colorScheme.background 而不是 Transparent
+        // 这样可以防止背景透视导致的重叠问题
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) { paddingValues ->
+        Box {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = 16.dp,
+                    bottom = 6.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                ),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (groups.isEmpty()) {
+                    item {
+                        EmptyStateCard(
+                            onCreateGroup = { viewModel.showCreateGroupDialog() }
+                        )
+                    }
+                } else {
+                    items(groups) { group ->
+                        ModelGroupCard(
+                            group = group,
+                            onAddModel = { viewModel.showAddModelDialog(group.id) },
+                            onDeleteGroup = { viewModel.deleteGroup(group, onSyncResult) },
+                            onDeleteModel = { viewModel.deleteModel(it, onSyncResult) },
+                            onEditGroup = { viewModel.showEditGroupDialog(it) },
+                            onEditModel = { viewModel.showEditModelDialog(it) },
+                            viewModel = viewModel
+                        )
+                    }
                 }
             }
         }
     }
-    }
-    
+
     // 对话框
     if (uiState.showCreateGroupDialog) {
         CreateGroupDialog(
@@ -150,7 +152,7 @@ fun ModelConfigScreen(
             }
         )
     }
-    
+
     // 添加模型对话框
     if (uiState.showAddModelDialog && uiState.selectedGroupId != null) {
         AddModelDialog(
@@ -160,7 +162,7 @@ fun ModelConfigScreen(
             }
         )
     }
-    
+
     // 编辑分组对话框
     if (uiState.showEditGroupDialog && uiState.selectedGroup != null) {
         EditGroupDialog(
@@ -171,7 +173,7 @@ fun ModelConfigScreen(
             }
         )
     }
-    
+
     // 编辑模型对话框
     if (uiState.showEditModelDialog && uiState.selectedModel != null) {
         EditModelDialog(
@@ -189,7 +191,7 @@ fun ModelConfigScreen(
             }
         )
     }
-    
+
     // 错误提示
     uiState.error?.let { error ->
         LaunchedEffect(error) {
@@ -256,7 +258,7 @@ fun ModelGroupCard(
     var expanded by remember { mutableStateOf(false) }
     var showDeleteGroupConfirm by remember { mutableStateOf(false) }
     val uriHandler = LocalUriHandler.current
-    
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
@@ -299,7 +301,7 @@ fun ModelGroupCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                
+
                 Row {
                     IconButton(onClick = { expanded = !expanded }) {
                         Icon(
@@ -323,11 +325,11 @@ fun ModelGroupCard(
                     }
                 }
             }
-            
+
             // 展开的内容
             if (expanded) {
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 // 模型列表
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -345,7 +347,7 @@ fun ModelGroupCard(
                         Text("添加模型")
                     }
                 }
-                
+
                 if (models.isEmpty()) {
                     Text(
                         text = "暂无模型，点击上方按钮添加",
@@ -423,7 +425,7 @@ fun ModelItem(
                 )
             }
         }
-        
+
         Row {
             IconButton(onClick = onEdit) {
                 Icon(

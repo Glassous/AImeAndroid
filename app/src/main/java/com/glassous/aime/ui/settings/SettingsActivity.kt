@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -28,7 +29,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -45,7 +45,7 @@ import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
-import com.glassous.aime.ui.screens.ModelConfigScreen // 确保导入这个
+import com.glassous.aime.ui.screens.ModelConfigScreen
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.AuthViewModel
@@ -54,9 +54,9 @@ import com.glassous.aime.ui.viewmodel.DataSyncViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModelFactory
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
-import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
+import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
@@ -76,19 +76,24 @@ class SettingsActivity : ComponentActivity() {
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
             val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
 
-            // 简单的导航状态：是否显示模型配置页
+            // 页面导航状态：是否显示模型配置页
             var showModelConfig by remember { mutableStateOf(false) }
+
+            // 拦截系统返回键
+            BackHandler(enabled = showModelConfig) {
+                showModelConfig = false
+            }
 
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
                 ThemePreferences.THEME_DARK -> true
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
+
             AImeTheme(
                 darkTheme = darkTheme,
                 isMonochrome = monochromeTheme
             ) {
-                // 根据状态显示不同内容
                 if (showModelConfig) {
                     ModelConfigScreen(
                         onNavigateBack = { showModelConfig = false }
@@ -107,7 +112,7 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SettingsContent(
     themeViewModel: ThemeViewModel,
-    onNavigateToModelConfig: () -> Unit // 新增参数
+    onNavigateToModelConfig: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
@@ -119,9 +124,6 @@ fun SettingsContent(
     )
     val syncViewModel: DataSyncViewModel = viewModel(
         factory = DataSyncViewModelFactory(application)
-    )
-    val modelViewModel: ModelConfigViewModel = viewModel(
-        factory = ModelConfigViewModelFactory(application.modelConfigRepository)
     )
     val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
         factory = VersionUpdateViewModelFactory(GitHubReleaseService())
@@ -292,7 +294,7 @@ fun SettingsContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // --- 新增：黑白主题开关 ---
+                    // --- 黑白主题开关 ---
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -430,7 +432,7 @@ fun SettingsContent(
                         modifier = Modifier.padding(bottom = 16.dp)
                     )
                     Button(
-                        onClick = onNavigateToModelConfig, // 这里现在正确引用了参数
+                        onClick = onNavigateToModelConfig,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Icon(Icons.Filled.Settings, contentDescription = "模型设置")
@@ -706,9 +708,7 @@ fun SettingsContent(
         FontSizeSettingDialog(
             currentFontSize = chatFontSize,
             onDismiss = { showFontSizeDialog = false },
-            onConfirm = { newSize ->
-                themeViewModel.setChatFontSize(newSize)
-            }
+            onConfirm = { themeViewModel.setChatFontSize(it) }
         )
     }
 
@@ -731,9 +731,9 @@ fun SettingsContent(
         ContextLimitSettingDialog(
             currentLimit = contextLimit,
             onDismiss = { showContextLimitDialog = false },
-            onConfirm = { newLimit ->
+            onConfirm = {
                 scope.launch {
-                    application.contextPreferences.setMaxContextMessages(newLimit)
+                    application.contextPreferences.setMaxContextMessages(it)
                 }
             }
         )
@@ -748,5 +748,4 @@ fun SettingsContent(
             onFullscreenChange = { themeViewModel.setMinimalModeFullscreen(it) }
         )
     }
-
 }

@@ -2,6 +2,10 @@ package com.glassous.aime
 
 import android.os.Bundle
 import android.os.Build
+import android.view.View
+import android.view.WindowManager
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -18,8 +22,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.ui.components.UpdateDialog
@@ -29,18 +37,13 @@ import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
-import android.view.View
-import android.view.WindowManager
-import android.content.Intent
-import android.net.Uri
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        // 安装启动页 (必须在 super.onCreate 之前)
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge()
 
         // 设置透明导航栏
@@ -58,10 +61,22 @@ class MainActivity : ComponentActivity() {
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
+        // 1. 在 onCreate 早期初始化 ViewModel
+        val themeViewModel = ViewModelProvider(this)[ThemeViewModel::class.java]
+
+        // 2. 关键修复：让启动页一直显示，直到主题配置加载完成 (isReady = true)
+        // 这避免了 "闪烁" 问题（先显示 Material You 颜色，然后突然变黑白）
+        splashScreen.setKeepOnScreenCondition {
+            !themeViewModel.isReady.value
+        }
+
         setContent {
-            val themeViewModel: ThemeViewModel = viewModel()
+            // 在这里获取同一个 ViewModel 实例
+            // 注意：这里我们不需要再次 viewModel()，直接用上面的 themeViewModel 也是可以的，
+            // 但为了保持 Compose 风格，我们重新获取（它是单例的，指向同一个对象）
+            // 或者直接传递 themeViewModel 也可以。
+
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
-            // --- 新增：获取黑白主题状态 ---
             val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
 
             val minimalMode by themeViewModel.minimalMode.collectAsState()
@@ -105,7 +120,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
 
-            // --- 修改：传递 isMonochrome 参数 ---
             AImeTheme(
                 darkTheme = darkTheme,
                 isMonochrome = monochromeTheme

@@ -52,12 +52,18 @@ class AuthActivity : ComponentActivity() {
         setContent {
             val themeViewModel: ThemeViewModel = viewModel()
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+            val monochromeTheme by themeViewModel.monochromeTheme.collectAsState() // 新增
+
             val darkTheme = when (selectedTheme) {
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_LIGHT -> false
                 com.glassous.aime.data.preferences.ThemePreferences.THEME_DARK -> true
                 else -> androidx.compose.foundation.isSystemInDarkTheme()
             }
-            AImeTheme(darkTheme = darkTheme) {
+
+            AImeTheme(
+                darkTheme = darkTheme,
+                isMonochrome = monochromeTheme // 传递参数
+            ) {
                 val context = LocalContext.current
                 val authViewModel: AuthViewModel = viewModel(
                     factory = AuthViewModelFactory(context.applicationContext as android.app.Application)
@@ -71,7 +77,6 @@ class AuthActivity : ComponentActivity() {
                 var isLoggingIn by remember { mutableStateOf(false) }
                 var showLogoutConfirm by remember { mutableStateOf(false) }
                 var clearLocalOnLogout by remember { mutableStateOf(false) }
-                // 新增：安全问题弹窗状态
                 var showSecurityQuestionDialog by remember { mutableStateOf(false) }
 
                 val snackbarHostState = remember { SnackbarHostState() }
@@ -103,7 +108,7 @@ class AuthActivity : ComponentActivity() {
                             )
                         },
                         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
-                        containerColor = Color.Transparent,
+                        containerColor = MaterialTheme.colorScheme.background, // 确保背景色
                         contentWindowInsets = WindowInsets(0, 0, 0, 0)
                     ) { paddingValues ->
                         Column(
@@ -137,7 +142,6 @@ class AuthActivity : ComponentActivity() {
                                             modifier = Modifier.fillMaxWidth()
                                         ) { Text("退出登录") }
 
-                                        // 新增：移动到此处的安全问题设置按钮
                                         Spacer(modifier = Modifier.height(12.dp))
                                         OutlinedButton(
                                             onClick = { showSecurityQuestionDialog = true },
@@ -419,7 +423,6 @@ class AuthActivity : ComponentActivity() {
                     )
                 }
 
-                // 新增：安全问题设置弹窗
                 if (showSecurityQuestionDialog) {
                     SecurityQuestionDialog(
                         onDismiss = { showSecurityQuestionDialog = false },
@@ -438,7 +441,6 @@ class AuthActivity : ComponentActivity() {
     }
 }
 
-// 新增：安全问题设置弹窗组件
 @Composable
 fun SecurityQuestionDialog(
     onDismiss: () -> Unit,
