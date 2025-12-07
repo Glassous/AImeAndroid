@@ -32,7 +32,16 @@ class ChatRepository(
     private val weatherService: WeatherService = WeatherService(),
     private val stockService: StockService = StockService()
 ) {
+    // 用于标记是否有对话正在生成，防止同步干扰
+    @Volatile
+    private var isGenerating = false
+    
     private suspend fun triggerSync() {
+        // 如果有对话正在生成，跳过同步
+        if (isGenerating) {
+            android.util.Log.d("ChatRepository", "Sync skipped: conversation is being generated")
+            return
+        }
         try {
             withContext(Dispatchers.IO) { cloudSyncManager.syncOnce() }
         } catch (_: Exception) { }
@@ -74,6 +83,8 @@ class ChatRepository(
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
+        // 设置标志位，表示正在生成对话
+        isGenerating = true
         return try {
             // Save user message
             val userMessage = ChatMessage(
@@ -86,7 +97,6 @@ class ChatRepository(
 
             // Update conversation (user side)
             updateConversationAfterMessage(conversationId, message)
-            triggerSync()
 
             // Resolve selected model config
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -769,6 +779,7 @@ class ChatRepository(
 
                 // Update conversation (assistant side)
                 updateConversationAfterMessage(conversationId, message)
+                triggerSync()
 
                 Result.success(finalUpdated)
             } catch (e: Exception) {
@@ -782,6 +793,9 @@ class ChatRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            // 重置标志位，表示对话生成完成
+            isGenerating = false
         }
     }
 
@@ -793,6 +807,8 @@ class ChatRepository(
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
+        // 设置标志位，表示正在生成对话
+        isGenerating = true
         return try {
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == assistantMessageId }
@@ -825,11 +841,17 @@ class ChatRepository(
                 }
             }
 
-            // 删除目标消息后的所有消息
+            // 删除目标消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
 
-            // 清空目标消息，作为新的流式输出占位
-            chatDao.updateMessage(target.copy(content = "正在思考..."))
+            // 插入新的助手消息占位，用于流式输出
+            val newAssistantMessage = ChatMessage(
+                conversationId = conversationId,
+                content = "正在思考...",
+                isFromUser = false,
+                timestamp = Date()
+            )
+            val newAssistantId = chatDao.insertMessage(newAssistantMessage)
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -1073,6 +1095,9 @@ class ChatRepository(
             val updateInterval = 0L
             var preLabelAdded = false
             var postLabelAdded = false
+            
+            // 使用新插入的助手消息作为目标消息
+            var assistantMessage = newAssistantMessage.copy(id = newAssistantId)
 
             withContext(Dispatchers.IO) {
                 streamWithFallback(
@@ -1085,7 +1110,7 @@ class ChatRepository(
                         aggregated.append(delta)
                         val currentTime = System.currentTimeMillis()
                         if (currentTime - lastUpdateTime >= updateInterval) {
-                            val updated = target.copy(content = aggregated.toString())
+                            val updated = assistantMessage.copy(content = aggregated.toString())
                             chatDao.updateMessage(updated)
                             lastUpdateTime = currentTime
                         }
@@ -1110,7 +1135,7 @@ class ChatRepository(
                                 aggregated.append("【前置回复】\n")
                                 aggregated.append(pre)
                                 aggregated.append("\n\n")
-                                val updated = target.copy(content = aggregated.toString())
+                                val updated = assistantMessage.copy(content = aggregated.toString())
                                 chatDao.updateMessage(updated)
                             }
                             preLabelAdded = true
@@ -1133,7 +1158,7 @@ class ChatRepository(
                                         aggregated.append(linksMarkdown)
                                         aggregated.append("\n\n\n")
                                         postLabelAdded = true
-                                        val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                         chatDao.updateMessage(updatedBeforeOfficial)
                                     }
 
@@ -1161,7 +1186,7 @@ class ChatRepository(
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = target.copy(content = aggregated.toString())
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
                                                 chatDao.updateMessage(updated)
                                                 lastUpdateTime = currentTime
                                             }
@@ -1181,11 +1206,11 @@ class ChatRepository(
                                     // 插入工具调用结果（Markdown表格）到消息流中，位于前置回复和正式回复之间
                                     val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
                                     aggregated.append("\n\n\n") // 工具结果开始分隔
-                                    aggregated.append(weatherTable.trim())
-                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
-                                    postLabelAdded = true
-                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
-                                    chatDao.updateMessage(updatedBeforeOfficial)
+                                        aggregated.append(weatherTable.trim())
+                                        aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
                                     val messagesWithWeather = contextMessages.toMutableList()
                                     messagesWithWeather.add(
                                         OpenAiChatMessage(
@@ -1208,7 +1233,7 @@ class ChatRepository(
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = target.copy(content = aggregated.toString())
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
                                                 chatDao.updateMessage(updated)
                                                 lastUpdateTime = currentTime
                                             }
@@ -1233,7 +1258,7 @@ class ChatRepository(
                                     aggregated.append(stockMarkdown)
                                     aggregated.append("\n\n\n")
                                     postLabelAdded = true
-                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                     chatDao.updateMessage(updatedBeforeOfficial)
                                     
                                     streamWithFallback(
@@ -1250,7 +1275,7 @@ class ChatRepository(
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = target.copy(content = aggregated.toString())
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
                                                 chatDao.updateMessage(updated)
                                                 lastUpdateTime = currentTime
                                             }
@@ -1271,7 +1296,7 @@ class ChatRepository(
                                     aggregated.append(md)
                                     aggregated.append("\n\n\n")
                                     postLabelAdded = true
-                                    val updatedBeforeOfficial = target.copy(content = aggregated.toString())
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                     chatDao.updateMessage(updatedBeforeOfficial)
 
                                     val messagesWithTiku = contextMessages.toMutableList()
@@ -1302,7 +1327,7 @@ class ChatRepository(
                                             aggregated.append(delta)
                                             val currentTime = System.currentTimeMillis()
                                             if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = target.copy(content = aggregated.toString())
+                                                val updated = assistantMessage.copy(content = aggregated.toString())
                                                 chatDao.updateMessage(updated)
                                                 lastUpdateTime = currentTime
                                             }
@@ -1319,12 +1344,15 @@ class ChatRepository(
             }
 
             // 最终写入完整文本
-            chatDao.updateMessage(target.copy(content = aggregated.toString()))
+            chatDao.updateMessage(assistantMessage.copy(content = aggregated.toString()))
             refreshConversationMetadata(conversationId)
             triggerSync()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            // 重置标志位，表示对话生成完成
+            isGenerating = false
         }
     }
 
@@ -1336,7 +1364,7 @@ class ChatRepository(
             messageCount = 0
         )
         val conversationId = chatDao.insertConversation(conversation)
-        triggerSync()
+        // 移除立即同步，等待对话完成后再同步
         return conversation.copy(id = conversationId)
     }
 
@@ -1397,12 +1425,13 @@ class ChatRepository(
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
             val messageCount = chatDao.getMessageCount(conversationId)
+            val lastMessage = chatDao.getLastMessage(conversationId)
             val updatedConversation = conversation.copy(
                 title = if (conversation.title == "新对话" && messageCount > 0) {
                     message.take(20) + if (message.length > 20) "..." else ""
                 } else conversation.title,
                 lastMessage = message,
-                lastMessageTime = Date(),
+                lastMessageTime = lastMessage?.timestamp ?: Date(),
                 messageCount = messageCount
             )
             chatDao.updateConversation(updatedConversation)
@@ -1415,7 +1444,7 @@ class ChatRepository(
         val lastMsg = chatDao.getLastMessage(conversationId)
         val updated = conversation.copy(
             lastMessage = lastMsg?.content ?: "",
-            lastMessageTime = Date(),
+            lastMessageTime = lastMsg?.timestamp ?: Date(),
             messageCount = messageCount
         )
         chatDao.updateConversation(updated)
@@ -1458,6 +1487,9 @@ class ChatRepository(
         onSyncResult: ((Boolean, String) -> Unit)? = null
     ): Result<Unit> {
         return try {
+            // 设置标志位，表示正在生成对话
+            isGenerating = true
+            
             // 获取完整历史
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == userMessageId }
@@ -2201,12 +2233,14 @@ class ChatRepository(
             val finalText = if (aggregated.isEmpty()) "生成失败或内容为空" else aggregated.toString()
             chatDao.updateMessage(assistantMessage.copy(content = finalText))
             refreshConversationMetadata(conversationId)
-            
-            
+            triggerSync()
             
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        } finally {
+            // 重置标志位，表示对话生成完成
+            isGenerating = false
         }
     }
 

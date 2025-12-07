@@ -54,6 +54,9 @@ interface ChatDao {
     suspend fun deleteAllConversations()
 
     // Added: delete subsequent messages after a timestamp in the same conversation
-    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND timestamp > :timestamp")
+    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND timestamp >= :timestamp")
     suspend fun deleteMessagesAfter(conversationId: Long, timestamp: Date)
+    
+    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND id = :messageId")
+    suspend fun deleteMessageById(conversationId: Long, messageId: Long)
 }

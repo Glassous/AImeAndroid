@@ -278,52 +278,55 @@ class CloudSyncManager(
 
         // 3. 合并会话
         val localConversations = chatDao.getAllConversations().first().toMutableList()
-        
+
         remote.conversations.forEach { rc ->
-            // 跳过云端备份中“空会话”（无任何消息且计数为0），避免应用启动时产生空白对话记录
-            if (rc.messageCount == 0 && rc.messages.isEmpty()) {
-                return@forEach
-            }
             // 尝试通过标题和最后消息时间模糊匹配找到本地对应的会话
             val matched = localConversations.firstOrNull { lc ->
                 // 匹配规则：标题相同，或者（如果标题是默认的）内容高度重叠
                 // 这里简化为标题相同且时间相差不大，或者是完全一样的内容
                 lc.title == rc.title
             }
-            
+
             val convId = if (matched == null) {
                 // 本地完全没有这个会话 -> 插入新会话
-                android.util.Log.d("CloudSyncManager", "Inserting new conversation: ${rc.title}")
-                val newId = chatDao.insertConversation(
-                    Conversation(
-                        title = rc.title,
-                        lastMessage = rc.lastMessage,
-                        lastMessageTime = Date(rc.lastMessageTime),
-                        messageCount = rc.messageCount
+                // 只插入有消息的会话，避免应用启动时产生空白对话记录
+                if (rc.messageCount > 0 || rc.messages.isNotEmpty()) {
+                    android.util.Log.d("CloudSyncManager", "Inserting new conversation: ${rc.title}")
+                    val newId = chatDao.insertConversation(
+                        Conversation(
+                            title = rc.title,
+                            lastMessage = rc.lastMessage,
+                            lastMessageTime = Date(rc.lastMessageTime),
+                            messageCount = rc.messageCount
+                        )
                     )
-                )
-                android.util.Log.d("CloudSyncManager", "Conversation inserted with ID: $newId")
+                    android.util.Log.d("CloudSyncManager", "Conversation inserted with ID: $newId")
 
-                // 验证插入是否成功
-                val insertedConv = chatDao.getConversation(newId)
-                if (insertedConv == null) {
-                    android.util.Log.e("CloudSyncManager", "Failed to insert conversation: ${rc.title}")
-                    return@forEach
+                    // 验证插入是否成功
+                    val insertedConv = chatDao.getConversation(newId)
+                    if (insertedConv == null) {
+                        android.util.Log.e("CloudSyncManager", "Failed to insert conversation: ${rc.title}")
+                        return@forEach
+                    } else {
+                        android.util.Log.d("CloudSyncManager", "Conversation insertion verified: ${insertedConv.title}")
+                    }
+
+                    // 更新内存中的列表避免重复插入
+                    localConversations.add(
+                        Conversation(
+                            id = newId,
+                            title = rc.title,
+                            lastMessage = rc.lastMessage,
+                            lastMessageTime = Date(rc.lastMessageTime),
+                            messageCount = rc.messageCount
+                        )
+                    )
+                    newId
                 } else {
-                    android.util.Log.d("CloudSyncManager", "Conversation insertion verified: ${insertedConv.title}")
+                    // 跳过空会话，避免插入空白对话
+                    android.util.Log.d("CloudSyncManager", "Skipping empty remote conversation: ${rc.title}")
+                    return@forEach
                 }
-
-                // 更新内存中的列表避免重复插入
-                localConversations.add(
-                    Conversation(
-                        id = newId,
-                        title = rc.title,
-                        lastMessage = rc.lastMessage,
-                        lastMessageTime = Date(rc.lastMessageTime),
-                        messageCount = rc.messageCount
-                    )
-                )
-                newId
             } else {
                 android.util.Log.d("CloudSyncManager", "Using existing conversation: ${matched.title} (id: ${matched.id})")
                 matched.id
