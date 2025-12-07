@@ -26,8 +26,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 
-// 移除实验性 API 引用，使用标准的 LoadingIndicator
-@OptIn(ExperimentalMaterial3Api::class)
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatInput(
     inputText: String,
@@ -37,18 +39,21 @@ fun ChatInput(
     minimalMode: Boolean = false,
     hideInputBorder: Boolean = false,
     hideSendButtonBackground: Boolean = false,
-    hideInputPlaceholder: Boolean = false,
+    hideInputPlaceholder: Boolean = false, // 新增参数：隐藏输入框占位符
     showScrollToBottomButton: Boolean = false,
     onScrollToBottomClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     overlayAlpha: Float = 0.5f,
+    // 新增：输入框内部背景透明度（默认与当前实现一致）
     innerAlpha: Float = 0.9f
 ) {
     val focusManager = LocalFocusManager.current
+    // 固定发送按钮高度为输入框初始高度（硬编码）
     val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
+    // 根据极简模式与隐藏占位符设置，控制输入框内部背景透明度
     val inputContainerAlpha = if (minimalMode && hideInputPlaceholder && inputText.isBlank()) 0f else innerAlpha.coerceIn(0f, 1f)
-
+    
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.background.copy(alpha = overlayAlpha.coerceIn(0f, 1f)),
@@ -74,6 +79,7 @@ fun ChatInput(
                     .heightIn(max = 120.dp)
                     .animateContentSize(),
                 placeholder = {
+                    // 仅在开启极简模式且配置为隐藏时才隐藏占位符
                     if (!(minimalMode && hideInputPlaceholder)) {
                         Text(
                             text = "输入消息...",
@@ -85,7 +91,7 @@ fun ChatInput(
                 shape = inputShape,
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.primary,
-                    unfocusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.outline,
+                unfocusedBorderColor = if (minimalMode && hideInputBorder) Color.Transparent else MaterialTheme.colorScheme.outline,
                     focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = inputContainerAlpha),
                     unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = inputContainerAlpha)
                 ),
@@ -110,13 +116,14 @@ fun ChatInput(
                     }
                 }
             )
-
+            
             AnimatedVisibility(
                 visible = inputText.isNotBlank(),
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
             ) {
                 if (minimalMode && hideSendButtonBackground) {
+                    // 极简模式或隐藏发送按钮背景：只显示图标，无背景
                     IconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
@@ -128,7 +135,7 @@ fun ChatInput(
                         modifier = Modifier.size(buttonSize)
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(
+                            LoadingIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -141,6 +148,7 @@ fun ChatInput(
                         }
                     }
                 } else {
+                    // 正常模式：带背景的按钮
                     FilledIconButton(
                         onClick = {
                             if (inputText.isNotBlank()) {
@@ -157,7 +165,7 @@ fun ChatInput(
                         )
                     ) {
                         if (isLoading) {
-                            CircularProgressIndicator(
+                            LoadingIndicator(
                                 modifier = Modifier.size(24.dp),
                                 color = MaterialTheme.colorScheme.onPrimary
                             )
