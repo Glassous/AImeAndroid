@@ -86,7 +86,7 @@ class ThemePreferences(private val context: Context) {
         .map { preferences -> preferences[HIDE_IMPORT_SHARED_BUTTON] ?: false }
 
     val themeAdvancedExpanded: Flow<Boolean> = context.dataStore.data
-        .map { preferences -> preferences[THEME_ADVANCED_EXPANDED] ?: true }
+        .map { preferences -> preferences[THEME_ADVANCED_EXPANDED] ?: false }
 
     val minimalModeConfig: Flow<MinimalModeConfig> = context.dataStore.data
         .map { preferences ->

@@ -55,7 +55,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
     private val _hideImportSharedButton = MutableStateFlow(false)
     val hideImportSharedButton: StateFlow<Boolean> = _hideImportSharedButton.asStateFlow()
 
-    private val _themeAdvancedExpanded = MutableStateFlow(true)
+    private val _themeAdvancedExpanded = MutableStateFlow(false)
     val themeAdvancedExpanded: StateFlow<Boolean> = _themeAdvancedExpanded.asStateFlow()
 
     private val _minimalModeConfig = MutableStateFlow(MinimalModeConfig())
