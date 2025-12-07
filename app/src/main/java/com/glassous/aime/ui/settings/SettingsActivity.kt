@@ -294,28 +294,6 @@ fun SettingsContent(
 
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    // --- 黑白主题开关 ---
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(text = "黑白主题", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                text = "使用纯黑/白高对比度配色，禁用动态取色",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Switch(
-                            checked = monochromeTheme,
-                            onCheckedChange = { themeViewModel.setMonochromeTheme(it) }
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { themeViewModel.setThemeAdvancedExpanded(!themeAdvancedExpanded) },
@@ -335,6 +313,27 @@ fun SettingsContent(
                         exit = shrinkVertically() + fadeOut()
                     ) {
                         Column {
+                            // --- 黑白主题开关 ---
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(text = "黑白主题", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        text = "使用纯黑/白高对比度配色，禁用动态取色",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = monochromeTheme,
+                                    onCheckedChange = { themeViewModel.setMonochromeTheme(it) }
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
                             // 极简模式开关
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable { showMinimalModeConfigDialog = true },
