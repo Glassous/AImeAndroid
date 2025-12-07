@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
-    kotlin("plugin.serialization") version "1.9.10"
+    alias(libs.plugins.kotlin.serialization)
 }
 
 import java.util.Properties
@@ -57,7 +57,6 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -67,47 +66,41 @@ dependencies {
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
     implementation(libs.androidx.material.icons.extended)
-    
-    // Navigation
     implementation(libs.androidx.navigation.compose)
-    
-    // ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.compose)
-    
-    // Material3 Window Size Class
     implementation(libs.androidx.material3.window.size)
+    implementation("androidx.compose.material3:material3-android:1.3.1")
 
-    // Material3 Expressive (for LoadingIndicator and related components)
-    implementation("androidx.compose.material3:material3-android:1.5.0-alpha07")
-    
     // Network
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging)
     implementation(libs.gson)
-    
-    // HTML parsing for web search
     implementation("org.jsoup:jsoup:1.17.2")
-    
+
     // Database
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
-    
+
     // DataStore
     implementation(libs.androidx.datastore.preferences)
-    
-    // Kotlinx Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-    
-    // SplashScreen
+
+    // Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+
+    // Splash
     implementation("androidx.core:core-splashscreen:1.0.1")
 
-    
+    // Supabase (Corrected for V3)
+    implementation(platform(libs.supabase.bom))
+    implementation(libs.supabase.postgrest)
+    implementation(libs.supabase.auth)
+    implementation(libs.ktor.client.okhttp)
+    implementation(libs.javax.inject)
 
-    // Markdown rendering
-    // Markwon dependencies
+    // Markdown
     implementation("io.noties.markwon:core:4.6.2")
     implementation("io.noties.markwon:ext-latex:4.6.2")
     implementation("io.noties.markwon:ext-tables:4.6.2")

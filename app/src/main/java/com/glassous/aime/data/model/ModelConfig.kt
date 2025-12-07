@@ -2,10 +2,12 @@ package com.glassous.aime.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * 模型配置分组
  */
+@Serializable
 @Entity(tableName = "model_groups")
 data class ModelGroup(
     @PrimaryKey
@@ -20,6 +22,7 @@ data class ModelGroup(
 /**
  * 模型配置
  */
+@Serializable
 @Entity(tableName = "models")
 data class Model(
     @PrimaryKey

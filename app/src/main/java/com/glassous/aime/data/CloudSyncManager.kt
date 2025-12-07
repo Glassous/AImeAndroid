@@ -8,6 +8,7 @@ import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.preferences.AuthPreferences
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.SyncPreferences
 import com.google.gson.Gson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,15 +19,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.util.Date
-import kotlin.math.abs
 
 class CloudSyncManager(
     private val chatDao: ChatDao,
     private val modelDao: ModelConfigDao,
     private val modelPreferences: ModelPreferences,
     private val authPreferences: AuthPreferences,
-    private val syncPreferences: com.glassous.aime.data.preferences.SyncPreferences,
+    private val syncPreferences: SyncPreferences,
     private val supabaseService: SupabaseAuthService = SupabaseAuthService()
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -72,78 +73,40 @@ class CloudSyncManager(
 
         android.util.Log.d("CloudSyncManager", "Starting sync process")
 
-        // 使用 IO 线程执行，避免阻塞主线程
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
+        withContext(Dispatchers.IO) {
             mutex.withLock {
                 try {
                     // 1. 下载云端备份
                     android.util.Log.d("CloudSyncManager", "Step 1: Downloading remote backup")
-                    val (okDownload, downloadMsg, remoteJson) = supabaseService.downloadBackup(token)
-                    android.util.Log.d("CloudSyncManager", "Download result: ok=$okDownload, message=$downloadMsg, hasData=${!remoteJson.isNullOrBlank()}")
+                    val downloadResult = supabaseService.downloadBackup(token)
+                    val okDownload = downloadResult.first
+                    val remoteJson = downloadResult.third
 
-                    // 2. 如果下载成功且有数据，执行"增量合并"到本地数据库
-                    // 关键点：这里不再清空本地数据，而是将云端的新数据插入本地
+                    // 2. 如果下载成功且有数据，执行"增量合并"
                     if (okDownload && !remoteJson.isNullOrBlank()) {
-                        android.util.Log.d("CloudSyncManager", "Step 2: Parsing and merging remote data")
                         val remoteBackup = try {
                             gson.fromJson(remoteJson, BackupData::class.java)
                         } catch (e: Exception) {
-                            android.util.Log.e("CloudSyncManager", "Failed to parse remote backup JSON", e)
                             null
                         }
                         if (remoteBackup != null) {
-                            android.util.Log.d("CloudSyncManager", "Merging remote data: conversations=${remoteBackup.conversations.size}, modelGroups=${remoteBackup.modelGroups.size}, models=${remoteBackup.models.size}")
-
-                            // 记录合并前的数据库状态
-                            val groupsBefore = modelDao.getAllGroups().first().size
-                            val conversationsBefore = chatDao.getAllConversations().first().size
-                            android.util.Log.d("CloudSyncManager", "Database before merge: groups=$groupsBefore, conversations=$conversationsBefore")
-
                             mergeRemoteIntoLocal(remoteBackup)
-
-                            // 记录合并后的数据库状态
-                            val groupsAfter = modelDao.getAllGroups().first().size
-                            val conversationsAfter = chatDao.getAllConversations().first().size
-                            android.util.Log.d("CloudSyncManager", "Database after merge: groups=$groupsAfter, conversations=$conversationsAfter")
-                            android.util.Log.d("CloudSyncManager", "Merge result: groups added=${groupsAfter - groupsBefore}, conversations added=${conversationsAfter - conversationsBefore}")
-
-                            android.util.Log.d("CloudSyncManager", "Remote data merged successfully")
-                        } else {
-                            android.util.Log.w("CloudSyncManager", "Skipping merge due to JSON parsing failure")
                         }
-                    } else {
-                        android.util.Log.w("CloudSyncManager", "Skipping merge: download failed or no data")
                     }
 
-                    // 3. 收集目前最新的本地数据（包含了刚才合并进来的云端数据 + 用户刚才新产生的操作）
-                     android.util.Log.d("CloudSyncManager", "Step 3: Collecting local backup data")
-
-                     // 验证数据库中是否有数据
-                     val dbGroups = modelDao.getAllGroups().first()
-                     val dbConversations = chatDao.getAllConversations().first()
-                     android.util.Log.d("CloudSyncManager", "Database state before collect: groups=${dbGroups.size}, conversations=${dbConversations.size}")
-
-                     val localAfterMerge = collectLocalBackup()
-                     val localBackupJson = gson.toJson(localAfterMerge)
-                     android.util.Log.d("CloudSyncManager", "Local data collected: conversations=${localAfterMerge.conversations.size}, modelGroups=${localAfterMerge.modelGroups.size}, models=${localAfterMerge.models.size}")
-                     android.util.Log.d("CloudSyncManager", "Local backup JSON length: ${localBackupJson.length}")
-                     android.util.Log.d("CloudSyncManager", "Local backup JSON preview: ${localBackupJson.take(500)}")
-
-                     // 再次验证数据库状态
-                     val dbGroupsAfter = modelDao.getAllGroups().first()
-                     val dbConversationsAfter = chatDao.getAllConversations().first()
-                     android.util.Log.d("CloudSyncManager", "Database state after collect: groups=${dbGroupsAfter.size}, conversations=${dbConversationsAfter.size}")
+                    // 3. 收集目前最新的本地数据
+                    val localAfterMerge = collectLocalBackup()
+                    val localBackupJson = gson.toJson(localAfterMerge)
 
                     // 4. 获取同步开关设置
                     val uploadHistory = syncPreferences.uploadHistoryEnabled.first()
                     val uploadModelConfig = syncPreferences.uploadModelConfigEnabled.first()
                     val uploadSelectedModel = syncPreferences.uploadSelectedModelEnabled.first()
                     val uploadApiKey = syncPreferences.uploadApiKeyEnabled.first()
-                    android.util.Log.d("CloudSyncManager", "Sync settings: history=$uploadHistory, modelConfig=$uploadModelConfig, selectedModel=$uploadSelectedModel, apiKey=$uploadApiKey")
 
-                    // 5. 上传合并后的完整数据到云端（作为新的基准）
+                    // 5. 上传合并后的完整数据到云端
                     android.util.Log.d("CloudSyncManager", "Step 4: Uploading backup to cloud")
-                    val (okUpload, uploadMsg) = supabaseService.uploadBackup(
+                    val uploadResult = supabaseService.uploadBackup(
                         token = token,
                         backupDataJson = localBackupJson,
                         syncHistory = uploadHistory,
@@ -151,50 +114,34 @@ class CloudSyncManager(
                         syncSelectedModel = uploadSelectedModel,
                         syncApiKey = uploadApiKey
                     )
-                    android.util.Log.d("CloudSyncManager", "Upload result: ok=$okUpload, message=$uploadMsg")
 
-                    if (okUpload) {
+                    if (uploadResult.first) {
                         android.util.Log.i("CloudSyncManager", "Sync completed successfully")
                     } else {
-                        android.util.Log.w("CloudSyncManager", "Sync completed with upload failure: $uploadMsg")
+                        android.util.Log.w("CloudSyncManager", "Sync upload failed: ${uploadResult.second}")
                     }
 
-                    // 移除：原来的 "upload 后再次 download 并 overwrite" 的逻辑
-                    // 这样就避免了用户在上传间隙的操作被覆盖
                 } catch (e: Exception) {
                     android.util.Log.e("CloudSyncManager", "Sync failed with exception", e)
-                    // 可以在这里添加日志或不需要处理，保持静默失败以免打扰用户
                 }
             }
         }
     }
 
-    // ... collectLocalBackup 方法保持不变 ...
     private suspend fun collectLocalBackup(): BackupData {
-        android.util.Log.d("CloudSyncManager", "Collecting local backup data...")
-
         val groups = modelDao.getAllGroups().first()
-        android.util.Log.d("CloudSyncManager", "Found ${groups.size} model groups")
-
         val models = mutableListOf<Model>()
         groups.forEach { g ->
             val ms = modelDao.getModelsByGroupId(g.id).first()
             models.addAll(ms)
-            android.util.Log.d("CloudSyncManager", "Group ${g.name}: ${ms.size} models")
         }
-        android.util.Log.d("CloudSyncManager", "Total models: ${models.size}")
 
         val selectedModelId = modelPreferences.selectedModelId.first()
-        android.util.Log.d("CloudSyncManager", "Selected model ID: $selectedModelId")
-
         val conversations = chatDao.getAllConversations().first()
-        android.util.Log.d("CloudSyncManager", "Found ${conversations.size} conversations")
-
         val backupConversations = mutableListOf<BackupConversation>()
+
         for (c in conversations) {
             val msgs = chatDao.getMessagesForConversation(c.id).first()
-            android.util.Log.d("CloudSyncManager", "Conversation '${c.title}': ${msgs.size} messages")
-
             val backupMessages = msgs.map { m ->
                 BackupMessage(
                     content = m.content,
@@ -214,7 +161,7 @@ class CloudSyncManager(
             )
         }
 
-        val backupData = BackupData(
+        return BackupData(
             version = 1,
             exportedAt = System.currentTimeMillis(),
             modelGroups = groups,
@@ -222,100 +169,60 @@ class CloudSyncManager(
             selectedModelId = selectedModelId,
             conversations = backupConversations
         )
-
-        android.util.Log.d("CloudSyncManager", "Local backup collected: version=${backupData.version}, exportedAt=${backupData.exportedAt}")
-        return backupData
     }
 
-    // 优化后的合并逻辑：只增加，不删除，不覆盖已存在的（除非我们引入版本号对比）
     private suspend fun mergeRemoteIntoLocal(remote: BackupData) {
-        android.util.Log.d("CloudSyncManager", "Starting merge remote into local: remote conversations=${remote.conversations.size}, modelGroups=${remote.modelGroups.size}, models=${remote.models.size}")
-
         // 1. 合并模型分组
-        val localGroups = modelDao.getAllGroups().first().toMutableList()
-        android.util.Log.d("CloudSyncManager", "Local groups before merge: ${localGroups.size}")
+        val localGroups = modelDao.getAllGroups().first()
         val nameToGroup = localGroups.associateBy { it.name }.toMutableMap()
 
         remote.modelGroups.forEach { rg ->
             val existing = nameToGroup[rg.name]
             val targetGroupId = if (existing == null) {
-                // 本地没有这个组，插入
-                android.util.Log.d("CloudSyncManager", "Inserting new model group: ${rg.name}")
                 modelDao.insertGroup(rg)
                 nameToGroup[rg.name] = rg
                 rg.id
             } else {
-                // 本地已有同名组，使用本地的 ID
-                android.util.Log.d("CloudSyncManager", "Using existing model group: ${rg.name} (id: ${existing.id})")
                 existing.id
             }
 
-            // 合并模型
             val localModels = modelDao.getModelsByGroupId(targetGroupId).first()
-            android.util.Log.d("CloudSyncManager", "Local models in group ${rg.name}: ${localModels.size}")
-            val nameToModel = localModels.associateBy { it.name }.toMutableMap() // 使用 name 或 modelName 判重
+            val nameToModel = localModels.associateBy { it.name }.toMutableMap()
 
             remote.models.filter { it.groupId == rg.id }.forEach { rm ->
-                // 只有当本地没有这个模型时才插入
                 if (nameToModel[rm.name] == null && nameToModel.values.none { it.modelName == rm.modelName }) {
-                    android.util.Log.d("CloudSyncManager", "Inserting new model: ${rm.name} (${rm.modelName})")
                     val newModel = rm.copy(groupId = targetGroupId)
                     modelDao.insertModel(newModel)
                     nameToModel[rm.name] = newModel
-                } else {
-                    android.util.Log.d("CloudSyncManager", "Skipping existing model: ${rm.name}")
                 }
             }
         }
 
-        // 2. 合并选中的模型 (仅当本地未选择时才采纳云端，避免覆盖用户刚切换的模型)
+        // 2. 合并选中的模型
         val currentSelected = modelPreferences.selectedModelId.first()
         if (currentSelected.isNullOrBlank() && !remote.selectedModelId.isNullOrBlank()) {
-             // 注意：这里需要确保 remote.selectedModelId 对应的模型已经在上面被插入到数据库了
-             // 简单起见，如果云端有记录且本地为空，尝试恢复
-             try { modelPreferences.setSelectedModelId(remote.selectedModelId) } catch (_: Exception) { }
+            try { modelPreferences.setSelectedModelId(remote.selectedModelId) } catch (_: Exception) { }
         }
 
         // 3. 合并会话
         val localConversations = chatDao.getAllConversations().first().toMutableList()
-        
+
         remote.conversations.forEach { rc ->
-            // 跳过云端备份中“空会话”（无任何消息且计数为0），避免应用启动时产生空白对话记录
-            if (rc.messageCount == 0 && rc.messages.isEmpty()) {
-                return@forEach
-            }
-            // 尝试通过标题和最后消息时间模糊匹配找到本地对应的会话
-            val matched = localConversations.firstOrNull { lc ->
-                // 匹配规则：标题相同，或者（如果标题是默认的）内容高度重叠
-                // 这里简化为标题相同且时间相差不大，或者是完全一样的内容
-                lc.title == rc.title
-            }
-            
+            if (rc.messageCount == 0 && rc.messages.isEmpty()) return@forEach
+
+            val matched = localConversations.firstOrNull { lc -> lc.title == rc.title }
+
             val convId = if (matched == null) {
-                // 本地完全没有这个会话 -> 插入新会话
-                android.util.Log.d("CloudSyncManager", "Inserting new conversation: ${rc.title}")
                 val newId = chatDao.insertConversation(
-                    Conversation(
+                    com.glassous.aime.data.Conversation(
                         title = rc.title,
                         lastMessage = rc.lastMessage,
                         lastMessageTime = Date(rc.lastMessageTime),
                         messageCount = rc.messageCount
                     )
                 )
-                android.util.Log.d("CloudSyncManager", "Conversation inserted with ID: $newId")
-
-                // 验证插入是否成功
-                val insertedConv = chatDao.getConversation(newId)
-                if (insertedConv == null) {
-                    android.util.Log.e("CloudSyncManager", "Failed to insert conversation: ${rc.title}")
-                    return@forEach
-                } else {
-                    android.util.Log.d("CloudSyncManager", "Conversation insertion verified: ${insertedConv.title}")
-                }
-
-                // 更新内存中的列表避免重复插入
                 localConversations.add(
-                    Conversation(
+                    com.glassous.aime.data.Conversation(
                         id = newId,
                         title = rc.title,
                         lastMessage = rc.lastMessage,
@@ -325,13 +232,10 @@ class CloudSyncManager(
                 )
                 newId
             } else {
-                android.util.Log.d("CloudSyncManager", "Using existing conversation: ${matched.title} (id: ${matched.id})")
                 matched.id
             }
 
-            // 合并消息：只插入本地缺失的消息
             val localMessages = chatDao.getMessagesForConversation(convId).first()
-            // 使用更可靠的去重方法：内容 + 时间戳（秒级） + 发送方
             val localMessageKeys = localMessages.map { msg ->
                 "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}"
             }.toSet()
@@ -339,46 +243,25 @@ class CloudSyncManager(
             var hasNewMessage = false
             rc.messages.forEach { rm ->
                 val rmKey = "${rm.content.trim()}_${rm.timestamp / 1000}_${rm.isFromUser}"
-
-                // 检查是否已存在相同的消息
                 if (rmKey !in localMessageKeys) {
-                    try {
-                        android.util.Log.d("CloudSyncManager", "Attempting to insert message: ${rm.content.take(50)}...")
-                        val messageId = chatDao.insertMessage(
-                            ChatMessage(
-                                conversationId = convId,
-                                content = rm.content,
-                                isFromUser = rm.isFromUser,
-                                timestamp = Date(rm.timestamp),
-                                isError = rm.isError ?: false
-                            )
+                    chatDao.insertMessage(
+                        com.glassous.aime.data.ChatMessage(
+                            conversationId = convId,
+                            content = rm.content,
+                            isFromUser = rm.isFromUser,
+                            timestamp = Date(rm.timestamp),
+                            isError = rm.isError ?: false
                         )
-                        android.util.Log.d("CloudSyncManager", "Message inserted with ID: $messageId")
-
-                        // 验证消息插入是否成功
-                        val insertedMsg = chatDao.getMessageById(messageId)
-                        if (insertedMsg == null) {
-                            android.util.Log.e("CloudSyncManager", "Failed to verify message insertion: ID $messageId")
-                        } else {
-                            android.util.Log.d("CloudSyncManager", "Message insertion verified: ${insertedMsg.content.take(50)}...")
-                            hasNewMessage = true
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.w("CloudSyncManager", "Failed to insert remote message", e)
-                    }
-                } else {
-                    android.util.Log.d("CloudSyncManager", "Skipped duplicate message: ${rm.content.take(50)}...")
+                    )
+                    hasNewMessage = true
                 }
             }
 
-            // 如果插入了新历史消息，可能需要刷新会话的 LastMessage
             if (hasNewMessage) {
                 val last = chatDao.getLastMessage(convId)
                 val count = chatDao.getMessageCount(convId)
                 val current = chatDao.getConversation(convId)
                 if (current != null && last != null) {
-                    // 只有当云端的最后一条消息比本地现在的更晚时，才更新会话预览
-                    // 这样防止把用户刚发的“新消息”的预览覆盖成旧的
                     if (last.timestamp.time > current.lastMessageTime.time) {
                         chatDao.updateConversation(
                             current.copy(
@@ -388,7 +271,6 @@ class CloudSyncManager(
                             )
                         )
                     } else {
-                        // 仅更新计数
                         chatDao.updateConversation(current.copy(messageCount = count))
                     }
                 }

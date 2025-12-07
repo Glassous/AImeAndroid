@@ -23,7 +23,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     // 注册：支持安全问题
     fun register(email: String, password: String, question: String = "", answer: String = "", onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, session, msg) = service.signUp(email, password, question, answer)
+            val result = service.signUp(email, password, question, answer)
+            val ok = result.first
+            val session = result.second
+            val msg = result.third
+
             if (ok && session != null) {
                 app.authPreferences.setSession(
                     session.sessionToken,
@@ -45,7 +49,11 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun login(email: String, password: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, session, msg) = service.login(email, password)
+            val result = service.login(email, password)
+            val ok = result.first
+            val session = result.second
+            val msg = result.third
+
             if (ok && session != null) {
                 app.authPreferences.setSession(
                     session.sessionToken,
@@ -70,20 +78,20 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     // 获取安全问题
     fun fetchSecurityQuestion(email: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, result) = service.getSecurityQuestion(email)
-            onResult(ok, result)
+            val result = service.getSecurityQuestion(email)
+            onResult(result.first, result.second)
         }
     }
 
     // 使用安全问题答案重置密码
     fun resetPasswordWithAnswer(email: String, answer: String, newPassword: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, msg) = service.resetPasswordWithAnswer(email, answer, newPassword)
-            onResult(ok, msg)
+            val result = service.resetPasswordWithAnswer(email, answer, newPassword)
+            onResult(result.first, result.second)
         }
     }
 
-    // 修复：添加 updateSecurityQuestion 方法
+    // 验证密码并更新安全问题
     fun updateSecurityQuestion(password: String, question: String, answer: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             val currentEmail = email.firstOrNull()
@@ -91,24 +99,24 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 onResult(false, "未登录")
                 return@launch
             }
-            val (ok, msg) = service.updateSecurityQuestion(currentEmail, password, question, answer)
-            onResult(ok, msg)
+            val result = service.updateSecurityQuestion(currentEmail, password, question, answer)
+            onResult(result.first, result.second)
         }
     }
 
     // 兼容旧的 recover 方法
     fun recover(email: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, msg) = service.recover(email)
-            onResult(ok, msg)
+            val result = service.recover(email)
+            onResult(result.first, result.second)
         }
     }
 
     // 兼容旧的 resetPassword 方法
     fun resetPassword(email: String, newPassword: String, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
-            val (ok, msg) = service.resetPassword(email, newPassword)
-            onResult(ok, msg)
+            val result = service.resetPassword(email, newPassword)
+            onResult(result.first, result.second)
         }
     }
 
@@ -129,11 +137,14 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 手动同步数据
+    // 手动同步数据 - 修复了解构声明歧义
     fun manualSync(onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val (success, message) = app.cloudSyncManager.manualSync()
+                // 显式访问 Pair 的属性，避免解构歧义
+                val result = app.cloudSyncManager.manualSync()
+                val success = result.first
+                val message = result.second
                 onResult(success, message)
             } catch (e: Exception) {
                 onResult(false, "同步失败：${e.message}")
