@@ -9,7 +9,15 @@ class HtmlPreviewViewModel : ViewModel() {
     private val _htmlCode = MutableLiveData("")
     val htmlCode: LiveData<String> = _htmlCode
     
+    // 用于存储预览模式，true为源码模式，false为预览模式
+    private val _isSourceMode = MutableLiveData(false)
+    val isSourceMode: LiveData<Boolean> = _isSourceMode
+    
     fun setHtmlCode(code: String) {
         _htmlCode.value = code
+    }
+    
+    fun setIsSourceMode(isSource: Boolean) {
+        _isSourceMode.value = isSource
     }
 }

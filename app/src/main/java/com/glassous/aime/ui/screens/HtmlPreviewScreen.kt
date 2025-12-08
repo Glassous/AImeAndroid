@@ -27,13 +27,14 @@ import android.webkit.WebViewClient
 @Composable
 fun HtmlPreviewScreen(
     htmlCode: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    isSourceMode: Boolean
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var isLoading by remember { mutableStateOf(true) }
     var showCopiedFeedback by remember { mutableStateOf(false) }
-    var isSourceMode by remember { mutableStateOf(false) }
+    var localIsSourceMode by remember { mutableStateOf(isSourceMode) }
 
     // 复制HTML代码到剪贴板
     fun copyHtmlCode() {
@@ -59,28 +60,28 @@ fun HtmlPreviewScreen(
                 actions = {
                     // 预览模式按钮
                     IconButton(
-                        onClick = { isSourceMode = false },
+                        onClick = { localIsSourceMode = false },
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = if (!isSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                            containerColor = if (!localIsSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Icon(
                             Icons.Filled.Visibility,
                             contentDescription = "预览模式",
-                            tint = if (!isSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (!localIsSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     // 源码模式按钮
                     IconButton(
-                        onClick = { isSourceMode = true },
+                        onClick = { localIsSourceMode = true },
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = if (isSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                            containerColor = if (localIsSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
                         )
                     ) {
                         Icon(
                             Icons.Filled.Code,
                             contentDescription = "源码模式",
-                            tint = if (isSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (localIsSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     // 复制按钮
@@ -98,7 +99,7 @@ fun HtmlPreviewScreen(
                 }
             )
         },
-        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+        contentWindowInsets = WindowInsets.navigationBars // 使用默认的导航栏insets
     ) {
         Box(
             modifier = Modifier
@@ -109,14 +110,14 @@ fun HtmlPreviewScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 // 加载状态指示器
-                if (isLoading && !isSourceMode) {
+                if (isLoading && !localIsSourceMode) {
                     LinearProgressIndicator(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
                 // 根据模式显示不同内容
-                if (isSourceMode) {
+                if (localIsSourceMode) {
                     // 源码模式：显示HTML代码
                     Box(
                         modifier = Modifier
@@ -134,7 +135,7 @@ fun HtmlPreviewScreen(
                                     start = 16.dp,
                                     end = 16.dp,
                                     top = 16.dp,
-                                    bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                    bottom = 16.dp // 移除过大的底部内边距
                                 )
                                 .verticalScroll(rememberScrollState())
                         )
@@ -155,6 +156,8 @@ fun HtmlPreviewScreen(
                                 settings.supportZoom()
                                 settings.builtInZoomControls = true
                                 settings.displayZoomControls = false
+                                // 允许WebView显示HTML背景颜色
+                                setBackgroundColor(0x00000000) // 设置透明背景
                                 webViewRef = this
                             }
                         },

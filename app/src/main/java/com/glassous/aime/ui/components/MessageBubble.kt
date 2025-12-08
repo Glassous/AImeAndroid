@@ -90,7 +90,7 @@ fun MessageBubble(
                     ),
                     color = when {
                         message.isError -> MaterialTheme.colorScheme.errorContainer
-                        message.isFromUser -> MaterialTheme.colorScheme.primary
+                        message.isFromUser -> MaterialTheme.colorScheme.primaryContainer
                         else -> MaterialTheme.colorScheme.surfaceContainer
                     },
                     tonalElevation = 1.dp
@@ -100,7 +100,7 @@ fun MessageBubble(
                     ) {
                         val textColor = when {
                             message.isError -> MaterialTheme.colorScheme.onErrorContainer
-                            message.isFromUser -> MaterialTheme.colorScheme.onPrimary
+                            message.isFromUser -> MaterialTheme.colorScheme.onPrimaryContainer
                             else -> MaterialTheme.colorScheme.onSurface
                         }
                         val textSizeSp = chatFontSize

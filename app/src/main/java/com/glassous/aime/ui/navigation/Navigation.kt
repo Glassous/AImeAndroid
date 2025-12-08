@@ -55,13 +55,15 @@ fun AppNavigation() {
                     navController.navigate("${Screen.MessageDetail.route}/$id")
                 },
                 onNavigateToHtmlPreview = { htmlCode ->
-                    // 将HTML代码存储到共享ViewModel中，然后导航
+                    // 将HTML代码存储到共享ViewModel中，设置为预览模式，然后导航
                     htmlPreviewViewModel.setHtmlCode(htmlCode)
+                    htmlPreviewViewModel.setIsSourceMode(false)
                     navController.navigate(Screen.HtmlPreview.route)
                 },
                 onNavigateToHtmlPreviewSource = { htmlCode ->
-                    // 将HTML代码存储到共享ViewModel中，然后导航
+                    // 将HTML代码存储到共享ViewModel中，设置为源码模式，然后导航
                     htmlPreviewViewModel.setHtmlCode(htmlCode)
+                    htmlPreviewViewModel.setIsSourceMode(true)
                     navController.navigate(Screen.HtmlPreview.route)
                 },
                 modelSelectionViewModel = modelSelectionViewModel,
@@ -95,7 +97,8 @@ fun AppNavigation() {
         ) {
             HtmlPreviewScreen(
                 htmlCode = htmlPreviewViewModel.htmlCode.value.orEmpty(),
-                onNavigateBack = { navController.popBackStack() }
+                onNavigateBack = { navController.popBackStack() },
+                isSourceMode = htmlPreviewViewModel.isSourceMode.value ?: false
             )
         }
     }

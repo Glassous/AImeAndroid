@@ -70,10 +70,12 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             combine(
                 themePreferences.selectedTheme,
-                themePreferences.monochromeTheme
-            ) { theme, mono ->
+                themePreferences.monochromeTheme,
+                themePreferences.themeAdvancedExpanded // 添加主题高级选项展开状态
+            ) { theme, mono, expanded ->
                 _selectedTheme.value = theme
                 _monochromeTheme.value = mono
+                _themeAdvancedExpanded.value = expanded // 优先设置展开状态，避免进入页面时的动画
                 true // 标记为已加载
             }.collect {
                 // 只有当数据真正发射出来后，才设置 ready
@@ -81,8 +83,7 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 其他非阻塞性的配置可以单独加载，或者为了防止布局跳动，也可以考虑合并进去
-        // 这里保持原样以简化逻辑，主要解决颜色闪烁
+        // 其他非阻塞性的配置可以单独加载
         viewModelScope.launch {
             themePreferences.minimalMode.collect { enabled -> _minimalMode.value = enabled }
         }
@@ -112,9 +113,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch {
             themePreferences.hideImportSharedButton.collect { enabled -> _hideImportSharedButton.value = enabled }
-        }
-        viewModelScope.launch {
-            themePreferences.themeAdvancedExpanded.collect { expanded -> _themeAdvancedExpanded.value = expanded }
         }
         viewModelScope.launch {
             themePreferences.minimalModeConfig.collect { config -> _minimalModeConfig.value = config }
