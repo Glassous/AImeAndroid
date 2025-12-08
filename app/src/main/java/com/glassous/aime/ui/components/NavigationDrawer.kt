@@ -58,69 +58,55 @@ fun NavigationDrawer(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            // Header
-            Text(
-                text = "AIme",
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontFamily = FontFamily.Cursive
-                ),
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
             var showImportDialog by remember { mutableStateOf(false) }
             var importCode by remember { mutableStateOf("") }
-            // New + Import buttons in one row
+            // Header with AIme text and buttons in one row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(bottom = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (hideImportSharedButton) {
-                    FilledTonalButton(
+                Text(
+                    text = "AIme",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontFamily = FontFamily.Cursive
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                
+                // Buttons section
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (!hideImportSharedButton) {
+                        IconButton(
+                            onClick = { showImportDialog = true },
+                            modifier = Modifier.size(40.dp), // 1:1 square
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "获取分享的对话",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                    IconButton(
                         onClick = onNewConversation,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp)
+                        modifier = Modifier.size(40.dp), // 1:1 square
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
                             contentDescription = "新建对话",
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("新建对话")
-                    }
-                } else {
-                    OutlinedButton(
-                        onClick = { showImportDialog = true },
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "获取分享的对话",
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    FilledTonalButton(
-                        onClick = onNewConversation,
-                        modifier = Modifier
-                            .weight(3f)
-                            .height(44.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "新建对话",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("新建对话")
                     }
                 }
             }
