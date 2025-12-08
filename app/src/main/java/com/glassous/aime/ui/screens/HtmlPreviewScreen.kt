@@ -99,7 +99,7 @@ fun HtmlPreviewScreen(
                 }
             )
         },
-        contentWindowInsets = WindowInsets.navigationBars // 使用默认的导航栏insets
+        contentWindowInsets = WindowInsets(0, 0, 0, 0) // 禁用自动inset处理，手动添加padding
     ) {
         Box(
             modifier = Modifier
@@ -134,38 +134,44 @@ fun HtmlPreviewScreen(
                                 .padding(
                                     start = 16.dp,
                                     end = 16.dp,
-                                    top = 16.dp,
-                                    bottom = 16.dp // 移除过大的底部内边距
+                                    top = 16.dp
+                                    // 移除底部内边距
                                 )
                                 .verticalScroll(rememberScrollState())
                         )
                     }
                 } else {
                     // 预览模式：显示WebView
-                    AndroidView(
-                        factory = {
-                            WebView(context).apply {
-                                webViewClient = object : WebViewClient() {
-                                    override fun onPageFinished(view: WebView?, url: String?) {
-                                        isLoading = false
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            // 移除底部内边距
+                    ) {
+                        AndroidView(
+                            factory = {
+                                WebView(context).apply {
+                                    webViewClient = object : WebViewClient() {
+                                        override fun onPageFinished(view: WebView?, url: String?) {
+                                            isLoading = false
+                                        }
                                     }
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.allowFileAccess = true
+                                    settings.supportZoom()
+                                    settings.builtInZoomControls = true
+                                    settings.displayZoomControls = false
+                                    // 允许WebView显示HTML背景颜色
+                                    setBackgroundColor(0x00000000) // 设置透明背景
+                                    webViewRef = this
                                 }
-                                settings.javaScriptEnabled = true
-                                settings.domStorageEnabled = true
-                                settings.allowFileAccess = true
-                                settings.supportZoom()
-                                settings.builtInZoomControls = true
-                                settings.displayZoomControls = false
-                                // 允许WebView显示HTML背景颜色
-                                setBackgroundColor(0x00000000) // 设置透明背景
-                                webViewRef = this
-                            }
-                        },
-                        update = {
-                            it.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+                            },
+                            update = {
+                                it.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
 
