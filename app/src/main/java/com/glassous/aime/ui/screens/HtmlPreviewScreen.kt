@@ -6,6 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Code
@@ -33,19 +34,39 @@ fun HtmlPreviewScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var isLoading by remember { mutableStateOf(true) }
-    var showCopiedFeedback by remember { mutableStateOf(false) }
+    var showCopiedIcon by remember { mutableStateOf(false) }
     var localIsSourceMode by remember { mutableStateOf(isSourceMode) }
 
     // 复制HTML代码到剪贴板
     fun copyHtmlCode() {
         clipboardManager.setText(AnnotatedString(htmlCode))
-        showCopiedFeedback = true
+        showCopiedIcon = true
+    }
+
+    // 3秒后恢复复制图标
+    LaunchedEffect(showCopiedIcon) {
+        if (showCopiedIcon) {
+            kotlinx.coroutines.delay(3000)
+            showCopiedIcon = false
+        }
     }
 
     // 刷新WebView
     var webViewRef by remember { mutableStateOf<WebView?>(null) }
     fun refreshWebView() {
         webViewRef?.reload()
+    }
+
+    // 加载HTML内容
+    fun loadHtmlContent() {
+        webViewRef?.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
+    }
+
+    // 当切换到预览模式时加载HTML内容
+    LaunchedEffect(localIsSourceMode) {
+        if (!localIsSourceMode) {
+            loadHtmlContent()
+        }
     }
 
     Scaffold(
@@ -87,9 +108,9 @@ fun HtmlPreviewScreen(
                     // 复制按钮
                     IconButton(onClick = { copyHtmlCode() }) {
                         Icon(
-                            Icons.Filled.ContentCopy,
-                            contentDescription = "复制HTML代码",
-                            tint = if (showCopiedFeedback) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                            if (showCopiedIcon) Icons.Filled.Done else Icons.Filled.ContentCopy,
+                            contentDescription = if (showCopiedIcon) "已复制" else "复制HTML代码",
+                            tint = if (showCopiedIcon) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                         )
                     }
                     // 刷新按钮
@@ -167,29 +188,11 @@ fun HtmlPreviewScreen(
                                 }
                             },
                             update = {
-                                it.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
+                                // 移除自动加载，改为通过LaunchedEffect加载
                             },
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                }
-            }
-
-            // 复制成功提示
-            if (showCopiedFeedback) {
-                LaunchedEffect(Unit) {
-                    kotlinx.coroutines.delay(2000)
-                    showCopiedFeedback = false
-                }
-                Snackbar(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(
-                            bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                        ),
-                    action = {}
-                ) {
-                    Text("HTML 代码已复制到剪贴板")
                 }
             }
         }
