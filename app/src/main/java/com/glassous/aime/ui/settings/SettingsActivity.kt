@@ -293,141 +293,132 @@ fun SettingsContent(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
+                    // --- 主题样式选择 ---
+                    Text(text = "主题样式", style = MaterialTheme.typography.titleSmall)
                     Row(
-                        modifier = Modifier.fillMaxWidth()
-                            .clickable { themeViewModel.setThemeAdvancedExpanded(!themeAdvancedExpanded) },
+                        modifier = Modifier.fillMaxWidth().selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val styleOptions = listOf(
+                            false to "Material You",
+                            true to "经典"
+                        )
+
+                        styleOptions.forEach { (value, label) ->
+                            val isSelected = monochromeTheme == value
+                            FilterChip(
+                                onClick = { themeViewModel.setMonochromeTheme(value) },
+                                label = { Text(text = label, style = MaterialTheme.typography.labelMedium) },
+                                selected = isSelected,
+                                modifier = Modifier.weight(1f).selectable(
+                                    selected = isSelected,
+                                    onClick = { themeViewModel.setMonochromeTheme(value) },
+                                    role = Role.RadioButton
+                                ),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // --- HTML代码块卡片显示开关 ---
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text(text = "更多主题选项", style = MaterialTheme.typography.titleSmall)
-                        Icon(
-                            imageVector = if (themeAdvancedExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = null
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "HTML代码块卡片显示", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "将HTML代码块显示为卡片样式",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = htmlCodeBlockCardEnabled,
+                            onCheckedChange = { themeViewModel.setHtmlCodeBlockCardEnabled(it) }
                         )
                     }
 
-                    AnimatedVisibility(
-                        visible = themeAdvancedExpanded,
-                        enter = expandVertically() + fadeIn(),
-                        exit = shrinkVertically() + fadeOut()
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // 极简模式开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { showMinimalModeConfigDialog = true },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Column {
-                            // --- 黑白主题开关 ---
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "黑白主题", style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        text = "使用纯黑/白高对比度配色，禁用动态取色",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = monochromeTheme,
-                                    onCheckedChange = { themeViewModel.setMonochromeTheme(it) }
-                                )
-                            }
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "极简模式", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "点击配置隐藏的界面元素",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = minimalMode,
+                            onCheckedChange = { themeViewModel.setMinimalMode(it) }
+                        )
+                    }
 
-                            // --- HTML代码块卡片显示开关 ---
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "HTML代码块卡片显示", style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        text = "将HTML代码块显示为卡片样式，包含预览和源码按钮",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = htmlCodeBlockCardEnabled,
-                                    onCheckedChange = { themeViewModel.setHtmlCodeBlockCardEnabled(it) }
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // 极简模式开关
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { showMinimalModeConfigDialog = true },
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "极简模式", style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        text = "点击配置隐藏的界面元素",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                Switch(
-                                    checked = minimalMode,
-                                    onCheckedChange = { themeViewModel.setMinimalMode(it) }
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // 回复气泡开关
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "启用回复气泡", style = MaterialTheme.typography.titleSmall)
-                                }
-                                Switch(
-                                    checked = replyBubbleEnabled,
-                                    onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            // 分享按钮开关
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "显示“获取分享对话”按钮", style = MaterialTheme.typography.titleSmall)
-                                }
-                                Switch(
-                                    checked = !hideImportSharedButton,
-                                    onCheckedChange = { themeViewModel.setHideImportSharedButton(!it) }
-                                )
-                            }
-                            // 字体设置入口
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { showFontSizeDialog = true }.padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "修改聊天字体大小", style = MaterialTheme.typography.titleSmall)
-                                    Text(
-                                        text = "${chatFontSize.toInt()}sp",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            // 透明度设置入口
-                            Row(
-                                modifier = Modifier.fillMaxWidth().clickable { showTransparencyDialog = true }.padding(vertical = 12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(text = "修改聊天页面组件透明度", style = MaterialTheme.typography.titleSmall)
-                                }
-                            }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // 回复气泡开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "启用回复气泡", style = MaterialTheme.typography.titleSmall)
+                        }
+                        Switch(
+                            checked = replyBubbleEnabled,
+                            onCheckedChange = { themeViewModel.setReplyBubbleEnabled(it) }
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    // 分享按钮开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "显示“获取分享对话”按钮", style = MaterialTheme.typography.titleSmall)
+                        }
+                        Switch(
+                            checked = !hideImportSharedButton,
+                            onCheckedChange = { themeViewModel.setHideImportSharedButton(!it) }
+                        )
+                    }
+                    // 字体设置入口
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { showFontSizeDialog = true }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "修改聊天字体大小", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "${chatFontSize.toInt()}sp",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    // 透明度设置入口
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clickable { showTransparencyDialog = true }.padding(vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(text = "修改聊天页面组件透明度", style = MaterialTheme.typography.titleSmall)
                         }
                     }
                 }
