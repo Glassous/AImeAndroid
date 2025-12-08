@@ -28,10 +28,20 @@ import androidx.compose.ui.platform.LocalContext
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.core.content.FileProvider
+import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,7 +85,7 @@ fun NavigationDrawer(
                     ),
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                
+
                 // Buttons section
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -121,15 +131,13 @@ fun NavigationDrawer(
                 }
             }
 
-            // Removed standalone import button; now combined with new button row above
-
             // Conversations List
             if (conversations.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp) // 增加间距以适应滑动操作
                 ) {
-                    items(conversations) { conversation ->
+                    items(conversations, key = { it.id }) { conversation ->
                         ConversationItem(
                             conversation = conversation,
                             isSelected = conversation.id == currentConversationId,
@@ -232,16 +240,15 @@ private fun ConversationItem(
     onShare: (Long, (String?) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val dateFormat = SimpleDateFormat("MM/dd HH:mm", Locale.getDefault())
-    var isExpanded by remember { mutableStateOf(false) }
     var isEditing by remember { mutableStateOf(false) }
     var editingTitle by remember { mutableStateOf(conversation.title) }
-    // 新增：删除确认弹窗状态
+
+    // 弹窗状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showShareDialog by remember { mutableStateOf(false) }
     var shareCode by remember { mutableStateOf<String?>(null) }
     var shareJson by remember { mutableStateOf<String>("") }
-    val clipboard = LocalClipboardManager.current
+
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
@@ -251,271 +258,275 @@ private fun ConversationItem(
             showShareDialog = false
         }
     }
-    
-    Card(
-        onClick = { 
-            if (!isExpanded && !isEditing) {
-                onSelect()
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 2.dp else 0.dp
-        )
+
+    // 滑动相关状态
+    val density = LocalDensity.current
+    val actionWidth = 150.dp // 三个按钮的总宽度
+    val actionWidthPx = with(density) { actionWidth.toPx() }
+    val offsetX = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(IntrinsicSize.Min) // 确保高度一致
     ) {
-        Column {
+        // --- 底层：操作按钮区域 ---
+        Row(
+            modifier = Modifier
+                .align(Alignment.CenterStart) // 改为左侧对齐
+                .width(actionWidth)
+                .fillMaxHeight()
+                .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp))
+                .padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 编辑按钮
+            IconButton(
+                onClick = {
+                    scope.launch { offsetX.animateTo(0f) }
+                    isEditing = true
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "重命名",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // 删除按钮
+            IconButton(
+                onClick = {
+                    scope.launch { offsetX.animateTo(0f) }
+                    showDeleteConfirm = true
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "删除",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            // 分享按钮
+            IconButton(
+                onClick = {
+                    scope.launch { offsetX.animateTo(0f) } // 点击后关闭侧滑
+                    onShare(conversation.id) { code ->
+                        shareCode = code
+                        if (code != null) {
+                            try {
+                                shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
+                            } catch (_: Exception) {
+                                shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
+                            }
+                        } else {
+                            shareJson = ""
+                        }
+                        showShareDialog = true
+                    }
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "分享",
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        // --- 顶层：对话内容卡片 ---
+        Card(
+            onClick = {
+                // 如果处于滑动打开状态(向右偏移)，点击则关闭；否则执行选中
+                if (offsetX.value > 10f) {
+                    scope.launch { offsetX.animateTo(0f) }
+                } else if (!isEditing) {
+                    onSelect()
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
+                .draggable(
+                    orientation = Orientation.Horizontal,
+                    enabled = !isEditing, // 编辑标题时禁用滑动
+                    state = rememberDraggableState { delta ->
+                        scope.launch {
+                            // 限制只能向右滑动，最大不超过按钮宽度
+                            val newOffset = (offsetX.value + delta).coerceIn(0f, actionWidthPx)
+                            offsetX.snapTo(newOffset)
+                        }
+                    },
+                    onDragStopped = {
+                        // 释放时根据位置自动吸附：超过一半则展开，否则收起
+                        val target = if (offsetX.value > actionWidthPx / 2) actionWidthPx else 0f
+                        scope.launch {
+                            offsetX.animateTo(
+                                targetValue = target,
+                                animationSpec = tween(durationMillis = 300)
+                            )
+                        }
+                    }
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isSelected) {
+                    MaterialTheme.colorScheme.primaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surface
+                }
+            ),
+            shape = RoundedCornerShape(12.dp),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = if (isSelected) 2.dp else 0.dp
+            )
+        ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp),
+                    .padding(16.dp), // 增加内边距，移除原来右侧的箭头空间
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    if (isEditing) {
-                        OutlinedTextField(
-                            value = editingTitle,
-                            onValueChange = { editingTitle = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyMedium,
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                                unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                            )
-                        )
-                    } else {
-                        Text(
-                            text = conversation.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            },
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    // 删除回答与时间戳展示，仅保留标题
-                    // (移除原先的 lastMessage 与 lastMessageTime 文本块)
-
-                }
-
                 if (isEditing) {
-                    Row {
-                        IconButton(
-                            onClick = {
-                                onEditTitle(conversation.id, editingTitle)
-                                isEditing = false
-                                isExpanded = false
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "确认编辑",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                editingTitle = conversation.title
-                                isEditing = false
-                            },
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "取消编辑",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                } else {
+                    OutlinedTextField(
+                        value = editingTitle,
+                        onValueChange = { editingTitle = it },
+                        modifier = Modifier.weight(1f),
+                        textStyle = MaterialTheme.typography.bodyMedium,
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
+                        )
+                    )
+
+                    // 编辑状态下的确认/取消按钮
                     IconButton(
-                        onClick = { 
-                            isExpanded = !isExpanded
+                        onClick = {
+                            onEditTitle(conversation.id, editingTitle)
+                            isEditing = false
                         },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                            contentDescription = if (isExpanded) "折叠" else "展开",
-                            tint = if (isSelected) {
-                                MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                            },
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "确认",
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(16.dp)
                         )
                     }
+                    IconButton(
+                        onClick = {
+                            editingTitle = conversation.title
+                            isEditing = false
+                        },
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "取消",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                } else {
+                    Text(
+                        text = conversation.title,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (isSelected) {
+                            MaterialTheme.colorScheme.onPrimaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
-            }
-            
-            // 展开的编辑和删除选项（加入平滑动画）
-            AnimatedVisibility(
-                visible = isExpanded && !isEditing,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = {
-                            isEditing = true
-                            isExpanded = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    
-                    OutlinedButton(
-                        onClick = {
-                            showDeleteConfirm = true
-                            isExpanded = false
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            onShare(conversation.id) { code ->
-                                shareCode = code
-                                if (code != null) {
-                                    try {
-                                        shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
-                                    } catch (_: Exception) {
-                                        shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
-                                    }
-                                } else {
-                                    shareJson = ""
-                                }
-                                showShareDialog = true
-                                isExpanded = false
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.secondary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-            
-            // 删除确认弹窗
-            if (showDeleteConfirm) {
-                AlertDialog(
-                    onDismissRequest = { showDeleteConfirm = false },
-                    title = { Text("确认删除对话") },
-                    text = { Text("删除后不可恢复，确定要删除该对话吗？") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                showDeleteConfirm = false
-                                onDelete()
-                            }
-                        ) {
-                            Text("删除", color = MaterialTheme.colorScheme.error)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(
-                            onClick = { showDeleteConfirm = false }
-                        ) {
-                            Text("取消")
-                        }
-                    }
-                )
-            }
-
-            if (showShareDialog) {
-                AlertDialog(
-                    onDismissRequest = { showShareDialog = false },
-                    title = { Text("分享对话") },
-                    text = {
-                        Column {
-                            val scrollState = rememberScrollState()
-                            Box(
-                                modifier = Modifier
-                                    .heightIn(max = 240.dp)
-                                    .verticalScroll(scrollState)
-                            ) {
-                                Text(
-                                    text = conversation.title,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = {
-                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                                    exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                                }
-                            ) { Text("导出JSON") }
-                            TextButton(
-                                onClick = {
-                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                                    val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                                    cacheFile.writeText(shareJson, Charsets.UTF_8)
-                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
-                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "application/json"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
-                                    showShareDialog = false
-                                }
-                            ) { Text("分享") }
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showShareDialog = false }) { Text("关闭") }
-                    }
-                )
             }
         }
+    }
+
+    // 删除确认弹窗
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("确认删除对话") },
+            text = { Text("删除后不可恢复，确定要删除该对话吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDelete()
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirm = false }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
+    // 分享弹窗
+    if (showShareDialog) {
+        AlertDialog(
+            onDismissRequest = { showShareDialog = false },
+            title = { Text("分享对话") },
+            text = {
+                Column {
+                    val scrollState = rememberScrollState()
+                    Box(
+                        modifier = Modifier
+                            .heightIn(max = 240.dp)
+                            .verticalScroll(scrollState)
+                    ) {
+                        Text(
+                            text = conversation.title,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                            exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                        }
+                    ) { Text("导出JSON") }
+                    TextButton(
+                        onClick = {
+                            val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                            val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                            cacheFile.writeText(shareJson, Charsets.UTF_8)
+                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/json"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
+                            showShareDialog = false
+                        }
+                    ) { Text("分享") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showShareDialog = false }) { Text("关闭") }
+            }
+        )
     }
 }
