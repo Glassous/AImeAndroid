@@ -45,7 +45,7 @@ import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
-import com.glassous.aime.ui.screens.ModelConfigScreen
+import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.AuthViewModel
@@ -76,14 +76,6 @@ class SettingsActivity : ComponentActivity() {
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
             val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
 
-            // 页面导航状态：是否显示模型配置页
-            var showModelConfig by remember { mutableStateOf(false) }
-
-            // 拦截系统返回键
-            BackHandler(enabled = showModelConfig) {
-                showModelConfig = false
-            }
-
             val darkTheme = when (selectedTheme) {
                 ThemePreferences.THEME_LIGHT -> false
                 ThemePreferences.THEME_DARK -> true
@@ -94,16 +86,13 @@ class SettingsActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 isMonochrome = monochromeTheme
             ) {
-                if (showModelConfig) {
-                    ModelConfigScreen(
-                        onNavigateBack = { showModelConfig = false }
-                    )
-                } else {
-                    SettingsContent(
-                        themeViewModel = themeViewModel,
-                        onNavigateToModelConfig = { showModelConfig = true }
-                    )
-                }
+                SettingsContent(
+                    themeViewModel = themeViewModel,
+                    onNavigateToModelConfig = { 
+                        val intent = Intent(this@SettingsActivity, ModelConfigActivity::class.java)
+                        startActivity(intent)
+                    }
+                )
             }
         }
     }

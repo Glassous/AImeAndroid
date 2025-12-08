@@ -57,6 +57,11 @@
             android:exported="false"
             android:label="设置"
             android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.screens.ModelConfigActivity"
+            android:exported="false"
+            android:label="模型配置"
+            android:theme="@style/Theme.AIme" />
     </application>
 
 </manifest>
