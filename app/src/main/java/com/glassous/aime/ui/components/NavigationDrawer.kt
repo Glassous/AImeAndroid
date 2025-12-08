@@ -58,23 +58,35 @@ fun NavigationDrawer(
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
+    // ModalDrawerSheet 默认会处理 insets，但为了让 LazyColumn 内容能滚上来，我们需要手动传递给 contentPadding
+    val windowInsets = WindowInsets.navigationBars
+
     ModalDrawerSheet(
         modifier = modifier.width(320.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
-        drawerContentColor = MaterialTheme.colorScheme.onSurface
+        drawerContentColor = MaterialTheme.colorScheme.onSurface,
+        // 将 ModalDrawerSheet 的 windowInsets 设为 0，我们自己在内部控制 Padding，
+        // 这样可以确保背景色延伸到底部，而内容通过 Padding 避开小白条
+        windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                // 顶部保留 16dp，移除底部 padding
+                // 注意：start/end 需要适配系统手势区域，但这里侧边栏已经有宽度限制，通常保留 16dp 即可
+                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp)
         ) {
             var showImportDialog by remember { mutableStateOf(false) }
             var importCode by remember { mutableStateOf("") }
+
             // Header with AIme text and buttons in one row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 16.dp),
+                    .padding(bottom = 16.dp)
+                    // 如果顶部有状态栏遮挡，也可以在这里加 WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -86,10 +98,26 @@ fun NavigationDrawer(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                // Buttons section
+                // Buttons section: 设置 -> 获取 -> 新建
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    // 1. 设置按钮
+                    IconButton(
+                        onClick = onNavigateToSettings,
+                        modifier = Modifier.size(40.dp), // 1:1 square
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Settings,
+                            contentDescription = "设置",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    // 2. 获取分享按钮
                     if (!hideImportSharedButton) {
                         IconButton(
                             onClick = { showImportDialog = true },
@@ -105,6 +133,8 @@ fun NavigationDrawer(
                             )
                         }
                     }
+
+                    // 3. 新建对话按钮
                     IconButton(
                         onClick = onNewConversation,
                         modifier = Modifier.size(40.dp), // 1:1 square
@@ -131,11 +161,17 @@ fun NavigationDrawer(
                 }
             }
 
+            // 获取导航栏高度
+            val bottomPadding = windowInsets.asPaddingValues().calculateBottomPadding()
+
             // Conversations List
             if (conversations.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp) // 增加间距以适应滑动操作
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    // 关键修改：底部 Padding = 基础间距(16.dp) + 导航栏高度(bottomPadding)
+                    // 这样列表可以滚上去，避免被小白条遮挡
+                    contentPadding = PaddingValues(bottom = 16.dp + bottomPadding)
                 ) {
                     items(conversations, key = { it.id }) { conversation ->
                         ConversationItem(
@@ -165,23 +201,6 @@ fun NavigationDrawer(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-
-            // Settings Button
-            Spacer(modifier = Modifier.height(6.dp))
-
-            OutlinedButton(
-                onClick = onNavigateToSettings,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = "设置",
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("设置")
             }
 
             if (showImportDialog) {
@@ -274,7 +293,7 @@ private fun ConversationItem(
         // --- 底层：操作按钮区域 ---
         Row(
             modifier = Modifier
-                .align(Alignment.CenterStart) // 改为左侧对齐
+                .align(Alignment.CenterStart) // 左侧对齐
                 .width(actionWidth)
                 .fillMaxHeight()
                 .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp))
