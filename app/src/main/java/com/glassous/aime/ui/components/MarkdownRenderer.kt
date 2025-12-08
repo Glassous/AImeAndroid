@@ -35,7 +35,10 @@ fun MarkdownRenderer(
     textSizeSp: Float,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
-    enableTables: Boolean = true
+    enableTables: Boolean = true,
+    onHtmlPreview: ((String) -> Unit)? = null,
+    onHtmlPreviewSource: ((String) -> Unit)? = null,
+    useCardStyleForHtmlCode: Boolean = false
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
     val displayMarkdown = remember(markdown) {
@@ -99,7 +102,18 @@ fun MarkdownRenderer(
                         textSizeSp = textSizeSp,
                         modifier = Modifier
                             .wrapContentWidth()
-                            .padding(vertical = 4.dp)
+                            .padding(vertical = 4.dp),
+                        onPreview = if (onHtmlPreview != null) {
+                            { onHtmlPreview(block.content) }
+                        } else {
+                            null
+                        },
+                        onPreviewSource = if (onHtmlPreviewSource != null) {
+                            { onHtmlPreviewSource(block.content) }
+                        } else {
+                            null
+                        },
+                        useCardStyle = useCardStyleForHtmlCode
                     )
                 }
             }

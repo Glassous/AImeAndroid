@@ -24,6 +24,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _monochromeTheme = MutableStateFlow(false)
     val monochromeTheme: StateFlow<Boolean> = _monochromeTheme.asStateFlow()
+    
+    private val _htmlCodeBlockCardEnabled = MutableStateFlow(true)
+    val htmlCodeBlockCardEnabled: StateFlow<Boolean> = _htmlCodeBlockCardEnabled.asStateFlow()
 
     private val _minimalMode = MutableStateFlow(false)
     val minimalMode: StateFlow<Boolean> = _minimalMode.asStateFlow()
@@ -116,6 +119,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             themePreferences.minimalModeConfig.collect { config -> _minimalModeConfig.value = config }
         }
+        viewModelScope.launch {
+            themePreferences.htmlCodeBlockCardEnabled.collect { enabled -> _htmlCodeBlockCardEnabled.value = enabled }
+        }
     }
 
     fun setTheme(theme: String) {
@@ -187,5 +193,9 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setThemeAdvancedExpanded(expanded: Boolean) {
         viewModelScope.launch { themePreferences.setThemeAdvancedExpanded(expanded) }
+    }
+    
+    fun setHtmlCodeBlockCardEnabled(enabled: Boolean) {
+        viewModelScope.launch { themePreferences.setHtmlCodeBlockCardEnabled(enabled) }
     }
 }

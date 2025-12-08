@@ -65,6 +65,8 @@ import com.glassous.aime.data.model.ModelGroup
 @Composable
 fun ChatScreen(
     onNavigateToMessageDetail: (Long) -> Unit,
+    onNavigateToHtmlPreview: (String) -> Unit,
+    onNavigateToHtmlPreviewSource: (String) -> Unit,
     modelSelectionViewModel: ModelSelectionViewModel,
     themeViewModel: ThemeViewModel = viewModel()
 ) {
@@ -111,6 +113,8 @@ fun ChatScreen(
     val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
     val topBarModelTextAlpha by themeViewModel.topBarModelTextAlpha.collectAsState()
     val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
+    // 新增：HTML代码块卡片显示设置
+    val htmlCodeBlockCardEnabled by themeViewModel.htmlCodeBlockCardEnabled.collectAsState()
 
     // 新增：读取聊天页面单独全屏显示设置
     val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
@@ -593,6 +597,9 @@ fun ChatScreen(
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
                                 isStreaming = isStreamingMessage,
+                                onHtmlPreview = onNavigateToHtmlPreview,
+                                onHtmlPreviewSource = onNavigateToHtmlPreviewSource,
+                                useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
                                 enableTypewriterEffect = true
                             )
                         }

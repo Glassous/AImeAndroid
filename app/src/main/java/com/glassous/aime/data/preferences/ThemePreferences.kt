@@ -41,6 +41,8 @@ class ThemePreferences(private val context: Context) {
 
         // --- 新增：黑白主题开关 ---
         private val MONOCHROME_THEME = booleanPreferencesKey("monochrome_theme")
+        // --- 新增：HTML代码块卡片显示开关 ---
+        private val HTML_CODE_BLOCK_CARD_ENABLED = booleanPreferencesKey("html_code_block_card_enabled")
     }
 
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -52,6 +54,12 @@ class ThemePreferences(private val context: Context) {
     val monochromeTheme: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[MONOCHROME_THEME] ?: false
+        }
+    
+    // --- 新增：获取HTML代码块卡片显示状态 (默认为 true) ---
+    val htmlCodeBlockCardEnabled: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[HTML_CODE_BLOCK_CARD_ENABLED] ?: true
         }
 
     // 现有获取方法...
@@ -110,6 +118,11 @@ class ThemePreferences(private val context: Context) {
     // --- 新增：设置黑白主题 ---
     suspend fun setMonochromeTheme(enabled: Boolean) {
         context.dataStore.edit { preferences -> preferences[MONOCHROME_THEME] = enabled }
+    }
+    
+    // --- 新增：设置HTML代码块卡片显示 ---
+    suspend fun setHtmlCodeBlockCardEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[HTML_CODE_BLOCK_CARD_ENABLED] = enabled }
     }
 
     // 现有设置方法...

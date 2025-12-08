@@ -224,27 +224,23 @@ class SupabaseAuthService(
         android.util.Log.d("SupabaseAuthService", "Starting uploadBackup with token: ${token.take(10)}...")
         val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_upload_backup"
         android.util.Log.d("SupabaseAuthService", "Upload URL: $url")
-        val payload = buildString {
-            append('{')
-            append("\"p_token\":")
-            append(gson.toJson(token))
-            append(',')
-            append("\"p_data\":")
-            append(backupDataJson)
-            append(',')
-            append("\"p_sync_history\":")
-            append(if (syncHistory) "true" else "false")
-            append(',')
-            append("\"p_sync_model_config\":")
-            append(if (syncModelConfig) "true" else "false")
-            append(',')
-            append("\"p_sync_selected_model\":")
-            append(if (syncSelectedModel) "true" else "false")
-            append(',')
-            append("\"p_sync_api_key\":")
-            append(if (syncApiKey) "true" else "false")
-            append('}')
-        }
+        
+        // 解析 backupDataJson 为 JsonElement 对象
+        val backupDataJsonElement = gson.fromJson(backupDataJson, com.google.gson.JsonElement::class.java)
+        
+        // 使用 Map 构建 JSON payload，确保所有值都被正确序列化
+        val payloadMap = mapOf(
+            "p_token" to token,
+            "p_data" to backupDataJsonElement,
+            "p_sync_history" to syncHistory,
+            "p_sync_model_config" to syncModelConfig,
+            "p_sync_selected_model" to syncSelectedModel,
+            "p_sync_api_key" to syncApiKey
+        )
+        
+        // 使用 Gson 将整个 Map 转换为 JSON 字符串
+        val payload = gson.toJson(payloadMap)
+        
         android.util.Log.d("SupabaseAuthService", "Upload payload length: ${payload.length}, syncHistory=$syncHistory, syncModelConfig=$syncModelConfig")
         val body = payload.toRequestBody("application/json".toMediaType())
         val req = Request.Builder()

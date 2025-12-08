@@ -1,0 +1,188 @@
+package com.glassous.aime.ui.screens
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import android.webkit.WebView
+import android.webkit.WebViewClient
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HtmlPreviewScreen(
+    htmlCode: String,
+    onNavigateBack: () -> Unit
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    var isLoading by remember { mutableStateOf(true) }
+    var showCopiedFeedback by remember { mutableStateOf(false) }
+    var isSourceMode by remember { mutableStateOf(false) }
+
+    // 复制HTML代码到剪贴板
+    fun copyHtmlCode() {
+        clipboardManager.setText(AnnotatedString(htmlCode))
+        showCopiedFeedback = true
+    }
+
+    // 刷新WebView
+    var webViewRef by remember { mutableStateOf<WebView?>(null) }
+    fun refreshWebView() {
+        webViewRef?.reload()
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("预览") },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
+                    }
+                },
+                actions = {
+                    // 预览模式按钮
+                    IconButton(
+                        onClick = { isSourceMode = false },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (!isSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.Visibility,
+                            contentDescription = "预览模式",
+                            tint = if (!isSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // 源码模式按钮
+                    IconButton(
+                        onClick = { isSourceMode = true },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (isSourceMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.Code,
+                            contentDescription = "源码模式",
+                            tint = if (isSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // 复制按钮
+                    IconButton(onClick = { copyHtmlCode() }) {
+                        Icon(
+                            Icons.Filled.ContentCopy,
+                            contentDescription = "复制HTML代码",
+                            tint = if (showCopiedFeedback) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    // 刷新按钮
+                    IconButton(onClick = { refreshWebView() }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "刷新预览")
+                    }
+                }
+            )
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(it)
+        ) {
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // 加载状态指示器
+                if (isLoading && !isSourceMode) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // 根据模式显示不同内容
+                if (isSourceMode) {
+                    // 源码模式：显示HTML代码
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                    ) {
+                        // 使用可滚动的文本区域显示源码
+                        Text(
+                            text = htmlCode,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(
+                                    start = 16.dp,
+                                    end = 16.dp,
+                                    top = 16.dp,
+                                    bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                                )
+                                .verticalScroll(rememberScrollState())
+                        )
+                    }
+                } else {
+                    // 预览模式：显示WebView
+                    AndroidView(
+                        factory = {
+                            WebView(context).apply {
+                                webViewClient = object : WebViewClient() {
+                                    override fun onPageFinished(view: WebView?, url: String?) {
+                                        isLoading = false
+                                    }
+                                }
+                                settings.javaScriptEnabled = true
+                                settings.domStorageEnabled = true
+                                settings.allowFileAccess = true
+                                settings.supportZoom()
+                                settings.builtInZoomControls = true
+                                settings.displayZoomControls = false
+                                webViewRef = this
+                            }
+                        },
+                        update = {
+                            it.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
+                        },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // 复制成功提示
+            if (showCopiedFeedback) {
+                LaunchedEffect(Unit) {
+                    kotlinx.coroutines.delay(2000)
+                    showCopiedFeedback = false
+                }
+                Snackbar(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(
+                            bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                        ),
+                    action = {}
+                ) {
+                    Text("HTML 代码已复制到剪贴板")
+                }
+            }
+        }
+    }
+}

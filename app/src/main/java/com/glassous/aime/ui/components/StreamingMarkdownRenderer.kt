@@ -12,7 +12,10 @@ fun StreamingMarkdownRenderer(
     textSizeSp: Float,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isStreaming: Boolean = false
+    isStreaming: Boolean = false,
+    onHtmlPreview: ((String) -> Unit)? = null,
+    onHtmlPreviewSource: ((String) -> Unit)? = null,
+    useCardStyleForHtmlCode: Boolean = false
 ) {
     Column(modifier = modifier) {
         MarkdownRenderer(
@@ -20,7 +23,10 @@ fun StreamingMarkdownRenderer(
             textColor = textColor,
             textSizeSp = textSizeSp,
             onLongClick = onLongClick,
-            enableTables = !isStreaming
+            enableTables = !isStreaming,
+            onHtmlPreview = onHtmlPreview,
+            onHtmlPreviewSource = onHtmlPreviewSource,
+            useCardStyleForHtmlCode = useCardStyleForHtmlCode
         )
     }
 }

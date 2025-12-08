@@ -129,9 +129,10 @@ fun SettingsContent(
         factory = VersionUpdateViewModelFactory(GitHubReleaseService())
     )
 
-    // States
+    // 主题相关状态
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
     val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
+    val htmlCodeBlockCardEnabled by themeViewModel.htmlCodeBlockCardEnabled.collectAsState()
     val minimalMode by themeViewModel.minimalMode.collectAsState()
     val replyBubbleEnabled by themeViewModel.replyBubbleEnabled.collectAsState()
     val chatFontSize by themeViewModel.chatFontSize.collectAsState()
@@ -330,6 +331,26 @@ fun SettingsContent(
                                 Switch(
                                     checked = monochromeTheme,
                                     onCheckedChange = { themeViewModel.setMonochromeTheme(it) }
+                                )
+                            }
+
+                            // --- HTML代码块卡片显示开关 ---
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(text = "HTML代码块卡片显示", style = MaterialTheme.typography.titleSmall)
+                                    Text(
+                                        text = "将HTML代码块显示为卡片样式，包含预览和源码按钮",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Switch(
+                                    checked = htmlCodeBlockCardEnabled,
+                                    onCheckedChange = { themeViewModel.setHtmlCodeBlockCardEnabled(it) }
                                 )
                             }
 

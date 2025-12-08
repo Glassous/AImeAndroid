@@ -40,7 +40,13 @@ fun MessageBubble(
     // 新增：是否正在流式输出（用于打字机效果）
     isStreaming: Boolean = false,
     // 新增：是否启用打字机效果
-    enableTypewriterEffect: Boolean = true
+    enableTypewriterEffect: Boolean = true,
+    // 新增：HTML 预览回调
+    onHtmlPreview: ((String) -> Unit)? = null,
+    // 新增：HTML 源码预览回调
+    onHtmlPreviewSource: ((String) -> Unit)? = null,
+    // 新增：是否使用卡片样式显示 HTML 代码块
+    useCardStyleForHtmlCode: Boolean = false
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -108,19 +114,25 @@ fun MessageBubble(
 
                         if (hasTwoPartReply) {
                             ExpandableReplyBox(
-                                content = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                isStreaming = isStreaming,
-                                onLongClick = { showDialog = true }
-                            )
+                            content = message.content,
+                            textColor = textColor,
+                            textSizeSp = textSizeSp,
+                            isStreaming = isStreaming,
+                            onLongClick = { showDialog = true },
+                            onHtmlPreview = onHtmlPreview,
+                            onHtmlPreviewSource = onHtmlPreviewSource,
+                            useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                        )
                         } else {
                             StreamingMarkdownRenderer(
                                 markdown = message.content,
                                 textColor = textColor,
                                 textSizeSp = textSizeSp,
                                 onLongClick = { showDialog = true },
-                                isStreaming = isStreaming
+                                isStreaming = isStreaming,
+                                onHtmlPreview = onHtmlPreview,
+                                onHtmlPreviewSource = onHtmlPreviewSource,
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
                             )
                         }
                     }
@@ -156,7 +168,10 @@ fun MessageBubble(
                                 textSizeSp = textSizeSp,
                                 isStreaming = isStreaming,
                                 onLongClick = { showDialog = true },
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier.fillMaxWidth(),
+                                onHtmlPreview = onHtmlPreview,
+                                onHtmlPreviewSource = onHtmlPreviewSource,
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件
@@ -165,7 +180,10 @@ fun MessageBubble(
                                 textColor = textColor,
                                 textSizeSp = textSizeSp,
                                 onLongClick = { showDialog = true },
-                                isStreaming = isStreaming
+                                isStreaming = isStreaming,
+                                onHtmlPreview = onHtmlPreview,
+                                onHtmlPreviewSource = onHtmlPreviewSource,
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
                             )
                         }
                     }

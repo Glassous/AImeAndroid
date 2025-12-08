@@ -10,9 +10,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.screens.ChatScreen
+import com.glassous.aime.ui.screens.HtmlPreviewScreen
 import com.glassous.aime.ui.screens.ModelConfigScreen
 import com.glassous.aime.ui.screens.MessageDetailScreen
 import com.glassous.aime.ui.theme.ThemeViewModel
+import com.glassous.aime.ui.viewmodel.HtmlPreviewViewModel
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModelFactory
  
@@ -22,6 +24,7 @@ sealed class Screen(val route: String) {
     object Chat : Screen("chat")
     object ModelConfig : Screen("model_config")
     object MessageDetail : Screen("message_detail")
+    object HtmlPreview : Screen("html_preview")
 }
 
 @Composable
@@ -39,6 +42,9 @@ fun AppNavigation() {
         )
     )
     
+    // 创建共享的HtmlPreviewViewModel实例
+    val htmlPreviewViewModel: HtmlPreviewViewModel = viewModel()
+    
     NavHost(
         navController = navController,
         startDestination = Screen.Chat.route
@@ -47,6 +53,16 @@ fun AppNavigation() {
             ChatScreen(
                 onNavigateToMessageDetail = { id ->
                     navController.navigate("${Screen.MessageDetail.route}/$id")
+                },
+                onNavigateToHtmlPreview = { htmlCode ->
+                    // 将HTML代码存储到共享ViewModel中，然后导航
+                    htmlPreviewViewModel.setHtmlCode(htmlCode)
+                    navController.navigate(Screen.HtmlPreview.route)
+                },
+                onNavigateToHtmlPreviewSource = { htmlCode ->
+                    // 将HTML代码存储到共享ViewModel中，然后导航
+                    htmlPreviewViewModel.setHtmlCode(htmlCode)
+                    navController.navigate(Screen.HtmlPreview.route)
                 },
                 modelSelectionViewModel = modelSelectionViewModel,
                 themeViewModel = themeViewModel
@@ -70,6 +86,15 @@ fun AppNavigation() {
             val messageId = backStackEntry.arguments?.getLong("messageId") ?: 0L
             MessageDetailScreen(
                 messageId = messageId,
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.HtmlPreview.route
+        ) {
+            HtmlPreviewScreen(
+                htmlCode = htmlPreviewViewModel.htmlCode.value.orEmpty(),
                 onNavigateBack = { navController.popBackStack() }
             )
         }

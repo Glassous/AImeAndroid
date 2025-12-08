@@ -27,7 +27,10 @@ fun ExpandableReplyBox(
     textSizeSp: Float,
     isStreaming: Boolean,
     onLongClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onHtmlPreview: ((String) -> Unit)? = null,
+    onHtmlPreviewSource: ((String) -> Unit)? = null,
+    useCardStyleForHtmlCode: Boolean = false
 ) {
     // 定义解析结果变量
     var preText by remember { mutableStateOf("") }
@@ -104,7 +107,10 @@ fun ExpandableReplyBox(
             textColor = textColor,
             textSizeSp = textSizeSp,
             onLongClick = onLongClick,
-            modifier = modifier
+            modifier = modifier,
+            onHtmlPreview = onHtmlPreview,
+            onHtmlPreviewSource = onHtmlPreviewSource,
+            useCardStyleForHtmlCode = useCardStyleForHtmlCode
         )
         return
     }
@@ -176,7 +182,10 @@ fun ExpandableReplyBox(
                             textColor = textColor.copy(alpha = 0.7f),
                             textSizeSp = textSizeSp * 0.9f,
                             onLongClick = onLongClick,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
+                            onHtmlPreview = onHtmlPreview,
+                            onHtmlPreviewSource = onHtmlPreviewSource,
+                            useCardStyleForHtmlCode = useCardStyleForHtmlCode
                         )
 
                         // 如果思考还在继续（流式且无正式回复），显示个简单的提示
@@ -200,7 +209,10 @@ fun ExpandableReplyBox(
                     textColor = textColor,
                     textSizeSp = textSizeSp,
                     onLongClick = onLongClick,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    onHtmlPreview = onHtmlPreview,
+                    onHtmlPreviewSource = onHtmlPreviewSource,
+                    useCardStyleForHtmlCode = useCardStyleForHtmlCode
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -208,12 +220,15 @@ fun ExpandableReplyBox(
             // 正式回复：正常渲染
             if (officialText != null && officialText!!.isNotEmpty()) {
                 StreamingMarkdownRenderer(
-                    markdown = officialText!!,
-                    textColor = textColor,
-                    textSizeSp = textSizeSp,
-                    onLongClick = onLongClick,
-                    isStreaming = isStreaming
-                )
+                markdown = officialText!!,
+                textColor = textColor,
+                textSizeSp = textSizeSp,
+                onLongClick = onLongClick,
+                isStreaming = isStreaming,
+                onHtmlPreview = onHtmlPreview,
+                onHtmlPreviewSource = onHtmlPreviewSource,
+                useCardStyleForHtmlCode = useCardStyleForHtmlCode
+            )
             } else if (!isStreaming && preText.isEmpty()) {
                 // 既没有思考也没有正式回复的异常情况
                 Text(
