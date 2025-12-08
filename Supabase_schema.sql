@@ -1,8 +1,8 @@
 -- =============================================================================
--- AIme Android 后端初始化脚本 (v5.0 - 修复 search_path 路径问题)
+-- AIme Android 后端初始化脚本 (v5.1 - 修复函数重载与权限签名问题)
 -- =============================================================================
 
--- 1. 创建 extensions 架构并启用 pgcrypto (确保扩展可用)
+-- 1. 创建 extensions 架构并启用 pgcrypto
 CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 
@@ -134,11 +134,13 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres;
 
 -- =============================================================================
--- 6. 核心业务函数 (Accounts & Auth) - 关键修复部分
+-- 6. 核心业务函数 (Accounts & Auth)
 -- =============================================================================
 
 -- 6.1 注册函数
--- 修复点：SET search_path = public, extensions
+-- 清理旧函数以防止重载冲突
+DROP FUNCTION IF EXISTS public.accounts_register(text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.accounts_register(
     p_email text, 
     p_password text,
@@ -148,7 +150,7 @@ CREATE OR REPLACE FUNCTION public.accounts_register(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions -- 关键修复：添加 extensions 到搜索路径
+SET search_path = public, extensions
 AS $$
 DECLARE
   new_uid uuid;
@@ -166,7 +168,7 @@ BEGIN
   VALUES (p_email, p_password, p_question, p_answer)
   RETURNING id INTO new_uid;
 
-  -- 3. 创建 Token (现在能找到 gen_random_bytes 了)
+  -- 3. 创建 Token
   new_token := encode(gen_random_bytes(32), 'hex');
   
   INSERT INTO public.account_sessions(user_id, email, token)
@@ -185,11 +187,13 @@ END;
 $$;
 
 -- 6.2 登录函数
+DROP FUNCTION IF EXISTS public.accounts_login(text, text);
+
 CREATE OR REPLACE FUNCTION public.accounts_login(p_email text, p_password text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions -- 关键修复：添加 extensions
+SET search_path = public, extensions
 AS $$
 DECLARE
   v_uid uuid;
@@ -216,6 +220,8 @@ END;
 $$;
 
 -- 6.3 获取密保
+DROP FUNCTION IF EXISTS public.accounts_get_security_question(text);
+
 CREATE OR REPLACE FUNCTION public.accounts_get_security_question(p_email text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -235,6 +241,8 @@ END;
 $$;
 
 -- 6.4 重置密码
+DROP FUNCTION IF EXISTS public.accounts_reset_password_with_answer(text, text, text);
+
 CREATE OR REPLACE FUNCTION public.accounts_reset_password_with_answer(
     p_email text, p_answer text, p_new_password text
 )
@@ -260,6 +268,8 @@ END;
 $$;
 
 -- 6.5 更新密保
+DROP FUNCTION IF EXISTS public.accounts_update_security_question(text, text, text, text);
+
 CREATE OR REPLACE FUNCTION public.accounts_update_security_question(
     p_email text, p_password text, p_new_question text, p_new_answer text
 )
@@ -285,6 +295,10 @@ $$;
 -- 7. 核心同步函数 (Sync)
 -- =============================================================================
 
+-- 7.1 上传备份函数
+-- 显式清理，防止重载错误
+DROP FUNCTION IF EXISTS public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean);
+
 CREATE OR REPLACE FUNCTION public.sync_upload_backup(
     p_token text, 
     p_data jsonb, 
@@ -296,7 +310,7 @@ CREATE OR REPLACE FUNCTION public.sync_upload_backup(
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, extensions -- 同样添加 extensions
+SET search_path = public, extensions
 AS $$
 DECLARE
   uid uuid;
@@ -378,10 +392,10 @@ BEGIN
          'lastMessageTime', (extract(epoch from c.last_message_time) * 1000)::bigint,
          'messageCount', c.message_count,
          'messages', (
-            SELECT COALESCE(jsonb_agg(
-              jsonb_build_object('content', m.content, 'isFromUser', m.is_from_user,
-                'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint, 'isError', m.is_error) ORDER BY m.timestamp ASC
-            ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id
+           SELECT COALESCE(jsonb_agg(
+             jsonb_build_object('content', m.content, 'isFromUser', m.is_from_user,
+               'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint, 'isError', m.is_error) ORDER BY m.timestamp ASC
+           ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id
          )
        ) ORDER BY c.last_message_time DESC
   ), '[]'::jsonb) INTO res_conversations FROM public.conversations c WHERE c.user_id = uid;
@@ -408,7 +422,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
--- 辅助下载
+-- 7.2 下载备份 (辅助函数)
+DROP FUNCTION IF EXISTS public.sync_download_backup(text);
+
 CREATE OR REPLACE FUNCTION public.sync_download_backup(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -423,7 +439,9 @@ $$;
 -- =============================================================================
 -- 8. 授权 (Grant Executions)
 -- =============================================================================
+-- 关键修改：在 GRANT 语句中必须指定参数列表，以消除函数重载带来的歧义
 
+-- 设置所有者 (Owner)
 ALTER FUNCTION public.accounts_register(text, text, text, text) OWNER TO postgres;
 ALTER FUNCTION public.accounts_login(text, text) OWNER TO postgres;
 ALTER FUNCTION public.accounts_get_security_question(text) OWNER TO postgres;
@@ -432,10 +450,12 @@ ALTER FUNCTION public.accounts_update_security_question(text, text, text, text) 
 ALTER FUNCTION public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean) OWNER TO postgres;
 ALTER FUNCTION public.sync_download_backup(text) OWNER TO postgres;
 
-GRANT EXECUTE ON FUNCTION public.accounts_register TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.accounts_login TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.accounts_get_security_question TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.accounts_reset_password_with_answer TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.accounts_update_security_question TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.sync_upload_backup TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.sync_download_backup TO anon, authenticated, service_role;
+-- 授权执行 (Grant Execute)
+GRANT EXECUTE ON FUNCTION public.accounts_register(text, text, text, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.accounts_login(text, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.accounts_get_security_question(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.accounts_reset_password_with_answer(text, text, text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.accounts_update_security_question(text, text, text, text) TO anon, authenticated, service_role;
+-- 下面这一行就是之前报错的地方，现在加上了参数列表：
+GRANT EXECUTE ON FUNCTION public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.sync_download_backup(text) TO anon, authenticated, service_role;
