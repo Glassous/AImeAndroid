@@ -35,7 +35,7 @@ fun CodeBlockWithCopy(
 ) {
     val clipboardManager = LocalClipboardManager.current
     var showCopiedFeedback by remember { mutableStateOf(false) }
-    
+
     LaunchedEffect(showCopiedFeedback) {
         if (showCopiedFeedback) {
             delay(3000) // 3秒后切换回复制按钮
@@ -61,17 +61,18 @@ fun CodeBlockWithCopy(
             shape = RoundedCornerShape(12.dp),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
-            Column(
+            // 修改为单行布局：左侧标题，右侧按钮
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .padding(12.dp), // 稍微减小一点内边距以适应一行
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // HTML代码提示
+                // 左侧：HTML代码提示
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Start
+                    modifier = Modifier.weight(1f, fill = false) // 允许左侧压缩，但不强制占位
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Code,
@@ -83,56 +84,48 @@ fun CodeBlockWithCopy(
                     Text(
                         text = "HTML 代码",
                         style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1
                     )
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // 按钮组
+                // 右侧：按钮组
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
                 ) {
                     // 预览按钮
-                    FilledTonalButton(
-                        onClick = onPreview ?: {},
-                        enabled = onPreview != null,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                    if (onPreview != null) {
+                        FilledTonalButton(
+                            onClick = onPreview,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp) // 稍微调小高度
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Visibility,
                                 contentDescription = "预览HTML",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "预览")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "预览", fontSize = 13.sp)
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(12.dp))
-
                     // 源码按钮
-                    FilledTonalButton(
-                        onClick = onPreviewSource ?: {},
-                        enabled = onPreviewSource != null,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
+                    if (onPreviewSource != null) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        FilledTonalButton(
+                            onClick = onPreviewSource,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.height(36.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Code,
                                 contentDescription = "查看源码",
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(text = "源码")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(text = "源码", fontSize = 13.sp)
                         }
                     }
                 }
@@ -159,7 +152,7 @@ fun CodeBlockWithCopy(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 20.sp
             )
-            
+
             // 右上角按钮区域
             Row(
                 modifier = Modifier
@@ -182,7 +175,7 @@ fun CodeBlockWithCopy(
                         )
                     }
                 }
-                
+
                 // 复制按钮/对号切换
                 IconButton(
                     onClick = {
@@ -197,9 +190,9 @@ fun CodeBlockWithCopy(
                     Icon(
                         imageVector = if (showCopiedFeedback) Icons.Default.Check else Icons.Default.ContentCopy,
                         contentDescription = if (showCopiedFeedback) "已复制" else "复制代码",
-                        tint = if (showCopiedFeedback) 
-                            MaterialTheme.colorScheme.primary 
-                        else 
+                        tint = if (showCopiedFeedback)
+                            MaterialTheme.colorScheme.primary
+                        else
                             MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                         modifier = Modifier.size(16.dp)
                     )

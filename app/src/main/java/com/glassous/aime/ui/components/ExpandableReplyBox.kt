@@ -123,12 +123,6 @@ fun ExpandableReplyBox(
     // 监听状态变化自动折叠：当正式回复开始出现时，自动收起思考过程
     LaunchedEffect(officialText) {
         if (!officialText.isNullOrBlank()) {
-            // 如果之前是展开的且正在流式传输，这里可以自动折叠
-            // 为了体验更好，我们只在从“无正式回复”变成“有正式回复”的那一刻折叠
-            // 这里简化处理：只要有正式回复，且非手动干预过（暂不记录手动状态），就默认折叠
-            // 但为了防止用户正在看思考过程被强制折叠，这里可以加个判断，或者简单地：
-            // 只有在初始化或者状态变更时设为 false。
-            // 策略：思考结束（有正式回复了），默认折叠。
             expanded = false
         } else {
             // 还在思考，保持展开
@@ -147,7 +141,7 @@ fun ExpandableReplyBox(
                 Surface(
                     onClick = { expanded = !expanded },
                     shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow, // 给思考过程标题一个浅色背景
+                    color = Color.Transparent, // 修改：移除背景色 (原 surfaceContainerLow)
                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                 ) {
                     Row(
@@ -158,14 +152,16 @@ fun ExpandableReplyBox(
                             text = if (isThinkTagMode) "深度思考过程" else "前置回复",
                             color = MaterialTheme.colorScheme.secondary,
                             style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.wrapContentWidth() // 修改：移除 weight(1f)，只占用必要宽度
                         )
+                        Spacer(modifier = Modifier.width(4.dp)) // 修改：添加间距
                         Icon(
                             imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(20.dp) // 修改：Icon 现在紧跟在 Text 后面
                         )
+                        Spacer(modifier = Modifier.weight(1f)) // 修改：填充剩余空间以保持整行左对齐布局
                     }
                 }
 
@@ -220,15 +216,15 @@ fun ExpandableReplyBox(
             // 正式回复：正常渲染
             if (officialText != null && officialText!!.isNotEmpty()) {
                 StreamingMarkdownRenderer(
-                markdown = officialText!!,
-                textColor = textColor,
-                textSizeSp = textSizeSp,
-                onLongClick = onLongClick,
-                isStreaming = isStreaming,
-                onHtmlPreview = onHtmlPreview,
-                onHtmlPreviewSource = onHtmlPreviewSource,
-                useCardStyleForHtmlCode = useCardStyleForHtmlCode
-            )
+                    markdown = officialText!!,
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = onLongClick,
+                    isStreaming = isStreaming,
+                    onHtmlPreview = onHtmlPreview,
+                    onHtmlPreviewSource = onHtmlPreviewSource,
+                    useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                )
             } else if (!isStreaming && preText.isEmpty()) {
                 // 既没有思考也没有正式回复的异常情况
                 Text(
