@@ -1,6 +1,7 @@
 package com.glassous.aime.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
@@ -159,9 +161,15 @@ fun ChatScreen(
     }
 
     val listState = rememberLazyListState()
+    // 监听用户拖拽状态
+    val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    // Track TopAppBar height for auto-scroll logic
+    var topBarHeightPx by remember { mutableIntStateOf(0) }
 
     
 
@@ -205,6 +213,45 @@ fun ChatScreen(
                 index = currentMessages.size + 1,
                 scrollOffset = 0
             )
+        }
+    }
+
+    // 流式输出时的自动滚动逻辑：保持滚动直到发送气泡到达顶部栏下方
+    LaunchedEffect(currentMessages.lastOrNull()?.content?.length, isLoading) {
+        // 如果用户正在拖拽，或者正在进行非自动滚动的滑动（例如惯性滑动），则不进行自动滚动
+        // 注意：animateScrollToItem也会导致isScrollInProgress为true，所以我们主要依靠isDragged来判断用户的主动交互
+        if (isDragged) return@LaunchedEffect
+
+        if (isLoading && currentMessages.isNotEmpty()) {
+            // User message is the one before the streaming message (last)
+            // In LazyColumn, Spacer is index 0.
+            // User Message Index = (currentMessages.size - 2) + 1 = currentMessages.size - 1
+            // e.g. Size=2 (User, AI). User is index 0 in list. Index 1 in LazyColumn. Size-1 = 1. Correct.
+            val userMsgIndex = currentMessages.size - 1 
+            
+            val layoutInfo = listState.layoutInfo
+            val visibleItems = layoutInfo.visibleItemsInfo
+            
+            val userItem = visibleItems.find { it.index == userMsgIndex }
+            
+            val shouldScroll = if (userItem != null) {
+                // If User message is visible, scroll only if it is below the Top Bar
+                // Stop scrolling if it reaches the Top Bar (offset <= height)
+                userItem.offset > topBarHeightPx
+            } else {
+                // If User message is not visible
+                val firstVisible = visibleItems.firstOrNull()?.index ?: 0
+                // If scrolled off top (firstVisible > userMsgIndex), STOP scrolling
+                // If scrolled off bottom (firstVisible <= userMsgIndex), keep scrolling
+                firstVisible <= userMsgIndex
+            }
+            
+            if (shouldScroll) {
+                listState.animateScrollToItem(
+                    index = currentMessages.size + 1, // Scroll to bottom spacer
+                    scrollOffset = 0
+                )
+            }
         }
     }
 
@@ -268,6 +315,7 @@ fun ChatScreen(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 topBar = {
                     TopAppBar(
+                        modifier = Modifier.onSizeChanged { topBarHeightPx = it.height },
                         title = {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
