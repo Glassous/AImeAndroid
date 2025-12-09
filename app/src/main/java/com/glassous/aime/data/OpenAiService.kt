@@ -54,6 +54,7 @@ data class ChatCompletionsRequest(
 // Streaming chunk models (delta)
 data class ChatCompletionsChunkChoiceDelta(
     @SerializedName("content") val content: String?,
+    @SerializedName("reasoning", alternate = ["reasoning_content"]) val reasoning: String?,
     @SerializedName("role") val role: String? = null,
     @SerializedName("tool_calls") val toolCalls: List<ToolCall>? = null,
     @SerializedName("function_call") val functionCall: FunctionCall? = null
@@ -171,6 +172,8 @@ class OpenAiService(
         val accumulatedToolCalls = mutableMapOf<Int, AccToolCall>()
         var hasEmittedToolCalls = false
         var accFunctionCall: AccToolCall? = null
+        var isThinking = false
+
         try {
             while (true) {
                 val line = source.readUtf8Line() ?: break
@@ -181,6 +184,14 @@ class OpenAiService(
                 if (line.startsWith("data:")) {
                     val payload = line.removePrefix("data:").trim()
                     if (payload == "[DONE]") {
+                        // Close thinking tag if still open
+                        if (isThinking) {
+                            val endTag = "</think>"
+                            finalText.append(endTag)
+                            onDelta(endTag)
+                            isThinking = false
+                        }
+
                         // Flush accumulated tool calls at end if not emitted
                         if (!hasEmittedToolCalls) {
                             accumulatedToolCalls.forEach { (_, acc) ->
@@ -216,9 +227,29 @@ class OpenAiService(
                         val choices = chunk?.choices ?: emptyList()
                         choices.forEach { choice ->
                             val delta = choice.delta
+                            
+                            // Handle reasoning delta
+                            val reasoning = delta?.reasoning
+                            if (!reasoning.isNullOrEmpty()) {
+                                if (!isThinking) {
+                                    val startTag = "<think>"
+                                    finalText.append(startTag)
+                                    onDelta(startTag)
+                                    isThinking = true
+                                }
+                                finalText.append(reasoning)
+                                onDelta(reasoning)
+                            }
+
                             // Handle content delta
                             val content = delta?.content
-                            if (content != null) {
+                            if (!content.isNullOrEmpty()) {
+                                if (isThinking) {
+                                    val endTag = "</think>"
+                                    finalText.append(endTag)
+                                    onDelta(endTag)
+                                    isThinking = false
+                                }
                                 finalText.append(content)
                                 onDelta(content)
                             }

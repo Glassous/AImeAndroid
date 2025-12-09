@@ -1,6 +1,8 @@
 package com.glassous.aime.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
@@ -119,21 +121,27 @@ fun ExpandableReplyBox(
     // 如果是思考模式且正式回复还没出来（正在思考），强制展开以便用户看到过程。
     // 一旦正式回复有了内容，就可以折叠起来不占地方。
     var expanded by remember { mutableStateOf(true) }
+    // 记录是否已经执行过自动折叠，防止流式输出过程中用户手动展开后被再次折叠
+    var hasAutoCollapsed by remember { mutableStateOf(false) }
 
     // 监听状态变化自动折叠：当正式回复开始出现时，自动收起思考过程
     LaunchedEffect(officialText) {
         if (!officialText.isNullOrBlank()) {
-            expanded = false
+            if (!hasAutoCollapsed) {
+                expanded = false
+                hasAutoCollapsed = true
+            }
         } else {
-            // 还在思考，保持展开
+            // 还在思考（或内容被重置），保持展开并重置自动折叠标记
             expanded = true
+            hasAutoCollapsed = false
         }
     }
 
     Surface(
         modifier = modifier.fillMaxWidth(),
         tonalElevation = 0.dp,
-        color = MaterialTheme.colorScheme.surface
+        color = Color.Transparent
     ) {
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
             // 顶部：折叠/展开控制栏（仅当前置文本不为空时显示）
@@ -141,7 +149,7 @@ fun ExpandableReplyBox(
                 Surface(
                     onClick = { expanded = !expanded },
                     shape = MaterialTheme.shapes.small,
-                    color = Color.Transparent, // 修改：移除背景色 (原 surfaceContainerLow)
+                    color = Color.Transparent,
                     modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                 ) {
                     Row(
@@ -152,16 +160,16 @@ fun ExpandableReplyBox(
                             text = if (isThinkTagMode) "深度思考过程" else "前置回复",
                             color = MaterialTheme.colorScheme.secondary,
                             style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.wrapContentWidth() // 修改：移除 weight(1f)，只占用必要宽度
+                            modifier = Modifier.wrapContentWidth()
                         )
-                        Spacer(modifier = Modifier.width(4.dp)) // 修改：添加间距
+                        Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp) // 修改：Icon 现在紧跟在 Text 后面
+                            modifier = Modifier.size(20.dp)
                         )
-                        Spacer(modifier = Modifier.weight(1f)) // 修改：填充剩余空间以保持整行左对齐布局
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
 
@@ -170,6 +178,10 @@ fun ExpandableReplyBox(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { expanded = false }
                             .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
                     ) {
                         // 思考内容使用略淡的颜色渲染，字体稍小
