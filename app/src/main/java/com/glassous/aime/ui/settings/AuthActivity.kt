@@ -169,18 +169,7 @@ class AuthActivity : ComponentActivity() {
                                                 onCheckedChange = { v ->
                                                     scope.launch {
                                                         app.syncPreferences.setUploadHistoryEnabled(v)
-                                                        if (v && !isSyncing) {
-                                                            isSyncing = true
-                                                            try {
-                                                                app.cloudSyncManager.syncOnce()
-                                                                snackbarHostState.showSnackbar("已触发完整同步")
-                                                            } catch (e: Exception) {
-                                                                val detail = e.stackTraceToString().take(500)
-                                                                snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
-                                                            } finally {
-                                                                isSyncing = false
-                                                            }
-                                                        }
+                                                        snackbarHostState.showSnackbar("设置已更新：上传聊天记录" + if (v) "已开启" else "已关闭")
                                                     }
                                                 }
                                             )
@@ -197,18 +186,7 @@ class AuthActivity : ComponentActivity() {
                                                 onCheckedChange = { v ->
                                                     scope.launch {
                                                         app.syncPreferences.setUploadModelConfigEnabled(v)
-                                                        if (v && !isSyncing) {
-                                                            isSyncing = true
-                                                            try {
-                                                                app.cloudSyncManager.syncOnce()
-                                                                snackbarHostState.showSnackbar("已触发完整同步")
-                                                            } catch (e: Exception) {
-                                                                val detail = e.stackTraceToString().take(500)
-                                                                snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
-                                                            } finally {
-                                                                isSyncing = false
-                                                            }
-                                                        }
+                                                        snackbarHostState.showSnackbar("设置已更新：上传模型配置" + if (v) "已开启" else "已关闭")
                                                     }
                                                 }
                                             )
@@ -225,18 +203,7 @@ class AuthActivity : ComponentActivity() {
                                                 onCheckedChange = { v ->
                                                     scope.launch {
                                                         app.syncPreferences.setUploadSelectedModelEnabled(v)
-                                                        if (v && !isSyncing) {
-                                                            isSyncing = true
-                                                            try {
-                                                                app.cloudSyncManager.syncOnce()
-                                                                snackbarHostState.showSnackbar("已触发完整同步")
-                                                            } catch (e: Exception) {
-                                                                val detail = e.stackTraceToString().take(500)
-                                                                snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
-                                                            } finally {
-                                                                isSyncing = false
-                                                            }
-                                                        }
+                                                        snackbarHostState.showSnackbar("设置已更新：上传模型选择" + if (v) "已开启" else "已关闭")
                                                     }
                                                 }
                                             )
@@ -260,18 +227,7 @@ class AuthActivity : ComponentActivity() {
                                                 onCheckedChange = { v ->
                                                     scope.launch {
                                                         app.syncPreferences.setUploadApiKeyEnabled(v)
-                                                        if (v && !isSyncing) {
-                                                            isSyncing = true
-                                                            try {
-                                                                app.cloudSyncManager.syncOnce()
-                                                                snackbarHostState.showSnackbar("已触发完整同步")
-                                                            } catch (e: Exception) {
-                                                                val detail = e.stackTraceToString().take(500)
-                                                                snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
-                                                            } finally {
-                                                                isSyncing = false
-                                                            }
-                                                        }
+                                                        snackbarHostState.showSnackbar("设置已更新：上传 API Key" + if (v) "已开启" else "已关闭")
                                                     }
                                                 }
                                             )
@@ -283,8 +239,8 @@ class AuthActivity : ComponentActivity() {
                                                     if (!isSyncing) {
                                                         isSyncing = true
                                                         try {
-                                                            app.cloudSyncManager.syncOnce()
-                                                            snackbarHostState.showSnackbar("同步完成")
+                                                            val (ok, msg) = app.cloudSyncManager.manualSync()
+                                                            snackbarHostState.showSnackbar(if (ok) "同步完成" else ("同步失败：" + msg))
                                                         } catch (e: Exception) {
                                                             val detail = e.stackTraceToString().take(500)
                                                             snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)

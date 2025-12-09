@@ -52,7 +52,7 @@ class SupabaseAuthService(
             .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
             .addHeader("Authorization", "Bearer ${BuildConfig.SUPABASE_ANON_KEY}")
             .addHeader("Accept", "application/json")
-            .addHeader("Prefer", "return=representation")
+            .addHeader("Prefer", "return=representation, params=single-object")
             .addHeader("Content-Type", "application/json")
             .post(body)
             .build()
@@ -222,13 +222,10 @@ class SupabaseAuthService(
         syncApiKey: Boolean = false
     ): Pair<Boolean, String> {
         android.util.Log.d("SupabaseAuthService", "Starting uploadBackup with token: ${token.take(10)}...")
-        val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_upload_backup"
+        val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_upload_backup_v1"
         android.util.Log.d("SupabaseAuthService", "Upload URL: $url")
-        
-        // 解析 backupDataJson 为 JsonElement 对象
+
         val backupDataJsonElement = gson.fromJson(backupDataJson, com.google.gson.JsonElement::class.java)
-        
-        // 使用 Map 构建 JSON payload，确保所有值都被正确序列化
         val payloadMap = mapOf(
             "p_token" to token,
             "p_data" to backupDataJsonElement,
@@ -237,40 +234,56 @@ class SupabaseAuthService(
             "p_sync_selected_model" to syncSelectedModel,
             "p_sync_api_key" to syncApiKey
         )
-        
-        // 使用 Gson 将整个 Map 转换为 JSON 字符串
         val payload = gson.toJson(payloadMap)
-        
-        android.util.Log.d("SupabaseAuthService", "Upload payload length: ${payload.length}, syncHistory=$syncHistory, syncModelConfig=$syncModelConfig")
+
+        android.util.Log.d("SupabaseAuthService", "Upload payload length: ${payload.length}, syncHistory=$syncHistory, syncModelConfig=$syncModelConfig, selectedModel=$syncSelectedModel, apiKey=$syncApiKey")
         val body = payload.toRequestBody("application/json".toMediaType())
         val req = Request.Builder()
             .url(url)
             .addHeader("apikey", BuildConfig.SUPABASE_ANON_KEY)
             .addHeader("Authorization", "Bearer ${BuildConfig.SUPABASE_ANON_KEY}")
             .addHeader("Accept", "application/json")
-            .addHeader("Prefer", "return=representation")
+            .addHeader("Prefer", "return=representation, params=single-object")
             .addHeader("Content-Type", "application/json")
             .post(body)
             .build()
         val resp = client.newCall(req).execute()
         val raw = resp.body?.string() ?: ""
         android.util.Log.d("SupabaseAuthService", "Upload response code: ${resp.code}, raw response: $raw")
-        resp.close()
-        val parsed = try { gson.fromJson(raw, RpcSyncResponse::class.java) } catch (_: Exception) { null }
-        val ok = resp.isSuccessful && (parsed?.ok != false)
-        val msg = when {
-            ok -> "上传成功"
-            parsed?.message != null -> "上传失败：" + parsed.message
-            raw.isNotBlank() -> "上传失败：" + raw.take(500)
-            else -> "上传失败：未知错误"
+
+        var ok = false
+        var msg = "上传失败：未知错误"
+        try {
+            val trimmed = raw.trim()
+            var normalized = trimmed
+            if (normalized.startsWith("[")) {
+                val arr = com.google.gson.JsonParser.parseString(normalized).asJsonArray
+                normalized = if (arr.size() > 0) arr[0].toString() else "{}"
+            }
+            val elem = com.google.gson.JsonParser.parseString(normalized)
+            if (elem.isJsonObject) {
+                val obj = elem.asJsonObject
+                val okFlag = obj.get("ok")?.asBoolean ?: false
+                val message = obj.get("message")?.asString
+                ok = resp.isSuccessful && okFlag
+                msg = message ?: if (ok) "上传成功" else "上传失败"
+            } else {
+                ok = false
+                msg = if (resp.isSuccessful && raw.isNotBlank()) raw.take(500) else msg
+            }
+        } catch (_: Exception) {
+            ok = false
+            msg = if (raw.isNotBlank()) raw.take(500) else msg
         }
+
         android.util.Log.d("SupabaseAuthService", "Upload result: ok=$ok, msg=$msg")
+        resp.close()
         return ok to msg
     }
 
     suspend fun downloadBackup(token: String): Triple<Boolean, String, String?> {
         android.util.Log.d("SupabaseAuthService", "Starting downloadBackup with token: ${token.take(10)}...")
-        val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_download_backup"
+        val url = BuildConfig.SUPABASE_URL.trimEnd('/') + "/rest/v1/rpc/sync_download_backup_v1"
         android.util.Log.d("SupabaseAuthService", "Download URL: $url")
         val payload = gson.toJson(mapOf("p_token" to token))
         android.util.Log.d("SupabaseAuthService", "Download payload: $payload")

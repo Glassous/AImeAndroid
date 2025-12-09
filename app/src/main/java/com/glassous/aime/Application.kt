@@ -23,8 +23,7 @@ class AIMeApplication : Application() {
     // Model config repository instance
     val modelConfigRepository by lazy {
         ModelConfigRepository(
-            modelConfigDao = database.modelConfigDao(),
-            cloudSyncManager = cloudSyncManager
+            modelConfigDao = database.modelConfigDao()
         )
     }
 
@@ -53,8 +52,7 @@ class AIMeApplication : Application() {
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,
-            contextPreferences = contextPreferences,
-            cloudSyncManager = cloudSyncManager
+            contextPreferences = contextPreferences
         )
     }
 
@@ -72,16 +70,13 @@ class AIMeApplication : Application() {
             try {
                 authPreferences.accessToken.collect { token ->
                     cloudSyncManager.onTokenChanged(token)
-                    if (!token.isNullOrBlank()) {
-                        try { cloudSyncManager.syncOnce() } catch (_: Exception) { }
-                    }
                 }
             } catch (_: Exception) { }
         }
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 modelPreferences.selectedModelId.collect {
-                    try { cloudSyncManager.syncOnce() } catch (_: Exception) { }
+                    // Auto-sync removed
                 }
             } catch (_: Exception) { }
         }

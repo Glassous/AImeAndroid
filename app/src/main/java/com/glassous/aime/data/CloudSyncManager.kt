@@ -38,16 +38,7 @@ class CloudSyncManager(
 
     fun onTokenChanged(token: String?) {
         runningJob?.cancel()
-        if (token.isNullOrBlank()) return
-        runningJob = scope.launch {
-            // 启动时稍微延迟一点点，避免和应用启动时的密集IO抢资源
-            delay(1000)
-            syncOnce()
-            while (isActive) {
-                delay(10 * 60 * 1000L) // 每10分钟自动同步
-                syncOnce()
-            }
-        }
+        // 自动同步已移除，仅保留手动同步
     }
 
     // 手动同步方法，用于测试和用户主动同步
@@ -63,7 +54,7 @@ class CloudSyncManager(
         }
     }
 
-    suspend fun syncOnce() {
+    suspend fun syncOnce(forceAll: Boolean = false) {
         val token = authPreferences.accessToken.first()
         if (token.isNullOrBlank()) {
             android.util.Log.w("CloudSyncManager", "Sync skipped: No access token available")
@@ -135,10 +126,10 @@ class CloudSyncManager(
                      android.util.Log.d("CloudSyncManager", "Database state after collect: groups=${dbGroupsAfter.size}, conversations=${dbConversationsAfter.size}")
 
                     // 4. 获取同步开关设置
-                    val uploadHistory = syncPreferences.uploadHistoryEnabled.first()
-                    val uploadModelConfig = syncPreferences.uploadModelConfigEnabled.first()
-                    val uploadSelectedModel = syncPreferences.uploadSelectedModelEnabled.first()
-                    val uploadApiKey = syncPreferences.uploadApiKeyEnabled.first()
+                    val uploadHistory = if (forceAll) true else syncPreferences.uploadHistoryEnabled.first()
+                    val uploadModelConfig = if (forceAll) true else syncPreferences.uploadModelConfigEnabled.first()
+                    val uploadSelectedModel = if (forceAll) true else syncPreferences.uploadSelectedModelEnabled.first()
+                    val uploadApiKey = if (forceAll) true else syncPreferences.uploadApiKeyEnabled.first()
                     android.util.Log.d("CloudSyncManager", "Sync settings: history=$uploadHistory, modelConfig=$uploadModelConfig, selectedModel=$uploadSelectedModel, apiKey=$uploadApiKey")
 
                     // 5. 上传合并后的完整数据到云端（作为新的基准）
@@ -173,12 +164,12 @@ class CloudSyncManager(
     private suspend fun collectLocalBackup(): BackupData {
         android.util.Log.d("CloudSyncManager", "Collecting local backup data...")
 
-        val groups = modelDao.getAllGroups().first()
+        val groups = modelDao.getAllGroupsIncludingDeleted().first()
         android.util.Log.d("CloudSyncManager", "Found ${groups.size} model groups")
 
         val models = mutableListOf<Model>()
         groups.forEach { g ->
-            val ms = modelDao.getModelsByGroupId(g.id).first()
+            val ms = modelDao.getModelsByGroupIdIncludingDeleted(g.id).first()
             models.addAll(ms)
             android.util.Log.d("CloudSyncManager", "Group ${g.name}: ${ms.size} models")
         }
@@ -187,12 +178,12 @@ class CloudSyncManager(
         val selectedModelId = modelPreferences.selectedModelId.first()
         android.util.Log.d("CloudSyncManager", "Selected model ID: $selectedModelId")
 
-        val conversations = chatDao.getAllConversations().first()
+        val conversations = chatDao.getAllConversationsIncludingDeleted().first()
         android.util.Log.d("CloudSyncManager", "Found ${conversations.size} conversations")
 
         val backupConversations = mutableListOf<BackupConversation>()
         for (c in conversations) {
-            val msgs = chatDao.getMessagesForConversation(c.id).first()
+            val msgs = chatDao.getMessagesForConversationIncludingDeleted(c.id).first()
             android.util.Log.d("CloudSyncManager", "Conversation '${c.title}': ${msgs.size} messages")
 
             val backupMessages = msgs.map { m ->
@@ -209,10 +200,15 @@ class CloudSyncManager(
                     lastMessage = c.lastMessage,
                     lastMessageTime = c.lastMessageTime.time,
                     messageCount = backupMessages.size,
-                    messages = backupMessages
+                    messages = backupMessages,
+                    isDeleted = c.isDeleted,
+                    deletedAt = c.deletedAt?.time
                 )
             )
         }
+
+        val apiKeys = groups.map { com.glassous.aime.data.model.ApiKey(platform = it.name, apiKey = it.apiKey) }
+            .filter { it.apiKey.isNotBlank() }
 
         val backupData = BackupData(
             version = 1,
@@ -220,7 +216,8 @@ class CloudSyncManager(
             modelGroups = groups,
             models = models,
             selectedModelId = selectedModelId,
-            conversations = backupConversations
+            conversations = backupConversations,
+            apiKeys = apiKeys
         )
 
         android.util.Log.d("CloudSyncManager", "Local backup collected: version=${backupData.version}, exportedAt=${backupData.exportedAt}")
@@ -231,12 +228,26 @@ class CloudSyncManager(
     private suspend fun mergeRemoteIntoLocal(remote: BackupData) {
         android.util.Log.d("CloudSyncManager", "Starting merge remote into local: remote conversations=${remote.conversations.size}, modelGroups=${remote.modelGroups.size}, models=${remote.models.size}")
 
+        val localGroupsAll = modelDao.getAllGroupsIncludingDeleted().first()
+        val deletedGroupIds = localGroupsAll.filter { it.isDeleted }.map { it.id }.toSet()
+        val deletedModelIds = mutableSetOf<String>()
+        localGroupsAll.forEach { g ->
+            val msAll = modelDao.getModelsByGroupIdIncludingDeleted(g.id).first()
+            msAll.filter { it.isDeleted }.forEach { deletedModelIds.add(it.id) }
+        }
+        val localConversationsAll = chatDao.getAllConversationsIncludingDeleted().first()
+        val deletedConversationTitles = localConversationsAll.filter { it.isDeleted }.map { it.title }.toSet()
+
         // 1. 合并模型分组
         val localGroups = modelDao.getAllGroups().first().toMutableList()
         android.util.Log.d("CloudSyncManager", "Local groups before merge: ${localGroups.size}")
         val nameToGroup = localGroups.associateBy { it.name }.toMutableMap()
 
         remote.modelGroups.forEach { rg ->
+            if (deletedGroupIds.contains(rg.id)) {
+                android.util.Log.d("CloudSyncManager", "Skip remote group due to local tombstone: ${rg.name}")
+                return@forEach
+            }
             val existing = nameToGroup[rg.name]
             val targetGroupId = if (existing == null) {
                 // 本地没有这个组，插入
@@ -256,6 +267,10 @@ class CloudSyncManager(
             val nameToModel = localModels.associateBy { it.name }.toMutableMap() // 使用 name 或 modelName 判重
 
             remote.models.filter { it.groupId == rg.id }.forEach { rm ->
+                if (deletedModelIds.contains(rm.id)) {
+                    android.util.Log.d("CloudSyncManager", "Skip remote model due to local tombstone: ${rm.name}")
+                    return@forEach
+                }
                 // 只有当本地没有这个模型时才插入
                 if (nameToModel[rm.name] == null && nameToModel.values.none { it.modelName == rm.modelName }) {
                     android.util.Log.d("CloudSyncManager", "Inserting new model: ${rm.name} (${rm.modelName})")
@@ -264,6 +279,16 @@ class CloudSyncManager(
                     nameToModel[rm.name] = newModel
                 } else {
                     android.util.Log.d("CloudSyncManager", "Skipping existing model: ${rm.name}")
+                }
+            }
+        }
+
+        if (remote.apiKeys != null) {
+            val currentGroups = modelDao.getAllGroups().first()
+            remote.apiKeys.forEach { ak ->
+                val grp = currentGroups.find { it.name == ak.platform }
+                if (grp != null && grp.apiKey.isBlank()) {
+                    modelDao.updateGroup(grp.copy(apiKey = ak.apiKey))
                 }
             }
         }
@@ -280,6 +305,10 @@ class CloudSyncManager(
         val localConversations = chatDao.getAllConversations().first().toMutableList()
 
         remote.conversations.forEach { rc ->
+            if (deletedConversationTitles.contains(rc.title)) {
+                android.util.Log.d("CloudSyncManager", "Skip remote conversation due to local tombstone: ${rc.title}")
+                return@forEach
+            }
             // 尝试通过标题和最后消息时间模糊匹配找到本地对应的会话
             val matched = localConversations.firstOrNull { lc ->
                 // 匹配规则：标题相同，或者（如果标题是默认的）内容高度重叠
@@ -338,13 +367,17 @@ class CloudSyncManager(
             val localMessageKeys = localMessages.map { msg ->
                 "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}"
             }.toSet()
+            val localDeletedMessageKeys = chatDao.getMessagesForConversationIncludingDeleted(convId).first()
+                .filter { it.isDeleted }
+                .map { msg -> "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}" }
+                .toSet()
 
             var hasNewMessage = false
             rc.messages.forEach { rm ->
                 val rmKey = "${rm.content.trim()}_${rm.timestamp / 1000}_${rm.isFromUser}"
 
                 // 检查是否已存在相同的消息
-                if (rmKey !in localMessageKeys) {
+                if (rmKey !in localMessageKeys && rmKey !in localDeletedMessageKeys) {
                     try {
                         android.util.Log.d("CloudSyncManager", "Attempting to insert message: ${rm.content.take(50)}...")
                         val messageId = chatDao.insertMessage(

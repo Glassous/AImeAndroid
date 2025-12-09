@@ -12,7 +12,9 @@ data class ChatMessage(
     val content: String,
     val isFromUser: Boolean,
     val timestamp: Date = Date(),
-    val isError: Boolean = false
+    val isError: Boolean = false,
+    val isDeleted: Boolean = false,
+    val deletedAt: Date? = null
 )
 
 @Entity(tableName = "conversations")
@@ -22,5 +24,7 @@ data class Conversation(
     val title: String,
     val lastMessage: String = "",
     val lastMessageTime: Date = Date(),
-    val messageCount: Int = 0
+    val messageCount: Int = 0,
+    val isDeleted: Boolean = false,
+    val deletedAt: Date? = null
 )

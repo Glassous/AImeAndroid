@@ -18,34 +18,20 @@ import com.google.gson.stream.JsonReader
 import java.io.StringReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.glassous.aime.data.CloudSyncManager
+
 
 class ChatRepository(
     private val chatDao: ChatDao,
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
     private val contextPreferences: ContextPreferences,
-    private val cloudSyncManager: CloudSyncManager,
     private val openAiService: OpenAiService = OpenAiService(),
     private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
     private val weatherService: WeatherService = WeatherService(),
     private val stockService: StockService = StockService()
 ) {
-    // 用于标记是否有对话正在生成，防止同步干扰
-    @Volatile
-    private var isGenerating = false
     
-    private suspend fun triggerSync() {
-        // 如果有对话正在生成，跳过同步
-        if (isGenerating) {
-            android.util.Log.d("ChatRepository", "Sync skipped: conversation is being generated")
-            return
-        }
-        try {
-            withContext(Dispatchers.IO) { cloudSyncManager.syncOnce() }
-        } catch (_: Exception) { }
-    }
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>> {
         return chatDao.getMessagesForConversation(conversationId)
     }
@@ -83,8 +69,6 @@ class ChatRepository(
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
-        // 设置标志位，表示正在生成对话
-        isGenerating = true
         return try {
             // Save user message
             val userMessage = ChatMessage(
@@ -779,7 +763,6 @@ class ChatRepository(
 
                 // Update conversation (assistant side)
                 updateConversationAfterMessage(conversationId, message)
-                triggerSync()
 
                 Result.success(finalUpdated)
             } catch (e: Exception) {
@@ -793,9 +776,6 @@ class ChatRepository(
             }
         } catch (e: Exception) {
             Result.failure(e)
-        } finally {
-            // 重置标志位，表示对话生成完成
-            isGenerating = false
         }
     }
 
@@ -807,8 +787,6 @@ class ChatRepository(
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
-        // 设置标志位，表示正在生成对话
-        isGenerating = true
         return try {
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == assistantMessageId }
@@ -1346,13 +1324,9 @@ class ChatRepository(
             // 最终写入完整文本
             chatDao.updateMessage(assistantMessage.copy(content = aggregated.toString()))
             refreshConversationMetadata(conversationId)
-            triggerSync()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
-        } finally {
-            // 重置标志位，表示对话生成完成
-            isGenerating = false
         }
     }
 
@@ -1402,9 +1376,6 @@ class ChatRepository(
             }
 
             refreshConversationMetadata(newId)
-            triggerSync()
-
-            
 
             newId
         }
@@ -1415,8 +1386,6 @@ class ChatRepository(
         if (conversation != null) {
             val updatedConversation = conversation.copy(title = newTitle)
             chatDao.updateConversation(updatedConversation)
-            triggerSync()
-            
             
         }
     }
@@ -1457,11 +1426,9 @@ class ChatRepository(
     suspend fun deleteConversation(conversationId: Long, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
-            chatDao.deleteMessagesForConversation(conversationId)
-            chatDao.deleteConversation(conversation)
-            triggerSync()
-            
-        
+            val now = java.util.Date()
+            chatDao.markMessagesDeletedForConversation(conversationId, now)
+            chatDao.markConversationDeleted(conversationId, now)
         }
     }
 
@@ -1487,9 +1454,6 @@ class ChatRepository(
         onSyncResult: ((Boolean, String) -> Unit)? = null
     ): Result<Unit> {
         return try {
-            // 设置标志位，表示正在生成对话
-            isGenerating = true
-            
             // 获取完整历史
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val targetIndex = history.indexOfFirst { it.id == userMessageId }
@@ -2233,14 +2197,10 @@ class ChatRepository(
             val finalText = if (aggregated.isEmpty()) "生成失败或内容为空" else aggregated.toString()
             chatDao.updateMessage(assistantMessage.copy(content = finalText))
             refreshConversationMetadata(conversationId)
-            triggerSync()
             
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
-        } finally {
-            // 重置标志位，表示对话生成完成
-            isGenerating = false
         }
     }
 

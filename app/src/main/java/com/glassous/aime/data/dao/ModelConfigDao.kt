@@ -9,10 +9,10 @@ import kotlinx.coroutines.flow.Flow
 interface ModelConfigDao {
     
     // 模型分组操作
-    @Query("SELECT * FROM model_groups ORDER BY createdAt DESC")
+    @Query("SELECT * FROM model_groups WHERE isDeleted = 0 ORDER BY createdAt DESC")
     fun getAllGroups(): Flow<List<ModelGroup>>
     
-    @Query("SELECT * FROM model_groups WHERE id = :groupId")
+    @Query("SELECT * FROM model_groups WHERE id = :groupId AND isDeleted = 0")
     suspend fun getGroupById(groupId: String): ModelGroup?
     
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -21,11 +21,11 @@ interface ModelConfigDao {
     @Update
     suspend fun updateGroup(group: ModelGroup)
     
-    @Delete
-    suspend fun deleteGroup(group: ModelGroup)
+    @Query("UPDATE model_groups SET isDeleted = 1, deletedAt = :deletedAt WHERE id = :groupId")
+    suspend fun markGroupDeleted(groupId: String, deletedAt: Long)
     
     // 模型操作
-    @Query("SELECT * FROM models WHERE groupId = :groupId ORDER BY createdAt DESC")
+    @Query("SELECT * FROM models WHERE groupId = :groupId AND isDeleted = 0 ORDER BY createdAt DESC")
     fun getModelsByGroupId(groupId: String): Flow<List<Model>>
     
     @Query("SELECT * FROM models WHERE id = :modelId")
@@ -37,11 +37,11 @@ interface ModelConfigDao {
     @Update
     suspend fun updateModel(model: Model)
     
-    @Delete
-    suspend fun deleteModel(model: Model)
+    @Query("UPDATE models SET isDeleted = 1, deletedAt = :deletedAt WHERE id = :modelId")
+    suspend fun markModelDeleted(modelId: String, deletedAt: Long)
     
-    @Query("DELETE FROM models WHERE groupId = :groupId")
-    suspend fun deleteModelsByGroupId(groupId: String)
+    @Query("UPDATE models SET isDeleted = 1, deletedAt = :deletedAt WHERE groupId = :groupId")
+    suspend fun markModelsDeletedByGroupId(groupId: String, deletedAt: Long)
 
     // Added: delete all data methods for import override mode
     @Query("DELETE FROM models")
@@ -49,4 +49,10 @@ interface ModelConfigDao {
 
     @Query("DELETE FROM model_groups")
     suspend fun deleteAllGroups()
+
+    @Query("SELECT * FROM model_groups ORDER BY createdAt DESC")
+    fun getAllGroupsIncludingDeleted(): Flow<List<ModelGroup>>
+
+    @Query("SELECT * FROM models WHERE groupId = :groupId ORDER BY createdAt DESC")
+    fun getModelsByGroupIdIncludingDeleted(groupId: String): Flow<List<Model>>
 }

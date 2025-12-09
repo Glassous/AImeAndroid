@@ -1,5 +1,5 @@
 -- =============================================================================
--- AIme Android 后端初始化脚本 (v5.1 - 修复函数重载与权限签名问题)
+-- AIme Android 后端初始化脚本 (v5.2 - 修复同步与密码哈希)
 -- =============================================================================
 
 -- 1. 创建 extensions 架构并启用 pgcrypto
@@ -24,7 +24,7 @@ DROP TABLE IF EXISTS public.accounts CASCADE;
 CREATE TABLE public.accounts (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     email text NOT NULL UNIQUE,
-    password text NOT NULL,
+    password text NOT NULL, -- 存储哈希后的密码
     security_question text,
     security_answer text,
     created_at timestamp with time zone DEFAULT now(),
@@ -50,7 +50,9 @@ CREATE TABLE public.conversations (
     last_message_time timestamp with time zone,
     message_count int DEFAULT 0,
     created_at timestamp with time zone DEFAULT now(),
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    is_deleted boolean DEFAULT false,
+    deleted_at timestamp with time zone
 );
 
 -- 3.4 消息表
@@ -62,7 +64,9 @@ CREATE TABLE public.chat_messages (
     is_from_user boolean DEFAULT false,
     timestamp timestamp with time zone,
     is_error boolean DEFAULT false,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    is_deleted boolean DEFAULT false,
+    deleted_at timestamp with time zone
 );
 
 -- 3.5 模型分组表
@@ -73,7 +77,9 @@ CREATE TABLE public.model_groups (
     base_url text NOT NULL,
     api_key text NOT NULL,
     provider_url text,
-    created_at bigint
+    created_at bigint,
+    is_deleted boolean DEFAULT false,
+    deleted_at timestamp with time zone
 );
 
 -- 3.6 模型表
@@ -84,7 +90,9 @@ CREATE TABLE public.models (
     name text NOT NULL,
     model_name text NOT NULL,
     remark text,
-    created_at bigint
+    created_at bigint,
+    is_deleted boolean DEFAULT false,
+    deleted_at timestamp with time zone
 );
 
 -- 3.7 用户设置表
@@ -138,7 +146,6 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO postgres;
 -- =============================================================================
 
 -- 6.1 注册函数
--- 清理旧函数以防止重载冲突
 DROP FUNCTION IF EXISTS public.accounts_register(text, text, text, text);
 
 CREATE OR REPLACE FUNCTION public.accounts_register(
@@ -156,6 +163,7 @@ DECLARE
   new_uid uuid;
   new_token text;
   existing_id uuid;
+  hashed_password text;
 BEGIN
   -- 1. 查重
   SELECT id INTO existing_id FROM public.accounts WHERE email = p_email LIMIT 1;
@@ -163,12 +171,15 @@ BEGIN
     RETURN jsonb_build_object('ok', false, 'message', '注册失败：该邮箱已被注册');
   END IF;
 
-  -- 2. 创建用户
+  -- 2. 密码哈希
+  hashed_password := crypt(p_password, gen_salt('bf'));
+
+  -- 3. 创建用户
   INSERT INTO public.accounts(email, password, security_question, security_answer)
-  VALUES (p_email, p_password, p_question, p_answer)
+  VALUES (p_email, hashed_password, p_question, p_answer)
   RETURNING id INTO new_uid;
 
-  -- 3. 创建 Token
+  -- 4. 创建 Token
   new_token := encode(gen_random_bytes(32), 'hex');
   
   INSERT INTO public.account_sessions(user_id, email, token)
@@ -203,7 +214,10 @@ BEGIN
   SELECT id, password INTO v_uid, v_stored_pass 
   FROM public.accounts WHERE email = p_email LIMIT 1;
   
-  IF v_uid IS NOT NULL AND v_stored_pass = p_password THEN
+  -- 验证密码 (兼容明文和哈希)
+  -- 如果 v_stored_pass 不是哈希格式（旧数据），crypt 会报错或行为不一，但这里假设是新环境或已迁移
+  -- 为了健壮性，这里仅支持哈希验证
+  IF v_uid IS NOT NULL AND v_stored_pass = crypt(p_password, v_stored_pass) THEN
     v_token := encode(gen_random_bytes(32), 'hex');
     
     DELETE FROM public.account_sessions WHERE user_id = v_uid;
@@ -258,7 +272,7 @@ BEGIN
   SELECT id, security_answer INTO v_uid, v_real_answer FROM public.accounts WHERE email = p_email LIMIT 1;
   
   IF v_uid IS NOT NULL AND v_real_answer = p_answer THEN
-    UPDATE public.accounts SET password = p_new_password, updated_at = now() WHERE id = v_uid;
+    UPDATE public.accounts SET password = crypt(p_new_password, gen_salt('bf')), updated_at = now() WHERE id = v_uid;
     DELETE FROM public.account_sessions WHERE user_id = v_uid;
     RETURN jsonb_build_object('ok', true, 'message', '密码重置成功，请重新登录');
   ELSE
@@ -280,9 +294,11 @@ SET search_path = public, extensions
 AS $$
 DECLARE
   v_uid uuid;
+  v_stored_pass text;
 BEGIN
-  SELECT id INTO v_uid FROM public.accounts WHERE email = p_email AND password = p_password LIMIT 1;
-  IF v_uid IS NOT NULL THEN
+  SELECT id, password INTO v_uid, v_stored_pass FROM public.accounts WHERE email = p_email LIMIT 1;
+  
+  IF v_uid IS NOT NULL AND v_stored_pass = crypt(p_password, v_stored_pass) THEN
     UPDATE public.accounts SET security_question = p_new_question, security_answer = p_new_answer, updated_at = now() WHERE id = v_uid;
     RETURN jsonb_build_object('ok', true, 'message', '安全问题已更新');
   ELSE
@@ -295,11 +311,11 @@ $$;
 -- 7. 核心同步函数 (Sync)
 -- =============================================================================
 
--- 7.1 上传备份函数
--- 显式清理，防止重载错误
+-- 清理可能存在的同名重载，避免 PostgREST 选择歧义
 DROP FUNCTION IF EXISTS public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean);
+DROP FUNCTION IF EXISTS public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean, jsonb);
 
-CREATE OR REPLACE FUNCTION public.sync_upload_backup(
+CREATE OR REPLACE FUNCTION public.sync_upload_backup_v1(
     p_token text, 
     p_data jsonb, 
     p_sync_history boolean, 
@@ -330,15 +346,51 @@ BEGIN
 
   -- A. 写入
   IF p_sync_model_config THEN
-    DELETE FROM public.model_groups WHERE user_id = uid;
-    INSERT INTO public.model_groups(user_id, id, name, base_url, api_key, provider_url, created_at)
-    SELECT uid, (g->>'id'), (g->>'name'), (g->>'baseUrl'), (g->>'apiKey'), (g->>'providerUrl'), (g->>'createdAt')::bigint
-    FROM jsonb_array_elements(COALESCE(p_data->'modelGroups', '[]'::jsonb)) AS g;
+    INSERT INTO public.model_groups(user_id, id, name, base_url, api_key, provider_url, created_at, is_deleted, deleted_at)
+    SELECT 
+      uid, 
+      (g->>'id'), 
+      COALESCE(g->>'name', 'Unknown'), 
+      COALESCE(g->>'baseUrl', ''), 
+      COALESCE(g->>'apiKey', ''), 
+      (g->>'providerUrl'), 
+      COALESCE((g->>'createdAt')::bigint, 0),
+      COALESCE((g->>'isDeleted')::boolean, false),
+      CASE WHEN (g ? 'deletedAt') THEN to_timestamp((((g->>'deletedAt')::numeric)/1000)::double precision) ELSE NULL END
+    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_data->'modelGroups') = 'array' THEN p_data->'modelGroups' ELSE '[]'::jsonb END) AS g
+    WHERE (g->>'id') IS NOT NULL
+    ON CONFLICT (id) DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      name = EXCLUDED.name,
+      base_url = EXCLUDED.base_url,
+      api_key = EXCLUDED.api_key,
+      provider_url = EXCLUDED.provider_url,
+      created_at = EXCLUDED.created_at,
+      is_deleted = EXCLUDED.is_deleted,
+      deleted_at = EXCLUDED.deleted_at;
 
-    DELETE FROM public.models WHERE user_id = uid;
-    INSERT INTO public.models(user_id, id, group_id, name, model_name, remark, created_at)
-    SELECT uid, (m->>'id'), (m->>'groupId'), (m->>'name'), (m->>'modelName'), (m->>'remark'), (m->>'createdAt')::bigint
-    FROM jsonb_array_elements(COALESCE(p_data->'models', '[]'::jsonb)) AS m;
+    INSERT INTO public.models(user_id, id, group_id, name, model_name, remark, created_at, is_deleted, deleted_at)
+    SELECT 
+      uid, 
+      (m->>'id'), 
+      (m->>'groupId'), 
+      COALESCE(m->>'name', 'Unknown'), 
+      COALESCE(m->>'modelName', ''), 
+      (m->>'remark'), 
+      COALESCE((m->>'createdAt')::bigint, 0),
+      COALESCE((m->>'isDeleted')::boolean, false),
+      CASE WHEN (m ? 'deletedAt') THEN to_timestamp((((m->>'deletedAt')::numeric)/1000)::double precision) ELSE NULL END
+    FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_data->'models') = 'array' THEN p_data->'models' ELSE '[]'::jsonb END) AS m
+    WHERE (m->>'id') IS NOT NULL
+    ON CONFLICT (id) DO UPDATE SET
+      user_id = EXCLUDED.user_id,
+      group_id = EXCLUDED.group_id,
+      name = EXCLUDED.name,
+      model_name = EXCLUDED.model_name,
+      remark = EXCLUDED.remark,
+      created_at = EXCLUDED.created_at,
+      is_deleted = EXCLUDED.is_deleted,
+      deleted_at = EXCLUDED.deleted_at;
   END IF;
 
   IF p_sync_selected_model THEN
@@ -348,15 +400,18 @@ BEGIN
   END IF;
 
   IF p_sync_api_key THEN
-    DELETE FROM public.api_keys WHERE user_id = uid;
-    INSERT INTO public.api_keys(user_id, platform, api_key)
-    SELECT uid, (k->>'platform'), (k->>'apiKey')
-    FROM jsonb_array_elements(COALESCE(p_data->'apiKeys', '[]'::jsonb)) AS k;
+    IF (p_data ? 'apiKeys') AND jsonb_typeof(p_data->'apiKeys') = 'array' THEN
+      DELETE FROM public.api_keys WHERE user_id = uid;
+      INSERT INTO public.api_keys(user_id, platform, api_key)
+      SELECT uid, (k->>'platform'), (k->>'apiKey')
+      FROM jsonb_array_elements(p_data->'apiKeys') AS k;
+    END IF;
   END IF;
 
   IF p_sync_history THEN
-    FOR conv_record IN SELECT * FROM jsonb_array_elements(COALESCE(p_data->'conversations', '[]'::jsonb)) LOOP
+    FOR conv_record IN SELECT * FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_data->'conversations') = 'array' THEN p_data->'conversations' ELSE '[]'::jsonb END) LOOP
         conv_id := NULL;
+        -- 尝试根据标题查找现有会话
         SELECT id INTO conv_id FROM public.conversations WHERE user_id = uid AND title = (conv_record.value->>'title')::text LIMIT 1;
         
         IF conv_id IS NOT NULL THEN
@@ -364,23 +419,40 @@ BEGIN
                 last_message = (conv_record.value->>'lastMessage'),
                 last_message_time = to_timestamp((((conv_record.value->>'lastMessageTime')::numeric)/1000)::double precision),
                 message_count = ((conv_record.value->>'messageCount')::int),
-                updated_at = now()
+                updated_at = now(),
+                is_deleted = COALESCE((conv_record.value->>'isDeleted')::boolean, false),
+                deleted_at = CASE WHEN (conv_record.value ? 'deletedAt') THEN to_timestamp((((conv_record.value->>'deletedAt')::numeric)/1000)::double precision) ELSE deleted_at END
             WHERE id = conv_id;
         ELSE
-            INSERT INTO public.conversations(user_id, title, last_message, last_message_time, message_count)
+            INSERT INTO public.conversations(user_id, title, last_message, last_message_time, message_count, is_deleted, deleted_at)
             VALUES (uid, (conv_record.value->>'title'), (conv_record.value->>'lastMessage'),
-                to_timestamp((((conv_record.value->>'lastMessageTime')::numeric)/1000)::double precision), ((conv_record.value->>'messageCount')::int))
+                to_timestamp((((conv_record.value->>'lastMessageTime')::numeric)/1000)::double precision), ((conv_record.value->>'messageCount')::int),
+                COALESCE((conv_record.value->>'isDeleted')::boolean, false),
+                CASE WHEN (conv_record.value ? 'deletedAt') THEN to_timestamp((((conv_record.value->>'deletedAt')::numeric)/1000)::double precision) ELSE NULL END)
             RETURNING id INTO conv_id;
         END IF;
 
+        IF COALESCE((conv_record.value->>'isDeleted')::boolean, false) THEN
+            CONTINUE;
+        END IF;
+
+        -- 插入消息 (避免重复)
+        -- 使用更宽松的去重条件，防止浮点数精度问题
         INSERT INTO public.chat_messages(conversation_id, user_id, content, is_from_user, timestamp, is_error)
-        SELECT conv_id, uid, (m->>'content'), ((m->>'isFromUser')::boolean),
-               to_timestamp((((m->>'timestamp')::numeric)/1000)::double precision), COALESCE((m->>'isError')::boolean, false)
+        SELECT 
+          conv_id, 
+          uid, 
+          (m->>'content'), 
+          ((m->>'isFromUser')::boolean),
+          to_timestamp((((m->>'timestamp')::numeric)/1000)::double precision), 
+          COALESCE((m->>'isError')::boolean, false)
         FROM jsonb_array_elements(conv_record.value->'messages') AS m
         WHERE NOT EXISTS (
             SELECT 1 FROM public.chat_messages cm 
             WHERE cm.conversation_id = conv_id AND cm.user_id = uid 
-            AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.002
+            -- 比较时间戳 (误差 10ms) 和 内容
+            AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.01
+            AND cm.content = (m->>'content')
         );
     END LOOP;
   END IF;
@@ -395,18 +467,20 @@ BEGIN
            SELECT COALESCE(jsonb_agg(
              jsonb_build_object('content', m.content, 'isFromUser', m.is_from_user,
                'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint, 'isError', m.is_error) ORDER BY m.timestamp ASC
-           ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id
+           ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id AND COALESCE(m.is_deleted, false) = false
          )
        ) ORDER BY c.last_message_time DESC
-  ), '[]'::jsonb) INTO res_conversations FROM public.conversations c WHERE c.user_id = uid;
+  ), '[]'::jsonb) INTO res_conversations FROM public.conversations c WHERE c.user_id = uid AND COALESCE(c.is_deleted, false) = false;
 
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
-      'id', id, 'name', name, 'baseUrl', base_url, 'apiKey', api_key, 'providerUrl', provider_url, 'createdAt', created_at
-  )), '[]'::jsonb) INTO res_model_groups FROM public.model_groups WHERE user_id = uid;
+      'id', id, 'name', name, 'baseUrl', base_url, 'apiKey', api_key, 'providerUrl', provider_url, 'createdAt', created_at,
+      'isDeleted', is_deleted, 'deletedAt', CASE WHEN deleted_at IS NOT NULL THEN (extract(epoch from deleted_at) * 1000)::bigint ELSE NULL END
+  )), '[]'::jsonb) INTO res_model_groups FROM public.model_groups WHERE user_id = uid AND COALESCE(is_deleted, false) = false;
 
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
-      'id', id, 'groupId', group_id, 'name', name, 'modelName', model_name, 'remark', remark, 'createdAt', created_at
-  )), '[]'::jsonb) INTO res_models FROM public.models WHERE user_id = uid;
+      'id', id, 'groupId', group_id, 'name', name, 'modelName', model_name, 'remark', remark, 'createdAt', created_at,
+      'isDeleted', is_deleted, 'deletedAt', CASE WHEN deleted_at IS NOT NULL THEN (extract(epoch from deleted_at) * 1000)::bigint ELSE NULL END
+  )), '[]'::jsonb) INTO res_models FROM public.models WHERE user_id = uid AND COALESCE(is_deleted, false) = false;
 
   SELECT selected_model_id INTO res_selected_model_id FROM public.user_settings WHERE user_id = uid;
 
@@ -425,21 +499,20 @@ $$;
 -- 7.2 下载备份 (辅助函数)
 DROP FUNCTION IF EXISTS public.sync_download_backup(text);
 
-CREATE OR REPLACE FUNCTION public.sync_download_backup(p_token text)
+CREATE OR REPLACE FUNCTION public.sync_download_backup_v1(p_token text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
 BEGIN
-  RETURN public.sync_upload_backup(p_token, '{}'::jsonb, false, false, false, false);
+  RETURN public.sync_upload_backup_v1(p_token, '{}'::jsonb, false, false, false, false);
 END;
 $$;
 
 -- =============================================================================
 -- 8. 授权 (Grant Executions)
 -- =============================================================================
--- 关键修改：在 GRANT 语句中必须指定参数列表，以消除函数重载带来的歧义
 
 -- 设置所有者 (Owner)
 ALTER FUNCTION public.accounts_register(text, text, text, text) OWNER TO postgres;
@@ -447,8 +520,8 @@ ALTER FUNCTION public.accounts_login(text, text) OWNER TO postgres;
 ALTER FUNCTION public.accounts_get_security_question(text) OWNER TO postgres;
 ALTER FUNCTION public.accounts_reset_password_with_answer(text, text, text) OWNER TO postgres;
 ALTER FUNCTION public.accounts_update_security_question(text, text, text, text) OWNER TO postgres;
-ALTER FUNCTION public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean) OWNER TO postgres;
-ALTER FUNCTION public.sync_download_backup(text) OWNER TO postgres;
+ALTER FUNCTION public.sync_upload_backup_v1(text, jsonb, boolean, boolean, boolean, boolean) OWNER TO postgres;
+ALTER FUNCTION public.sync_download_backup_v1(text) OWNER TO postgres;
 
 -- 授权执行 (Grant Execute)
 GRANT EXECUTE ON FUNCTION public.accounts_register(text, text, text, text) TO anon, authenticated, service_role;
@@ -456,6 +529,5 @@ GRANT EXECUTE ON FUNCTION public.accounts_login(text, text) TO anon, authenticat
 GRANT EXECUTE ON FUNCTION public.accounts_get_security_question(text) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.accounts_reset_password_with_answer(text, text, text) TO anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.accounts_update_security_question(text, text, text, text) TO anon, authenticated, service_role;
--- 下面这一行就是之前报错的地方，现在加上了参数列表：
-GRANT EXECUTE ON FUNCTION public.sync_upload_backup(text, jsonb, boolean, boolean, boolean, boolean) TO anon, authenticated, service_role;
-GRANT EXECUTE ON FUNCTION public.sync_download_backup(text) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.sync_upload_backup_v1(text, jsonb, boolean, boolean, boolean, boolean) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.sync_download_backup_v1(text) TO anon, authenticated, service_role;

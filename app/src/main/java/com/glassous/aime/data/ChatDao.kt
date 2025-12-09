@@ -6,10 +6,10 @@ import java.util.Date
 
 @Dao
 interface ChatDao {
-    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
+    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId AND isDeleted = 0 ORDER BY timestamp ASC")
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>>
 
-    @Query("SELECT * FROM conversations ORDER BY lastMessageTime DESC")
+    @Query("SELECT * FROM conversations WHERE isDeleted = 0 ORDER BY lastMessageTime DESC")
     fun getAllConversations(): Flow<List<Conversation>>
 
     @Query("SELECT * FROM conversations WHERE id = :conversationId")
@@ -33,13 +33,13 @@ interface ChatDao {
     @Delete
     suspend fun deleteConversation(conversation: Conversation)
 
-    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId")
-    suspend fun deleteMessagesForConversation(conversationId: Long)
+    @Query("UPDATE chat_messages SET isDeleted = 1, deletedAt = :deletedAt WHERE conversationId = :conversationId")
+    suspend fun markMessagesDeletedForConversation(conversationId: Long, deletedAt: Date)
 
-    @Query("SELECT COUNT(*) FROM chat_messages WHERE conversationId = :conversationId")
+    @Query("SELECT COUNT(*) FROM chat_messages WHERE conversationId = :conversationId AND isDeleted = 0")
     suspend fun getMessageCount(conversationId: Long): Int
 
-    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp DESC LIMIT 1")
+    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId AND isDeleted = 0 ORDER BY timestamp DESC LIMIT 1")
     suspend fun getLastMessage(conversationId: Long): ChatMessage?
 
     // Added: fetch single message by id
@@ -59,4 +59,13 @@ interface ChatDao {
     
     @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND id = :messageId")
     suspend fun deleteMessageById(conversationId: Long, messageId: Long)
+
+    @Query("UPDATE conversations SET isDeleted = 1, deletedAt = :deletedAt WHERE id = :conversationId")
+    suspend fun markConversationDeleted(conversationId: Long, deletedAt: Date)
+
+    @Query("SELECT * FROM conversations ORDER BY lastMessageTime DESC")
+    fun getAllConversationsIncludingDeleted(): Flow<List<Conversation>>
+
+    @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
+    fun getMessagesForConversationIncludingDeleted(conversationId: Long): Flow<List<ChatMessage>>
 }

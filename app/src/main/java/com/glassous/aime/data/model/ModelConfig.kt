@@ -2,6 +2,7 @@ package com.glassous.aime.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import com.google.gson.annotations.SerializedName
 
 /**
  * 模型配置分组
@@ -9,12 +10,14 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "model_groups")
 data class ModelGroup(
     @PrimaryKey
-    val id: String,
-    val name: String,
-    val baseUrl: String,
-    val apiKey: String,
-    val providerUrl: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("baseUrl") val baseUrl: String,
+    @SerializedName("apiKey") val apiKey: String,
+    @SerializedName("providerUrl") val providerUrl: String? = null,
+    @SerializedName("createdAt") val createdAt: Long = System.currentTimeMillis(),
+    @SerializedName("isDeleted") val isDeleted: Boolean = false,
+    @SerializedName("deletedAt") val deletedAt: Long? = null
 )
 
 /**
@@ -23,12 +26,14 @@ data class ModelGroup(
 @Entity(tableName = "models")
 data class Model(
     @PrimaryKey
-    val id: String,
-    val groupId: String,
-    val name: String,
-    val modelName: String, // 实际的模型名称，如 gpt-3.5-turbo
-    val remark: String? = null,
-    val createdAt: Long = System.currentTimeMillis()
+    @SerializedName("id") val id: String,
+    @SerializedName("groupId") val groupId: String,
+    @SerializedName("name") val name: String,
+    @SerializedName("modelName") val modelName: String, // 实际的模型名称，如 gpt-3.5-turbo
+    @SerializedName("remark") val remark: String? = null,
+    @SerializedName("createdAt") val createdAt: Long = System.currentTimeMillis(),
+    @SerializedName("isDeleted") val isDeleted: Boolean = false,
+    @SerializedName("deletedAt") val deletedAt: Long? = null
 )
 
 /**
