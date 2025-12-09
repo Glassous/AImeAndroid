@@ -3,6 +3,7 @@ package com.glassous.aime.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState // Added import
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -61,6 +62,18 @@ fun NavigationDrawer(
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
     // ModalDrawerSheet 默认会处理 insets，但为了让 LazyColumn 内容能滚上来，我们需要手动传递给 contentPadding
     val windowInsets = WindowInsets.navigationBars
+
+    // [优化] 引入 LazyListState 以便控制滚动
+    val listState = rememberLazyListState()
+
+    // [优化] 监听对话列表数量变化，当数量增加（新对话生成）时自动滚动到顶部
+    var previousConversationCount by remember { mutableIntStateOf(conversations.size) }
+    LaunchedEffect(conversations.size) {
+        if (conversations.size > previousConversationCount) {
+            listState.animateScrollToItem(0)
+        }
+        previousConversationCount = conversations.size
+    }
 
     ModalDrawerSheet(
         modifier = modifier.width(320.dp),
@@ -168,6 +181,7 @@ fun NavigationDrawer(
             if (conversations.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.weight(1f),
+                    state = listState, // [优化] 绑定 ListState
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     // 关键修改：底部 Padding = 基础间距(16.dp) + 导航栏高度(bottomPadding)
                     // 这样列表可以滚上去，避免被小白条遮挡
@@ -248,6 +262,7 @@ fun NavigationDrawer(
     }
 }
 
+// ... existing code ...
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ConversationItem(
