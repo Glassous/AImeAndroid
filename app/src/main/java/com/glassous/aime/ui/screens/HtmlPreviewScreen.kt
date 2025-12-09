@@ -10,6 +10,8 @@ import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -17,6 +19,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,6 +45,8 @@ fun HtmlPreviewScreen(
     var isLoading by remember { mutableStateOf(true) }
     var showCopiedIcon by remember { mutableStateOf(false) }
     var localIsSourceMode by remember { mutableStateOf(isSourceMode) }
+    var isPcMode by remember { mutableStateOf(false) }
+    var showStatsDialog by remember { mutableStateOf(false) }
 
     // 复制HTML代码到剪贴板
     fun copyHtmlCode() {
@@ -69,6 +80,103 @@ fun HtmlPreviewScreen(
         }
     }
 
+    // 监听 PC 模式变化
+    LaunchedEffect(isPcMode) {
+        if (!localIsSourceMode) {
+            webViewRef?.settings?.apply {
+                if (isPcMode) {
+                    userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                    useWideViewPort = true
+                    loadWithOverviewMode = true
+                } else {
+                    userAgentString = null
+                    useWideViewPort = false
+                    loadWithOverviewMode = false
+                }
+            }
+            loadHtmlContent()
+        }
+    }
+
+    // HTML 高亮逻辑
+    val highlightedCode = remember(htmlCode) {
+        buildAnnotatedString {
+            val rawCode = htmlCode
+            append(rawCode)
+            
+            // 简单的正则高亮
+            val tagPattern = Regex("</?[a-zA-Z0-9]+", RegexOption.IGNORE_CASE)
+            val attrPattern = Regex("\\s[a-zA-Z0-9-]+=", RegexOption.IGNORE_CASE)
+            val stringPattern = Regex("\"[^\"]*\"|'[^']*'")
+            val commentPattern = Regex("<!--[\\s\\S]*?-->")
+
+            // 注释 (灰色)
+            commentPattern.findAll(rawCode).forEach {
+                addStyle(SpanStyle(color = Color(0xFF7F848E)), it.range.first, it.range.last + 1)
+            }
+
+            // 标签 (粉红色)
+            tagPattern.findAll(rawCode).forEach {
+                // 确保不在注释内 (简单判断，若需精确需完整解析)
+                // 这里简单覆盖，注意顺序
+                addStyle(SpanStyle(color = Color(0xFFE06C75)), it.range.first, it.range.last + 1)
+            }
+            
+            // 标签结束符 > (粉红色)
+            Regex(">").findAll(rawCode).forEach {
+                addStyle(SpanStyle(color = Color(0xFFE06C75)), it.range.first, it.range.last + 1)
+            }
+
+            // 属性名 (橙色)
+            attrPattern.findAll(rawCode).forEach {
+                addStyle(SpanStyle(color = Color(0xFFD19A66)), it.range.first, it.range.last + 1)
+            }
+
+            // 字符串/属性值 (绿色)
+            stringPattern.findAll(rawCode).forEach {
+                addStyle(SpanStyle(color = Color(0xFF98C379)), it.range.first, it.range.last + 1)
+            }
+        }
+    }
+
+    // 统计信息
+    val charCount = remember(htmlCode) { htmlCode.length }
+    val lineCount = remember(htmlCode) { htmlCode.lines().size }
+
+    if (showStatsDialog) {
+        AlertDialog(
+            onDismissRequest = { showStatsDialog = false },
+            icon = { Icon(Icons.Filled.Info, contentDescription = null) },
+            title = { Text("代码统计") },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("字符数:", style = MaterialTheme.typography.bodyLarge)
+                        Text("$charCount", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    }
+                    Divider()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("行数:", style = MaterialTheme.typography.bodyLarge)
+                        Text("$lineCount", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showStatsDialog = false }) {
+                    Text("关闭")
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,6 +187,12 @@ fun HtmlPreviewScreen(
                     }
                 },
                 actions = {
+                    // 统计信息按钮 (仅在源码模式显示)
+                    if (localIsSourceMode) {
+                        IconButton(onClick = { showStatsDialog = true }) {
+                            Icon(Icons.Filled.Info, contentDescription = "统计信息")
+                        }
+                    }
                     // 预览模式按钮
                     IconButton(
                         onClick = { localIsSourceMode = false },
@@ -103,6 +217,19 @@ fun HtmlPreviewScreen(
                             Icons.Filled.Code,
                             contentDescription = "源码模式",
                             tint = if (localIsSourceMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    // PC模式按钮
+                    IconButton(
+                        onClick = { isPcMode = !isPcMode },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = if (isPcMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface
+                        )
+                    ) {
+                        Icon(
+                            Icons.Filled.Computer,
+                            contentDescription = "PC模式",
+                            tint = if (isPcMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     // 复制按钮
@@ -146,7 +273,7 @@ fun HtmlPreviewScreen(
                     ) {
                         // 使用可滚动的文本区域显示源码
                         Text(
-                            text = htmlCode,
+                            text = highlightedCode,
                             fontFamily = FontFamily.Monospace,
                             fontSize = 14.sp,
                             color = MaterialTheme.colorScheme.onSurface,
@@ -182,6 +309,14 @@ fun HtmlPreviewScreen(
                                     settings.supportZoom()
                                     settings.builtInZoomControls = true
                                     settings.displayZoomControls = false
+
+                                    // 初始化 PC 模式设置
+                                    if (isPcMode) {
+                                        settings.userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                                        settings.useWideViewPort = true
+                                        settings.loadWithOverviewMode = true
+                                    }
+
                                     // 允许WebView显示HTML背景颜色
                                     setBackgroundColor(0x00000000) // 设置透明背景
                                     webViewRef = this
