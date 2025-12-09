@@ -3,7 +3,7 @@ package com.glassous.aime.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState // Added import
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -43,6 +43,12 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.platform.LocalViewConfiguration
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -295,6 +301,7 @@ private fun ConversationItem(
 
     // 滑动相关状态
     val density = LocalDensity.current
+    val viewConfiguration = LocalViewConfiguration.current
     val actionWidth = 150.dp // 三个按钮的总宽度
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
@@ -387,27 +394,86 @@ private fun ConversationItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                .draggable(
-                    orientation = Orientation.Horizontal,
-                    enabled = !isEditing, // 编辑标题时禁用滑动
-                    state = rememberDraggableState { delta ->
-                        scope.launch {
-                            // 限制只能向右滑动，最大不超过按钮宽度
-                            val newOffset = (offsetX.value + delta).coerceIn(0f, actionWidthPx)
-                            offsetX.snapTo(newOffset)
-                        }
-                    },
-                    onDragStopped = {
-                        // 释放时根据位置自动吸附：超过一半则展开，否则收起
-                        val target = if (offsetX.value > actionWidthPx / 2) actionWidthPx else 0f
-                        scope.launch {
-                            offsetX.animateTo(
-                                targetValue = target,
-                                animationSpec = tween(durationMillis = 300)
-                            )
+                // 使用 pointerInput 替代 draggable 以实现自定义的手势拦截逻辑
+                .pointerInput(isEditing) {
+                    if (isEditing) return@pointerInput // 编辑时禁用滑动
+
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var drag: androidx.compose.ui.input.pointer.PointerInputChange? = null
+                        var overSlop = 0f
+
+                        // 1. 手动检测 TouchSlop，并在此时判断手势方向
+                        var totalDx = 0f
+                        val touchSlop = viewConfiguration.touchSlop
+
+                        do {
+                            val event = awaitPointerEvent()
+                            // 查找当前触摸点的变化
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+                            // 修复：替换 change.changedToUp()，兼容不同 Compose 版本
+                            if (!change.pressed) {
+                                // 手指抬起，手势结束
+                                break
+                            }
+
+                            val dx = change.positionChange().x
+                            totalDx += dx
+
+                            // 累积滑动距离超过阈值，判定为拖拽
+                            if (abs(totalDx) > touchSlop) {
+                                // 关键逻辑：如果当前处于关闭状态 (offsetX <= 0) 且向左滑动 (totalDx < 0)
+                                // 则判定为关闭侧边栏手势，不消耗该事件，让父组件（Drawer）处理。
+                                if (offsetX.value <= 0.5f && totalDx < 0) {
+                                    return@awaitEachGesture
+                                }
+
+                                // 否则判定为打开按钮手势，消耗事件并开始拖拽
+                                change.consume()
+                                drag = change
+                                overSlop = totalDx
+                                break
+                            }
+                        } while (true)
+
+                        // 2. 如果判定为有效的列表项拖拽，开始处理后续移动
+                        if (drag != null) {
+                            // 应用初始的过量滑动
+                            scope.launch {
+                                val newOffset = (offsetX.value + overSlop).coerceIn(0f, actionWidthPx)
+                                offsetX.snapTo(newOffset)
+                            }
+
+                            // 继续监听后续的拖拽事件
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+
+                                // 修复：替换 change.changedToUp()
+                                if (!change.pressed) break
+
+                                val delta = change.positionChange().x
+                                if (delta != 0f) {
+                                    change.consume()
+                                    scope.launch {
+                                        val newOffset = (offsetX.value + delta).coerceIn(0f, actionWidthPx)
+                                        offsetX.snapTo(newOffset)
+                                    }
+                                }
+                            }
+
+                            // 3. 手势结束，根据位置吸附
+                            val target = if (offsetX.value > actionWidthPx / 2) actionWidthPx else 0f
+                            scope.launch {
+                                offsetX.animateTo(
+                                    targetValue = target,
+                                    animationSpec = tween(durationMillis = 300)
+                                )
+                            }
                         }
                     }
-                ),
+                },
             colors = CardDefaults.cardColors(
                 containerColor = if (isSelected) {
                     MaterialTheme.colorScheme.primaryContainer
