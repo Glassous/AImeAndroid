@@ -1467,8 +1467,8 @@ class ChatRepository(
             val updatedUser = target.copy(content = trimmed)
             chatDao.updateMessage(updatedUser)
 
-            // 删除其后的所有消息（保证重新生成上下文正确）
-            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+            // 删除其后的所有消息（保证重新生成上下文正确），保留当前用户消息本身
+            chatDao.deleteMessagesAfterExclusive(conversationId, target.timestamp)
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()

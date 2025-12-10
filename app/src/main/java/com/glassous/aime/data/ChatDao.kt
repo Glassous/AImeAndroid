@@ -57,6 +57,10 @@ interface ChatDao {
     @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND timestamp >= :timestamp")
     suspend fun deleteMessagesAfter(conversationId: Long, timestamp: Date)
     
+    // Exclusive variant: delete messages strictly after the given timestamp (keeps the message at timestamp)
+    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND timestamp > :timestamp")
+    suspend fun deleteMessagesAfterExclusive(conversationId: Long, timestamp: Date)
+    
     @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId AND id = :messageId")
     suspend fun deleteMessageById(conversationId: Long, messageId: Long)
 
