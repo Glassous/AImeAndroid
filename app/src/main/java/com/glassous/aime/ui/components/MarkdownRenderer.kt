@@ -16,6 +16,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 import java.util.regex.Pattern
 
 data class MarkdownBlock(
@@ -53,9 +54,23 @@ fun MarkdownRenderer(
     val blocks = remember(displayMarkdown) { parseMarkdownBlocks(displayMarkdown) }
 
     // 创建不包含代码块处理的Markwon实例，用于渲染普通文本
-    val markwon = remember(context, enableTables) {
+    val markwon = remember(context, enableTables, textSizeSp) {
+        val scaledDensity = context.resources.displayMetrics.scaledDensity
+        val textPx = textSizeSp * scaledDensity
+
         val builder = Markwon.builder(context)
-            .usePlugin(JLatexMathPlugin.create(44f))
+            .usePlugin(MarkwonInlineParserPlugin.create())
+            .usePlugin(
+                JLatexMathPlugin.create(
+                    textPx,
+                    textPx,
+                    object : JLatexMathPlugin.BuilderConfigure {
+                        override fun configureBuilder(builder: JLatexMathPlugin.Builder) {
+                            builder.inlinesEnabled(true)
+                        }
+                    }
+                )
+            )
         if (enableTables) {
             builder.usePlugin(TablePlugin.create(context))
         }
@@ -89,7 +104,8 @@ fun MarkdownRenderer(
                                     onLongClick()
                                     true
                                 }
-                                markwon.setMarkdown(tv, block.content)
+                                val normalized = normalizeInlineMathSingleDollar(block.content)
+                                markwon.setMarkdown(tv, normalized)
                             },
                             modifier = Modifier.wrapContentWidth()
                         )
@@ -159,4 +175,42 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     }
 
     return blocks
+}
+
+private fun normalizeInlineMathSingleDollar(input: String): String {
+    val sb = StringBuilder()
+    var i = 0
+    var inInlineCode = false
+    var inMath = false
+    while (i < input.length) {
+        val c = input[i]
+        val prev = if (i > 0) input[i - 1] else '\u0000'
+        if (c == '`' && prev != '\\') {
+            inInlineCode = !inInlineCode
+            sb.append(c)
+            i++
+            continue
+        }
+        if (!inInlineCode && c == '$' && prev != '\\') {
+            val next = if (i + 1 < input.length) input[i + 1] else '\u0000'
+            val prevChar = prev
+            if (next == '$' || prevChar == '$') {
+                sb.append(c)
+                i++
+                continue
+            }
+            if (!inMath) {
+                sb.append("$$")
+                inMath = true
+            } else {
+                sb.append("$$")
+                inMath = false
+            }
+            i++
+            continue
+        }
+        sb.append(c)
+        i++
+    }
+    return sb.toString()
 }
