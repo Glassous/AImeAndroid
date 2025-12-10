@@ -271,7 +271,8 @@ fun ChatScreen(
     
 
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
-        ModalNavigationDrawer(
+        Box(modifier = Modifier.fillMaxSize()) {
+            ModalNavigationDrawer(
             drawerState = drawerState,
             drawerContent = {
                 NavigationDrawer(
@@ -324,12 +325,12 @@ fun ChatScreen(
                         }
                     },
                     sidebarSyncButtonEnabled = sidebarSyncButtonEnabled,
-                    isLoggedIn = isLoggedIn
+                    isLoggedIn = isLoggedIn,
+                    isSyncing = isSyncing
                 )
             }
         ) {
             Scaffold(
-                snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
@@ -825,5 +826,14 @@ fun ChatScreen(
                 }
             )
         }
-    }
+
+    SnackbarHost(
+        hostState = snackbarHostState,
+        modifier = Modifier
+            .align(Alignment.BottomCenter)
+            .navigationBarsPadding()
+            .imePadding()
+    )
+}
+}
 }

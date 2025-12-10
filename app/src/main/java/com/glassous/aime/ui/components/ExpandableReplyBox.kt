@@ -39,6 +39,7 @@ fun ExpandableReplyBox(
     var toolText by remember { mutableStateOf<String?>(null) }
     var officialText by remember { mutableStateOf<String?>(null) }
     var isThinkTagMode by remember { mutableStateOf(false) }
+    var thinkingTime by remember { mutableStateOf<String?>(null) }
 
     // 解析逻辑
     LaunchedEffect(content) {
@@ -65,39 +66,121 @@ fun ExpandableReplyBox(
                 officialText = null
             }
             toolText = null // Think 模式下暂时不混合旧版工具文本逻辑
+            thinkingTime = null // <think> 标签模式下通常没有时间信息，除非从 API 另外获取
         } else {
-            // 2. 回退到旧的 【前置回复】/【第一次回复】 模式
-            isThinkTagMode = false
-            val preLabelNew = "【前置回复】"
-            val preLabelOld = "【第一次回复】"
-            val tripleSep = "\n\n\n"
+            // 2. 检查 Blockquote Reasoning 模式 (Gemini/DeepSeek 变体)
+            // 特征：以 > 开头，且包含 "*Thought for X seconds*" 样式的行
+            var isBlockquoteReasoning = false
+            // 只要内容中包含这个特定的思考时间结束标记，我们就尝试解析，而不再严格要求每行都以 > 开头
+            // 因为某些模型输出的代码块可能不会每行都加 >
+            val lines = content.lines()
+            var thoughtLineIndex = -1
+            var tempTime: String? = null
 
-            val preIndexCandidate = content.indexOf(preLabelNew)
-            val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
-
-            if (preIndex != -1) {
-                val afterPreLabelStart = preIndex + if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
-                val firstSepIndex = content.indexOf(tripleSep, afterPreLabelStart)
-
-                val preTextEnd = if (firstSepIndex != -1) firstSepIndex else content.length
-                preText = content.substring(afterPreLabelStart, preTextEnd).trim()
-
-                if (firstSepIndex != -1) {
-                    val secondSepIndex = content.indexOf(tripleSep, firstSepIndex + tripleSep.length)
-                    if (secondSepIndex != -1) {
-                        toolText = content.substring(firstSepIndex + tripleSep.length, secondSepIndex).trim()
-                        officialText = content.substring(secondSepIndex + tripleSep.length).trim()
+            // 倒序查找效率更高，通常在中间或结尾
+            for (i in lines.indices.reversed()) {
+                val line = lines[i].trim()
+                // 必须是引用行，且包含特定关键词
+                if (line.startsWith(">") &&
+                    line.contains("Thought for", ignoreCase = true) &&
+                    line.contains("seconds", ignoreCase = true)) {
+                    
+                    thoughtLineIndex = i
+                    val contentLine = line.removePrefix(">").trim()
+                    val cleanLine = contentLine.replace("*", "").trim()
+                    val match = Regex("Thought for (.*)", RegexOption.IGNORE_CASE).find(cleanLine)
+                    if (match != null) {
+                        // 如果能提取到具体内容，尝试只保留数字部分
+                        val timeStr = match.groupValues[1].trim()
+                        val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(timeStr)
+                        if (numberMatch != null) {
+                            tempTime = numberMatch.groupValues[1] + "秒"
+                        } else {
+                            tempTime = timeStr
+                        }
                     } else {
-                        officialText = content.substring(firstSepIndex + tripleSep.length).trim()
+                        // 降级：直接从 cleanLine 中尝试提取数字
+                        val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(cleanLine)
+                        if (numberMatch != null) {
+                            tempTime = numberMatch.groupValues[1] + "秒"
+                        } else {
+                            tempTime = cleanLine
+                        }
+                    }
+                    break
+                }
+            }
+
+            if (thoughtLineIndex != -1) {
+                isBlockquoteReasoning = true
+                isThinkTagMode = true
+                thinkingTime = tempTime
+                
+                // 提取思考内容：从开始到 thoughtLineIndex 之前的所有行
+                val blockquoteBuilder = StringBuilder()
+                for (i in 0 until thoughtLineIndex) {
+                    val rawLine = lines[i]
+                    // 如果行以 > 开头，去除它；否则保留原样（处理未引用的代码块等）
+                    val processedLine = if (rawLine.trimStart().startsWith(">")) {
+                        // 移除第一个 > 和随后的一个空格（如果有）
+                        val trimmedStart = rawLine.trimStart()
+                        val contentWithoutQuote = trimmedStart.removePrefix(">")
+                        if (contentWithoutQuote.startsWith(" ")) {
+                            contentWithoutQuote.substring(1)
+                        } else {
+                            contentWithoutQuote
+                        }
+                    } else {
+                        rawLine
+                    }
+                    blockquoteBuilder.append(processedLine).append("\n")
+                }
+                preText = blockquoteBuilder.toString().trim()
+                
+                // 提取正式回复：thoughtLineIndex 之后的所有行
+                officialText = if (thoughtLineIndex + 1 < lines.size) {
+                    lines.subList(thoughtLineIndex + 1, lines.size).joinToString("\n").trim()
+                } else {
+                    ""
+                }
+                toolText = null
+            }
+
+            if (!isBlockquoteReasoning) {
+                // 3. 回退到旧的 【前置回复】/【第一次回复】 模式
+                isThinkTagMode = false
+                thinkingTime = null
+                val preLabelNew = "【前置回复】"
+                val preLabelOld = "【第一次回复】"
+                val tripleSep = "\n\n\n"
+
+                val preIndexCandidate = content.indexOf(preLabelNew)
+                val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
+
+                if (preIndex != -1) {
+                    val afterPreLabelStart = preIndex + if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
+                    val firstSepIndex = content.indexOf(tripleSep, afterPreLabelStart)
+
+                    val preTextEnd = if (firstSepIndex != -1) firstSepIndex else content.length
+                    preText = content.substring(afterPreLabelStart, preTextEnd).trim()
+
+                    if (firstSepIndex != -1) {
+                        val secondSepIndex = content.indexOf(tripleSep, firstSepIndex + tripleSep.length)
+                        if (secondSepIndex != -1) {
+                            toolText = content.substring(firstSepIndex + tripleSep.length, secondSepIndex).trim()
+                            officialText = content.substring(secondSepIndex + tripleSep.length).trim()
+                        } else {
+                            officialText = content.substring(firstSepIndex + tripleSep.length).trim()
+                        }
+                    } else {
+                        toolText = null
+                        officialText = null
                     }
                 } else {
-                    toolText = null
-                    officialText = null
+                    // 既没有 think 也没有前置标签，降级处理（直接渲染全文）
+                    officialText = content
+                    preText = ""
                 }
-            } else {
-                // 既没有 think 也没有前置标签，降级处理（直接渲染全文）
-                officialText = content
-                preText = ""
             }
         }
     }
@@ -162,6 +245,15 @@ fun ExpandableReplyBox(
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.wrapContentWidth()
                         )
+                        if (thinkingTime != null) {
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = thinkingTime!!,
+                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                                style = MaterialTheme.typography.labelMedium,
+                                modifier = Modifier.wrapContentWidth()
+                            )
+                        }
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(
                             imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,

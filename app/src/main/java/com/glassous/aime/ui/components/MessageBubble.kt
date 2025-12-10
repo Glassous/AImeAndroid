@@ -105,11 +105,12 @@ fun MessageBubble(
                         }
                         val textSizeSp = chatFontSize
 
-                        // 【关键修改】增加了对 <think> 标签的检测
+                        // 【关键修改】增加了对 <think> 标签和 Blockquote Reasoning 格式的检测
                         val hasTwoPartReply = !message.isFromUser && (
                                 message.content.contains("【前置回复】") ||
                                         message.content.contains("【第一次回复】") ||
-                                        message.content.contains("<think>")
+                                        message.content.contains("<think>") ||
+                                        (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
                                 )
 
                         if (hasTwoPartReply) {
@@ -154,11 +155,12 @@ fun MessageBubble(
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
                     ) {
-                        // 【关键修改】同样增加了对 <think> 标签的检测
+                        // 【关键修改】同样增加了对 <think> 标签和 Blockquote Reasoning 格式的检测
                         val hasTwoPartReply = !message.isFromUser && (
                                 message.content.contains("【前置回复】") ||
                                         message.content.contains("【第一次回复】") ||
-                                        message.content.contains("<think>")
+                                        message.content.contains("<think>") ||
+                                        (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
                                 )
 
                         if (hasTwoPartReply) {

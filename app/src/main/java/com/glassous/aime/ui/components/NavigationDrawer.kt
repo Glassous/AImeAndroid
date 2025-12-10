@@ -31,6 +31,11 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -66,6 +71,7 @@ fun NavigationDrawer(
     onSync: () -> Unit,
     sidebarSyncButtonEnabled: Boolean,
     isLoggedIn: Boolean,
+    isSyncing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
@@ -141,8 +147,22 @@ fun NavigationDrawer(
 
                     // 1.5 同步按钮
                     if (isLoggedIn && sidebarSyncButtonEnabled) {
+                        val rotation by if (isSyncing) {
+                            val infiniteTransition = rememberInfiniteTransition(label = "sync_rotation")
+                            infiniteTransition.animateFloat(
+                                initialValue = 0f,
+                                targetValue = 360f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(1000, easing = LinearEasing)
+                                ),
+                                label = "rotation"
+                            )
+                        } else {
+                            remember { mutableStateOf(0f) }
+                        }
+
                         IconButton(
-                            onClick = onSync,
+                            onClick = { if (!isSyncing) onSync() },
                             modifier = Modifier.size(40.dp),
                             colors = IconButtonDefaults.iconButtonColors(
                                 contentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -151,7 +171,9 @@ fun NavigationDrawer(
                             Icon(
                                 imageVector = Icons.Default.Sync,
                                 contentDescription = "一键同步",
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier
+                                    .size(20.dp)
+                                    .rotate(rotation)
                             )
                         }
                     }

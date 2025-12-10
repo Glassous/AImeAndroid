@@ -104,7 +104,7 @@ fun MarkdownRenderer(
                                     onLongClick()
                                     true
                                 }
-                                val normalized = normalizeInlineMathSingleDollar(block.content)
+                                val normalized = normalizeLaTeX(block.content)
                                 markwon.setMarkdown(tv, normalized)
                             },
                             modifier = Modifier.wrapContentWidth()
@@ -177,7 +177,7 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     return blocks
 }
 
-private fun normalizeInlineMathSingleDollar(input: String): String {
+private fun normalizeLaTeX(input: String): String {
     val sb = StringBuilder()
     var i = 0
     var inInlineCode = false
@@ -185,30 +185,62 @@ private fun normalizeInlineMathSingleDollar(input: String): String {
     while (i < input.length) {
         val c = input[i]
         val prev = if (i > 0) input[i - 1] else '\u0000'
+        
+        // Handle inline code backticks
         if (c == '`' && prev != '\\') {
             inInlineCode = !inInlineCode
             sb.append(c)
             i++
             continue
         }
-        if (!inInlineCode && c == '$' && prev != '\\') {
-            val next = if (i + 1 < input.length) input[i + 1] else '\u0000'
-            val prevChar = prev
-            if (next == '$' || prevChar == '$') {
-                sb.append(c)
+
+        if (!inInlineCode) {
+            // Handle LaTeX delimiters \[ \] \( \)
+            if (c == '\\' && i + 1 < input.length) {
+                val next = input[i + 1]
+                if (next == '[' || next == ']' || next == '(' || next == ')') {
+                    // Check if we are toggling math mode?
+                    // Usually \[ starts and \] ends.
+                    // But here we just convert all to $$ which acts as a toggle.
+                    if (!inMath) {
+                        sb.append("$$")
+                        inMath = true
+                    } else {
+                        sb.append("$$")
+                        inMath = false
+                    }
+                    i += 2
+                    continue
+                }
+            }
+
+            // Handle single dollar $
+            if (c == '$' && prev != '\\') {
+                val next = if (i + 1 < input.length) input[i + 1] else '\u0000'
+                val prevChar = prev
+                // Avoid matching $$ (already handled by Markwon or previous iteration)
+                // But wait, if input has $$, loop sees first $. next is $.
+                // Logic below: if next is $ or prev is $, append c ($).
+                // So $$ is preserved as $$.
+                if (next == '$' || prevChar == '$') {
+                    sb.append(c)
+                    i++
+                    continue
+                }
+                
+                // Convert single $ to $$
+                if (!inMath) {
+                    sb.append("$$")
+                    inMath = true
+                } else {
+                    sb.append("$$")
+                    inMath = false
+                }
                 i++
                 continue
             }
-            if (!inMath) {
-                sb.append("$$")
-                inMath = true
-            } else {
-                sb.append("$$")
-                inMath = false
-            }
-            i++
-            continue
         }
+        
         sb.append(c)
         i++
     }
