@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,6 +41,7 @@ fun MessageDetailScreen(
     var isEditing by remember { mutableStateOf(false) }
     var editedContent by remember { mutableStateOf("") }
     var fontSize by remember { mutableStateOf(16f) }
+    var showStatsDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(messageId) {
         message = repository.getMessageById(messageId)
@@ -73,6 +75,9 @@ fun MessageDetailScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { showStatsDialog = true }) {
+                        Icon(Icons.Filled.Info, contentDescription = "字数统计")
+                    }
                     // 字体大小控制
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -163,6 +168,29 @@ fun MessageDetailScreen(
                     }
                 }
             }
+        }
+
+        if (showStatsDialog) {
+            AlertDialog(
+                onDismissRequest = { showStatsDialog = false },
+                confirmButton = {
+                    TextButton(onClick = { showStatsDialog = false }) { Text("关闭") }
+                },
+                title = { Text("字数统计") },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val contentText = message?.content ?: ""
+                        Text(text = "字数：${contentText.length}")
+                        val modelName = message?.modelDisplayName
+                        if (!modelName.isNullOrBlank()) {
+                            Text(text = "模型：$modelName")
+                        }
+                    }
+                }
+            )
         }
     }
 }

@@ -13,6 +13,7 @@ data class ChatMessage(
     val isFromUser: Boolean,
     val timestamp: Date = Date(),
     val isError: Boolean = false,
+    val modelDisplayName: String? = null,
     val isDeleted: Boolean = false,
     val deletedAt: Date? = null
 )

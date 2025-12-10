@@ -30,7 +30,8 @@ data class BackupMessage(
     @SerializedName("content") val content: String,
     @SerializedName("isFromUser") val isFromUser: Boolean,
     @SerializedName("timestamp") val timestamp: Long,
-    @SerializedName("isError") val isError: Boolean?
+    @SerializedName("isError") val isError: Boolean?,
+    @SerializedName("modelDisplayName") val modelDisplayName: String? = null
 )
 
 data class ApiKey(

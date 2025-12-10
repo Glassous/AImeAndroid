@@ -191,7 +191,8 @@ class CloudSyncManager(
                     content = m.content,
                     isFromUser = m.isFromUser,
                     timestamp = m.timestamp.time,
-                    isError = m.isError
+                    isError = m.isError,
+                    modelDisplayName = m.modelDisplayName
                 )
             }
             backupConversations.add(
@@ -386,7 +387,8 @@ class CloudSyncManager(
                                 content = rm.content,
                                 isFromUser = rm.isFromUser,
                                 timestamp = Date(rm.timestamp),
-                                isError = rm.isError ?: false
+                                isError = rm.isError ?: false,
+                                modelDisplayName = rm.modelDisplayName
                             )
                         )
                         android.util.Log.d("CloudSyncManager", "Message inserted with ID: $messageId")

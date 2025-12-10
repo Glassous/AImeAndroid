@@ -64,6 +64,7 @@ CREATE TABLE public.chat_messages (
     is_from_user boolean DEFAULT false,
     timestamp timestamp with time zone,
     is_error boolean DEFAULT false,
+    model_display_name text,
     created_at timestamp with time zone DEFAULT now(),
     is_deleted boolean DEFAULT false,
     deleted_at timestamp with time zone
@@ -438,14 +439,15 @@ BEGIN
 
         -- 插入消息 (避免重复)
         -- 使用更宽松的去重条件，防止浮点数精度问题
-        INSERT INTO public.chat_messages(conversation_id, user_id, content, is_from_user, timestamp, is_error)
+        INSERT INTO public.chat_messages(conversation_id, user_id, content, is_from_user, timestamp, is_error, model_display_name)
         SELECT 
           conv_id, 
           uid, 
           (m->>'content'), 
           ((m->>'isFromUser')::boolean),
           to_timestamp((((m->>'timestamp')::numeric)/1000)::double precision), 
-          COALESCE((m->>'isError')::boolean, false)
+          COALESCE((m->>'isError')::boolean, false),
+          CASE WHEN (m ? 'modelDisplayName') THEN (m->>'modelDisplayName') ELSE NULL END
         FROM jsonb_array_elements(conv_record.value->'messages') AS m
         WHERE NOT EXISTS (
             SELECT 1 FROM public.chat_messages cm 
@@ -454,6 +456,18 @@ BEGIN
             AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.01
             AND cm.content = (m->>'content')
         );
+
+        -- 更新已有消息的模型外显名称（如果之前为NULL且本次上传提供了值）
+        UPDATE public.chat_messages cm
+        SET model_display_name = (m->>'modelDisplayName')
+        FROM jsonb_array_elements(conv_record.value->'messages') AS m
+        WHERE cm.conversation_id = conv_id
+          AND cm.user_id = uid
+          AND cm.model_display_name IS NULL
+          AND (m ? 'modelDisplayName')
+          AND cm.content = (m->>'content')
+          AND cm.is_from_user = ((m->>'isFromUser')::boolean)
+          AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.01;
     END LOOP;
   END IF;
 
@@ -464,11 +478,16 @@ BEGIN
          'lastMessageTime', (extract(epoch from c.last_message_time) * 1000)::bigint,
          'messageCount', c.message_count,
          'messages', (
-           SELECT COALESCE(jsonb_agg(
-             jsonb_build_object('content', m.content, 'isFromUser', m.is_from_user,
-               'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint, 'isError', m.is_error) ORDER BY m.timestamp ASC
-           ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id AND COALESCE(m.is_deleted, false) = false
-         )
+            SELECT COALESCE(jsonb_agg(
+              jsonb_build_object(
+                'content', m.content,
+                'isFromUser', m.is_from_user,
+                'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint,
+                'isError', m.is_error,
+                'modelDisplayName', m.model_display_name
+              ) ORDER BY m.timestamp ASC
+            ), '[]'::jsonb) FROM public.chat_messages m WHERE m.conversation_id = c.id AND COALESCE(m.is_deleted, false) = false
+        )
        ) ORDER BY c.last_message_time DESC
   ), '[]'::jsonb) INTO res_conversations FROM public.conversations c WHERE c.user_id = uid AND COALESCE(c.is_deleted, false) = false;
 

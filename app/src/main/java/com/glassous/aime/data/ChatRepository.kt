@@ -380,7 +380,8 @@ class ChatRepository(
                 conversationId = conversationId,
                 content = "正在思考...",
                 isFromUser = false,
-                timestamp = Date()
+                timestamp = Date(),
+                modelDisplayName = model.name
             )
             val assistantId = chatDao.insertMessage(assistantMessage)
             assistantMessage = assistantMessage.copy(id = assistantId)
@@ -1075,6 +1076,8 @@ class ChatRepository(
             
             // 使用新插入的助手消息作为目标消息
             var assistantMessage = newAssistantMessage.copy(id = newAssistantId)
+            assistantMessage = assistantMessage.copy(modelDisplayName = model.name)
+            chatDao.updateMessage(assistantMessage)
 
             withContext(Dispatchers.IO) {
                 streamWithFallback(
@@ -1562,7 +1565,8 @@ class ChatRepository(
                 conversationId = conversationId,
                 content = "正在思考...",
                 isFromUser = false,
-                timestamp = Date()
+                timestamp = Date(),
+                modelDisplayName = model.name
             )
             val assistantId = chatDao.insertMessage(assistantMessage)
             assistantMessage = assistantMessage.copy(id = assistantId)

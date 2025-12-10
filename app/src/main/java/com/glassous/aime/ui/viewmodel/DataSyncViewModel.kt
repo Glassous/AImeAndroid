@@ -65,7 +65,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                             content = m.content,
                             isFromUser = m.isFromUser,
                             timestamp = m.timestamp.time,
-                            isError = m.isError
+                            isError = m.isError,
+                            modelDisplayName = m.modelDisplayName
                         )
                     }
                     backupConversations.add(
@@ -172,7 +173,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                                 content = bm.content,
                                 isFromUser = bm.isFromUser,
                                 timestamp = Date(bm.timestamp),
-                                isError = bm.isError ?: false
+                                isError = bm.isError ?: false,
+                                modelDisplayName = bm.modelDisplayName
                             )
                         )
                     }
