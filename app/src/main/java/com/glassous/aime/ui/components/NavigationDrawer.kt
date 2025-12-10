@@ -96,8 +96,7 @@ fun NavigationDrawer(
             modifier = Modifier
                 .fillMaxSize()
                 // 顶部保留 16dp，移除底部 padding
-                // 注意：start/end 需要适配系统手势区域，但这里侧边栏已经有宽度限制，通常保留 16dp 即可
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp)
+                .padding(top = 16.dp, bottom = 0.dp)
         ) {
             var showImportDialog by remember { mutableStateOf(false) }
             var importCode by remember { mutableStateOf("") }
@@ -106,6 +105,7 @@ fun NavigationDrawer(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
                     // 如果顶部有状态栏遮挡，也可以在这里加 WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
                     .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
