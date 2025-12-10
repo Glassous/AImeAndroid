@@ -112,6 +112,8 @@ dependencies {
     implementation("io.noties.markwon:ext-latex:4.6.2")
     implementation("io.noties.markwon:ext-tables:4.6.2")
 
+    implementation("com.knuddels:jtokkit:1.1.0")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

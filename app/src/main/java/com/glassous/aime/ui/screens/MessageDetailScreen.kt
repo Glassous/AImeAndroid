@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.ChatMessage
+import com.knuddels.jtokkit.Encodings
+import com.knuddels.jtokkit.api.EncodingType
  
 import kotlinx.coroutines.launch
 
@@ -128,7 +130,7 @@ fun MessageDetailScreen(
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
-    ) { paddingValues ->
+) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -188,6 +190,31 @@ fun MessageDetailScreen(
                         if (!modelName.isNullOrBlank()) {
                             Text(text = "模型：$modelName")
                         }
+                        val registry = remember { Encodings.newDefaultEncodingRegistry() }
+                        val encodingType = remember(modelName) {
+                            val name = modelName?.lowercase() ?: ""
+                            when {
+                                name.contains("gpt-4o") -> EncodingType.CL100K_BASE
+                                name.contains("gpt-4") -> EncodingType.CL100K_BASE
+                                name.contains("gpt-3.5") -> EncodingType.CL100K_BASE
+                                else -> EncodingType.CL100K_BASE
+                            }
+                        }
+                        val encoding = remember(encodingType) { registry.getEncoding(encodingType) }
+                        val conversationId = message?.conversationId
+                        val messagesInConversation by remember(conversationId) {
+                            if (conversationId != null) repository.getMessagesForConversation(conversationId) else kotlinx.coroutines.flow.flowOf(emptyList())
+                        }.collectAsState(initial = emptyList())
+                        val currentMsg = message
+                        val idx = messagesInConversation.indexOfFirst { it.id == currentMsg?.id }
+                        val prevUser = if (idx > 0) messagesInConversation.subList(0, idx).lastOrNull { it.isFromUser } else null
+                        val nextAssistant = if (idx != -1 && idx + 1 < messagesInConversation.size) messagesInConversation.subList(idx + 1, messagesInConversation.size).firstOrNull { !it.isFromUser } else null
+                        val inputText = if (currentMsg?.isFromUser == true) currentMsg.content else (prevUser?.content ?: "")
+                        val outputText = if (currentMsg?.isFromUser == false) currentMsg.content else (nextAssistant?.content ?: "")
+                        val inputTokens = try { encoding.countTokens(inputText) } catch (_: Exception) { 0 }
+                        val outputTokens = try { encoding.countTokens(outputText) } catch (_: Exception) { 0 }
+                        Text(text = "输入token：$inputTokens")
+                        Text(text = "输出token：$outputTokens")
                     }
                 }
             )
