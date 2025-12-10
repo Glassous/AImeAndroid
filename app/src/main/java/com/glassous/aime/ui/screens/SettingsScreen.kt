@@ -238,6 +238,7 @@ fun SettingsScreen(
                     }
 
                     Spacer(modifier = Modifier.height(12.dp))
+
                     Row(
                         modifier = Modifier.fillMaxWidth()
                             .clickable { themeViewModel.setThemeAdvancedExpanded(!themeAdvancedExpanded) },
@@ -307,6 +308,7 @@ fun SettingsScreen(
                                     onCheckedChange = { themeViewModel.setHideImportSharedButton(!it) }
                                 )
                             }
+                            Spacer(modifier = Modifier.height(8.dp))
                             // 字体设置入口
                             Row(
                                 modifier = Modifier.fillMaxWidth().clickable { showFontSizeDialog = true }.padding(vertical = 12.dp),

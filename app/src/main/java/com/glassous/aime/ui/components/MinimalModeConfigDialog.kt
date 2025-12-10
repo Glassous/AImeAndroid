@@ -83,6 +83,7 @@ fun MinimalModeConfigDialog(
                                     "send_button_bg" -> config.copy(hideSendButtonBackground = enabled)
                                     "model_selection_text" -> config.copy(hideModelSelectionText = enabled)
                                     "input_placeholder" -> config.copy(hideInputPlaceholder = enabled)
+                                    "sidebar_sync_button" -> config.copy(hideSidebarSyncButton = enabled)
                                     else -> config
                                 }
                                 onConfigChange(newConfig)

@@ -63,6 +63,9 @@ fun NavigationDrawer(
     onImportSharedConversation: (String, (Long?) -> Unit) -> Unit,
     hideImportSharedButton: Boolean,
     onNavigateToSettings: () -> Unit,
+    onSync: () -> Unit,
+    sidebarSyncButtonEnabled: Boolean,
+    isLoggedIn: Boolean,
     modifier: Modifier = Modifier
 ) {
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
@@ -134,6 +137,23 @@ fun NavigationDrawer(
                             contentDescription = "设置",
                             modifier = Modifier.size(20.dp)
                         )
+                    }
+
+                    // 1.5 同步按钮
+                    if (isLoggedIn && sidebarSyncButtonEnabled) {
+                        IconButton(
+                            onClick = onSync,
+                            modifier = Modifier.size(40.dp),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = "一键同步",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
 
                     // 2. 获取分享按钮

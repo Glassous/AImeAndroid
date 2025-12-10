@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Sync
  
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,6 +42,7 @@ import com.glassous.aime.ui.viewmodel.ToolSelectionViewModel
 import com.glassous.aime.viewmodel.ChatViewModel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 import java.util.Calendar
  
 import com.glassous.aime.data.preferences.ThemePreferences
@@ -117,6 +119,13 @@ fun ChatScreen(
     val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
     // 新增：HTML代码块卡片显示设置
     val htmlCodeBlockCardEnabled by themeViewModel.htmlCodeBlockCardEnabled.collectAsState()
+    // 新增：侧边栏同步按钮设置 (从极简模式配置中读取)
+    val sidebarSyncButtonEnabled = if (minimalMode) !minimalModeConfig.hideSidebarSyncButton else true
+
+    // 登录状态
+    val app = context.applicationContext as AIMeApplication
+    val isLoggedIn by remember(app) { app.authPreferences.accessToken.map { !it.isNullOrEmpty() } }.collectAsState(initial = false)
+    var isSyncing by remember { mutableStateOf(false) }
 
     // 新增：读取聊天页面单独全屏显示设置
     val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
@@ -297,7 +306,25 @@ fun ChatScreen(
                         })
                     },
                     hideImportSharedButton = hideImportSharedButton,
-                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
+                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
+                    onSync = {
+                        scope.launch {
+                            if (!isSyncing) {
+                                isSyncing = true
+                                try {
+                                    val (ok, msg) = app.cloudSyncManager.manualSync()
+                                    snackbarHostState.showSnackbar(if (ok) "同步完成" else ("同步失败：$msg"))
+                                } catch (e: Exception) {
+                                    val detail = e.stackTraceToString().take(500)
+                                    snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
+                                } finally {
+                                    isSyncing = false
+                                }
+                            }
+                        }
+                    },
+                    sidebarSyncButtonEnabled = sidebarSyncButtonEnabled,
+                    isLoggedIn = isLoggedIn
                 )
             }
         ) {
