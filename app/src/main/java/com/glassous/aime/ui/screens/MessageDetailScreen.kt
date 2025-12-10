@@ -205,14 +205,32 @@ fun MessageDetailScreen(
                         val messagesInConversation by remember(conversationId) {
                             if (conversationId != null) repository.getMessagesForConversation(conversationId) else kotlinx.coroutines.flow.flowOf(emptyList())
                         }.collectAsState(initial = emptyList())
+                        val maxContextMessages by remember(application) { application.contextPreferences.maxContextMessages }.collectAsState(initial = 5)
                         val currentMsg = message
-                        val idx = messagesInConversation.indexOfFirst { it.id == currentMsg?.id }
-                        val prevUser = if (idx > 0) messagesInConversation.subList(0, idx).lastOrNull { it.isFromUser } else null
-                        val nextAssistant = if (idx != -1 && idx + 1 < messagesInConversation.size) messagesInConversation.subList(idx + 1, messagesInConversation.size).firstOrNull { !it.isFromUser } else null
-                        val inputText = if (currentMsg?.isFromUser == true) currentMsg.content else (prevUser?.content ?: "")
-                        val outputText = if (currentMsg?.isFromUser == false) currentMsg.content else (nextAssistant?.content ?: "")
-                        val inputTokens = try { encoding.countTokens(inputText) } catch (_: Exception) { 0 }
-                        val outputTokens = try { encoding.countTokens(outputText) } catch (_: Exception) { 0 }
+                        val filtered = messagesInConversation.filter { !it.isError }
+                        val idx = filtered.indexOfFirst { it.id == currentMsg?.id }
+                        val (inputTokens, outputTokens) = if (idx != -1 && currentMsg != null) {
+                            if (currentMsg.isFromUser) {
+                                val upto = filtered.subList(0, idx + 1)
+                                val limited = if (maxContextMessages <= 0) upto else upto.takeLast(maxContextMessages)
+                                val inTokens = limited.sumOf { try { encoding.countTokens(it.content) } catch (_: Exception) { 0 } }
+                                val nextAssistant = filtered.drop(idx + 1).firstOrNull { !it.isFromUser }
+                                val outTokens = nextAssistant?.let { try { encoding.countTokens(it.content) } catch (_: Exception) { 0 } } ?: 0
+                                inTokens to outTokens
+                            } else {
+                                val before = filtered.subList(0, idx)
+                                val lastUserIndex = before.indexOfLast { it.isFromUser }
+                                val uptoUser = if (lastUserIndex != -1) filtered.subList(0, lastUserIndex + 1) else emptyList()
+                                val limited = if (maxContextMessages <= 0) uptoUser else uptoUser.takeLast(maxContextMessages)
+                                val inTokens = limited.sumOf { try { encoding.countTokens(it.content) } catch (_: Exception) { 0 } }
+                                val outTokens = try { encoding.countTokens(currentMsg.content) } catch (_: Exception) { 0 }
+                                inTokens to outTokens
+                            }
+                        } else {
+                            val inTokens = try { encoding.countTokens(currentMsg?.content ?: "") } catch (_: Exception) { 0 }
+                            val outTokens = 0
+                            inTokens to outTokens
+                        }
                         Text(text = "输入token：$inputTokens")
                         Text(text = "输出token：$outputTokens")
                     }
