@@ -28,6 +28,7 @@ data class BackupConversation(
 )
 
 data class BackupMessage(
+    @SerializedName("uuid") val uuid: String? = null,
     @SerializedName("content") val content: String,
     @SerializedName("isFromUser") val isFromUser: Boolean,
     @SerializedName("timestamp") val timestamp: Long,

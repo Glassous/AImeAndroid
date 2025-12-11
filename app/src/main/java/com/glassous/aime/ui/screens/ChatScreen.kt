@@ -212,7 +212,8 @@ fun ChatScreen(
         }
     }
 
-    // 移除生成期间的自动保持底部机制，仅保留回到底部按钮
+    // 长图分享预览弹窗状态
+    var showLongImageDialog by remember { mutableStateOf(false) }
 
     // 进入对话时滚动到最新消息（仅在对话切换时触发）
     LaunchedEffect(currentConversationId) {
@@ -305,6 +306,13 @@ fun ChatScreen(
                                 scope.launch { drawerState.close() }
                             }
                         })
+                    },
+                    onGenerateLongImage = { convId ->
+                        chatViewModel.selectConversation(convId)
+                        scope.launch {
+                            drawerState.close()
+                            showLongImageDialog = true
+                        }
                     },
                     hideImportSharedButton = hideImportSharedButton,
                     onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
@@ -826,6 +834,17 @@ fun ChatScreen(
                 }
             )
         }
+
+    // 长图分享预览弹窗
+    if (showLongImageDialog) {
+        com.glassous.aime.ui.components.LongImagePreviewDialog(
+            messages = currentMessages,
+            onDismiss = { showLongImageDialog = false },
+            chatFontSize = chatFontSize,
+            useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
+            replyBubbleEnabled = replyBubbleEnabled
+        )
+    }
 
     SnackbarHost(
         hostState = snackbarHostState,

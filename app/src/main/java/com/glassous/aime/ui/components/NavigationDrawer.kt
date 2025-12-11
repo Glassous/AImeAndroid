@@ -66,6 +66,7 @@ fun NavigationDrawer(
     onEditConversationTitle: (Long, String) -> Unit,
     onGenerateShareCode: (Long, (String?) -> Unit) -> Unit,
     onImportSharedConversation: (String, (Long?) -> Unit) -> Unit,
+    onGenerateLongImage: (Long) -> Unit,
     hideImportSharedButton: Boolean,
     onNavigateToSettings: () -> Unit,
     onSync: () -> Unit,
@@ -248,7 +249,8 @@ fun NavigationDrawer(
                                 onGenerateShareCode(convId) { code ->
                                     onCode(code)
                                 }
-                            }
+                            },
+                            onGenerateLongImage = onGenerateLongImage
                         )
                     }
                 }
@@ -320,6 +322,7 @@ private fun ConversationItem(
     onDelete: () -> Unit,
     onEditTitle: (Long, String) -> Unit,
     onShare: (Long, (String?) -> Unit) -> Unit,
+    onGenerateLongImage: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -639,33 +642,63 @@ private fun ConversationItem(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                }
-            },
-            confirmButton = {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = {
-                            val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                            exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                        }
-                    ) { Text("导出JSON") }
-                    TextButton(
-                        onClick = {
-                            val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                            val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                            cacheFile.writeText(shareJson, Charsets.UTF_8)
-                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = "application/json"
-                                putExtra(Intent.EXTRA_STREAM, uri)
-                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 操作按钮区域
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // 第一行：导出与分享文本
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                                    exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { 
+                                Text("导出JSON") 
                             }
-                            context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
-                            showShareDialog = false
+                            
+                            OutlinedButton(
+                                onClick = {
+                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
+                                    val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
+                                    cacheFile.writeText(shareJson, Charsets.UTF_8)
+                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
+                                    val intent = Intent(Intent.ACTION_SEND).apply {
+                                        type = "application/json"
+                                        putExtra(Intent.EXTRA_STREAM, uri)
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                    context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
+                                    showShareDialog = false
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) { 
+                                Text("分享文本") 
+                            }
                         }
-                    ) { Text("分享") }
+
+                        // 第二行：生成截图分享（独占一行）
+                        Button(
+                            onClick = {
+                                showShareDialog = false
+                                onGenerateLongImage(conversation.id)
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("生成截图分享")
+                        }
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
                 TextButton(onClick = { showShareDialog = false }) { Text("关闭") }
             }

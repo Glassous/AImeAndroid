@@ -9,6 +9,7 @@ data class ChatMessage(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val conversationId: Long,
+    val uuid: String = java.util.UUID.randomUUID().toString(),
     val content: String,
     val isFromUser: Boolean,
     val timestamp: Date = Date(),

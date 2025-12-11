@@ -77,9 +77,6 @@ fun MessageDetailScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showStatsDialog = true }) {
-                        Icon(Icons.Filled.Info, contentDescription = "字数统计")
-                    }
                     // 字体大小控制
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -101,6 +98,9 @@ fun MessageDetailScreen(
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+                    IconButton(onClick = { showStatsDialog = true }) {
+                        Icon(Icons.Filled.Info, contentDescription = "信息")
                     }
                     
                     // 编辑按钮组
@@ -178,13 +178,18 @@ fun MessageDetailScreen(
                 confirmButton = {
                     TextButton(onClick = { showStatsDialog = false }) { Text("关闭") }
                 },
-                title = { Text("字数统计") },
+                title = { Text("信息") },
                 text = {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val contentText = message?.content ?: ""
+                        val timestamp = message?.timestamp
+                        if (timestamp != null) {
+                            val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                            Text(text = "时间：${dateFormat.format(timestamp)}")
+                        }
                         Text(text = "字数：${contentText.length}")
                         val modelName = message?.modelDisplayName
                         if (!modelName.isNullOrBlank()) {

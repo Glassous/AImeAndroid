@@ -294,7 +294,8 @@ class CloudSyncManager(
                     isFromUser = m.isFromUser,
                     timestamp = m.timestamp.time,
                     isError = m.isError,
-                    modelDisplayName = m.modelDisplayName
+                    modelDisplayName = m.modelDisplayName,
+                    uuid = m.uuid
                 )
             }
             backupConversations.add(
@@ -472,21 +473,34 @@ class CloudSyncManager(
 
             // 合并消息：只插入本地缺失的消息
             val localMessages = chatDao.getMessagesForConversation(convId).first()
-            // 使用更可靠的去重方法：内容 + 时间戳（秒级） + 发送方
-            val localMessageKeys = localMessages.map { msg ->
+            
+            // 准备去重集合
+            val localUuids = localMessages.map { it.uuid }.toSet()
+            // 兼容旧数据的去重键：内容 + 时间戳（秒级） + 发送方
+            val localLegacyKeys = localMessages.map { msg ->
                 "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}"
             }.toSet()
-            val localDeletedMessageKeys = chatDao.getMessagesForConversationIncludingDeleted(convId).first()
+
+            val localDeletedMessages = chatDao.getMessagesForConversationIncludingDeleted(convId).first()
                 .filter { it.isDeleted }
+            
+            val localDeletedUuids = localDeletedMessages.map { it.uuid }.toSet()
+            val localDeletedLegacyKeys = localDeletedMessages
                 .map { msg -> "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}" }
                 .toSet()
 
             var hasNewMessage = false
             rc.messages.forEach { rm ->
-                val rmKey = "${rm.content.trim()}_${rm.timestamp / 1000}_${rm.isFromUser}"
+                // 判断是否重复：优先使用UUID，若无UUID（旧备份）则降级使用时间戳+内容
+                val isDuplicate = if (!rm.uuid.isNullOrBlank()) {
+                    rm.uuid in localUuids || rm.uuid in localDeletedUuids
+                } else {
+                    val rmKey = "${rm.content.trim()}_${rm.timestamp / 1000}_${rm.isFromUser}"
+                    rmKey in localLegacyKeys || rmKey in localDeletedLegacyKeys
+                }
 
                 // 检查是否已存在相同的消息
-                if (rmKey !in localMessageKeys && rmKey !in localDeletedMessageKeys) {
+                if (!isDuplicate) {
                     try {
                         android.util.Log.d("CloudSyncManager", "Attempting to insert message: ${rm.content.take(50)}...")
                         val messageId = chatDao.insertMessage(
@@ -496,7 +510,8 @@ class CloudSyncManager(
                                 isFromUser = rm.isFromUser,
                                 timestamp = Date(rm.timestamp),
                                 isError = rm.isError ?: false,
-                                modelDisplayName = rm.modelDisplayName
+                                modelDisplayName = rm.modelDisplayName,
+                                uuid = rm.uuid ?: java.util.UUID.randomUUID().toString()
                             )
                         )
                         android.util.Log.d("CloudSyncManager", "Message inserted with ID: $messageId")
