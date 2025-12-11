@@ -18,6 +18,7 @@ data class BackupData(
 
 data class BackupConversation(
     @SerializedName("title") val title: String,
+    @SerializedName("uuid") val uuid: String? = null,
     @SerializedName("lastMessage") val lastMessage: String,
     @SerializedName("lastMessageTime") val lastMessageTime: Long,
     @SerializedName("messageCount") val messageCount: Int,

@@ -13,7 +13,7 @@ import com.glassous.aime.data.model.ModelGroup
 
 @Database(
     entities = [ChatMessage::class, Conversation::class, ModelGroup::class, Model::class],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -48,13 +48,29 @@ abstract class ChatDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Add uuid column with default empty string to satisfy NOT NULL constraint
+                db.execSQL("ALTER TABLE conversations ADD COLUMN uuid TEXT NOT NULL DEFAULT ''")
+                
+                // Populate uuid for existing records with random UUIDs
+                val cursor = db.query("SELECT id FROM conversations")
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(0)
+                    val uuid = java.util.UUID.randomUUID().toString()
+                    db.execSQL("UPDATE conversations SET uuid = '$uuid' WHERE id = $id")
+                }
+                cursor.close()
+            }
+        }
+
         fun getDatabase(context: Context): ChatDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     ChatDatabase::class.java,
                     "chat_database"
-                ).addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+                ).addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
                 .build()
                 INSTANCE = instance
                 instance

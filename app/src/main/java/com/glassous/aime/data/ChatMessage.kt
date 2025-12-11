@@ -23,6 +23,7 @@ data class Conversation(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val title: String,
+    val uuid: String = java.util.UUID.randomUUID().toString(),
     val lastMessage: String = "",
     val lastMessageTime: Date = Date(),
     val messageCount: Int = 0,

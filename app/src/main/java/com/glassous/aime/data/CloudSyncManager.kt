@@ -300,6 +300,7 @@ class CloudSyncManager(
             backupConversations.add(
                 BackupConversation(
                     title = c.title,
+                    uuid = c.uuid,
                     lastMessage = c.lastMessage,
                     lastMessageTime = c.lastMessageTime.time,
                     messageCount = backupMessages.size,
@@ -412,11 +413,13 @@ class CloudSyncManager(
                 android.util.Log.d("CloudSyncManager", "Skip remote conversation due to local tombstone: ${rc.title}")
                 return@forEach
             }
-            // 尝试通过标题和最后消息时间模糊匹配找到本地对应的会话
+            // 尝试通过UUID匹配，如果云端没有UUID（旧版备份），则降级到标题匹配
             val matched = localConversations.firstOrNull { lc ->
-                // 匹配规则：标题相同，或者（如果标题是默认的）内容高度重叠
-                // 这里简化为标题相同且时间相差不大，或者是完全一样的内容
-                lc.title == rc.title
+                if (!rc.uuid.isNullOrBlank()) {
+                    lc.uuid == rc.uuid
+                } else {
+                    lc.title == rc.title
+                }
             }
 
             val convId = if (matched == null) {
@@ -424,9 +427,11 @@ class CloudSyncManager(
                 // 只插入有消息的会话，避免应用启动时产生空白对话记录
                 if (rc.messageCount > 0 || rc.messages.isNotEmpty()) {
                     android.util.Log.d("CloudSyncManager", "Inserting new conversation: ${rc.title}")
+                    val newUuid = rc.uuid ?: java.util.UUID.randomUUID().toString()
                     val newId = chatDao.insertConversation(
                         Conversation(
                             title = rc.title,
+                            uuid = newUuid,
                             lastMessage = rc.lastMessage,
                             lastMessageTime = Date(rc.lastMessageTime),
                             messageCount = rc.messageCount
@@ -448,6 +453,7 @@ class CloudSyncManager(
                         Conversation(
                             id = newId,
                             title = rc.title,
+                            uuid = newUuid,
                             lastMessage = rc.lastMessage,
                             lastMessageTime = Date(rc.lastMessageTime),
                             messageCount = rc.messageCount

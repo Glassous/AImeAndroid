@@ -45,6 +45,7 @@ CREATE TABLE public.account_sessions (
 CREATE TABLE public.conversations (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+    client_uuid text, -- 客户端生成的唯一标识 (UUID)
     title text NOT NULL,
     last_message text,
     last_message_time timestamp with time zone,
@@ -119,6 +120,7 @@ CREATE TABLE public.api_keys (
 CREATE INDEX idx_accounts_email ON public.accounts(email);
 CREATE INDEX idx_sessions_token ON public.account_sessions(token);
 CREATE INDEX idx_conversations_user ON public.conversations(user_id);
+CREATE INDEX idx_conversations_client_uuid ON public.conversations(user_id, client_uuid);
 CREATE INDEX idx_messages_conv ON public.chat_messages(conversation_id);
 CREATE INDEX idx_model_groups_user ON public.model_groups(user_id);
 CREATE INDEX idx_models_user ON public.models(user_id);
@@ -421,11 +423,21 @@ BEGIN
   IF p_sync_history THEN
     FOR conv_record IN SELECT * FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_data->'conversations') = 'array' THEN p_data->'conversations' ELSE '[]'::jsonb END) LOOP
         conv_id := NULL;
-        -- 尝试根据标题查找现有会话
-        SELECT id INTO conv_id FROM public.conversations WHERE user_id = uid AND title = (conv_record.value->>'title')::text LIMIT 1;
+        
+        -- 尝试根据 client_uuid 查找现有会话
+        IF (conv_record.value ? 'uuid') AND (conv_record.value->>'uuid') IS NOT NULL THEN
+            SELECT id INTO conv_id FROM public.conversations WHERE user_id = uid AND client_uuid = (conv_record.value->>'uuid')::text LIMIT 1;
+        END IF;
+
+        -- 如果没找到，尝试根据标题查找（兼容旧版客户端或数据）
+        IF conv_id IS NULL THEN
+            SELECT id INTO conv_id FROM public.conversations WHERE user_id = uid AND title = (conv_record.value->>'title')::text LIMIT 1;
+        END IF;
         
         IF conv_id IS NOT NULL THEN
             UPDATE public.conversations SET
+                client_uuid = COALESCE((conv_record.value->>'uuid')::text, client_uuid),
+                title = (conv_record.value->>'title'),
                 last_message = (conv_record.value->>'lastMessage'),
                 last_message_time = to_timestamp((((conv_record.value->>'lastMessageTime')::numeric)/1000)::double precision),
                 message_count = ((conv_record.value->>'messageCount')::int),
@@ -434,8 +446,8 @@ BEGIN
                 deleted_at = CASE WHEN (conv_record.value ? 'deletedAt') THEN to_timestamp((((conv_record.value->>'deletedAt')::numeric)/1000)::double precision) ELSE deleted_at END
             WHERE id = conv_id;
         ELSE
-            INSERT INTO public.conversations(user_id, title, last_message, last_message_time, message_count, is_deleted, deleted_at)
-            VALUES (uid, (conv_record.value->>'title'), (conv_record.value->>'lastMessage'),
+            INSERT INTO public.conversations(user_id, client_uuid, title, last_message, last_message_time, message_count, is_deleted, deleted_at)
+            VALUES (uid, (conv_record.value->>'uuid'), (conv_record.value->>'title'), (conv_record.value->>'lastMessage'),
                 to_timestamp((((conv_record.value->>'lastMessageTime')::numeric)/1000)::double precision), ((conv_record.value->>'messageCount')::int),
                 COALESCE((conv_record.value->>'isDeleted')::boolean, false),
                 CASE WHEN (conv_record.value ? 'deletedAt') THEN to_timestamp((((conv_record.value->>'deletedAt')::numeric)/1000)::double precision) ELSE NULL END)
@@ -483,7 +495,8 @@ BEGIN
   -- B. 读取
   SELECT COALESCE(jsonb_agg(
        jsonb_build_object(
-         'id', c.id, 'title', c.title, 'lastMessage', c.last_message,
+         'id', c.id, 'title', c.title, 'uuid', c.client_uuid,
+         'lastMessage', c.last_message,
          'lastMessageTime', (extract(epoch from c.last_message_time) * 1000)::bigint,
          'messageCount', c.message_count,
          'messages', (
