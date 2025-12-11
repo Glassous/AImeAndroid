@@ -334,6 +334,33 @@ class SupabaseAuthService(
                     }
                 }
                 toLongField(obj, "exportedAt")
+
+                // 处理 modelGroups
+                if (obj.has("modelGroups") && obj.get("modelGroups").isJsonArray) {
+                    val groups = obj.getAsJsonArray("modelGroups")
+                    android.util.Log.d("SupabaseAuthService", "Processing ${groups.size()} model groups")
+                    for (gElem in groups) {
+                        if (gElem.isJsonObject) {
+                            val gObj = gElem.asJsonObject
+                            toLongField(gObj, "createdAt")
+                            toLongField(gObj, "deletedAt")
+                        }
+                    }
+                }
+
+                // 处理 models
+                if (obj.has("models") && obj.get("models").isJsonArray) {
+                    val models = obj.getAsJsonArray("models")
+                    android.util.Log.d("SupabaseAuthService", "Processing ${models.size()} models")
+                    for (mElem in models) {
+                        if (mElem.isJsonObject) {
+                            val mObj = mElem.asJsonObject
+                            toLongField(mObj, "createdAt")
+                            toLongField(mObj, "deletedAt")
+                        }
+                    }
+                }
+
                 if (obj.has("conversations") && obj.get("conversations").isJsonArray) {
                     val convs = obj.getAsJsonArray("conversations")
                     android.util.Log.d("SupabaseAuthService", "Processing ${convs.size()} conversations")
@@ -341,6 +368,7 @@ class SupabaseAuthService(
                         if (convElem.isJsonObject) {
                             val convObj = convElem.asJsonObject
                             toLongField(convObj, "lastMessageTime")
+                            toLongField(convObj, "deletedAt")
                             if (convObj.has("messages") && convObj.get("messages").isJsonArray) {
                                 val msgsArr = convObj.getAsJsonArray("messages")
                                 android.util.Log.d("SupabaseAuthService", "Processing ${msgsArr.size()} messages in conversation")

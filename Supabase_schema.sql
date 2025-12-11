@@ -221,7 +221,16 @@ BEGIN
   IF v_uid IS NOT NULL AND v_stored_pass = crypt(p_password, v_stored_pass) THEN
     v_token := encode(gen_random_bytes(32), 'hex');
     
-    DELETE FROM public.account_sessions WHERE user_id = v_uid;
+    -- 限制每个用户最多同时存在 6 个活跃会话，避免无限增长
+    DELETE FROM public.account_sessions 
+    WHERE user_id = v_uid 
+      AND id NOT IN (
+        SELECT id FROM public.account_sessions 
+        WHERE user_id = v_uid 
+        ORDER BY created_at DESC 
+        LIMIT 5
+      );
+
     INSERT INTO public.account_sessions(user_id, email, token)
     VALUES (v_uid, p_email, v_token);
     
@@ -443,31 +452,31 @@ BEGIN
         SELECT 
           conv_id, 
           uid, 
-          (m->>'content'), 
-          ((m->>'isFromUser')::boolean),
-          to_timestamp((((m->>'timestamp')::numeric)/1000)::double precision), 
+          COALESCE(m->>'content', ''), 
+          COALESCE((m->>'isFromUser')::boolean, false),
+          to_timestamp((((COALESCE(m->>'timestamp', '0'))::numeric)/1000)::double precision), 
           COALESCE((m->>'isError')::boolean, false),
           CASE WHEN (m ? 'modelDisplayName') THEN (m->>'modelDisplayName') ELSE NULL END
-        FROM jsonb_array_elements(conv_record.value->'messages') AS m
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(conv_record.value->'messages') = 'array' THEN conv_record.value->'messages' ELSE '[]'::jsonb END) AS m
         WHERE NOT EXISTS (
             SELECT 1 FROM public.chat_messages cm 
             WHERE cm.conversation_id = conv_id AND cm.user_id = uid 
             -- 比较时间戳 (误差 10ms) 和 内容
-            AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.01
-            AND cm.content = (m->>'content')
+            AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 0.01
+            AND cm.content = COALESCE(m->>'content', '')
         );
 
         -- 更新已有消息的模型外显名称（如果之前为NULL且本次上传提供了值）
         UPDATE public.chat_messages cm
         SET model_display_name = (m->>'modelDisplayName')
-        FROM jsonb_array_elements(conv_record.value->'messages') AS m
+        FROM jsonb_array_elements(CASE WHEN jsonb_typeof(conv_record.value->'messages') = 'array' THEN conv_record.value->'messages' ELSE '[]'::jsonb END) AS m
         WHERE cm.conversation_id = conv_id
           AND cm.user_id = uid
           AND cm.model_display_name IS NULL
           AND (m ? 'modelDisplayName')
-          AND cm.content = (m->>'content')
-          AND cm.is_from_user = ((m->>'isFromUser')::boolean)
-          AND abs(extract(epoch from cm.timestamp) - (((m->>'timestamp')::numeric)/1000)) < 0.01;
+          AND cm.content = COALESCE(m->>'content', '')
+          AND cm.is_from_user = COALESCE((m->>'isFromUser')::boolean, false)
+          AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 0.01;
     END LOOP;
   END IF;
 

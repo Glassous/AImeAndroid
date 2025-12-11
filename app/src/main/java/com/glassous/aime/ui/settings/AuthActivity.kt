@@ -240,7 +240,7 @@ class AuthActivity : ComponentActivity() {
                                                         isSyncing = true
                                                         try {
                                                             val (ok, msg) = app.cloudSyncManager.manualSync()
-                                                            snackbarHostState.showSnackbar(if (ok) "同步完成" else ("同步失败：" + msg))
+                                                            snackbarHostState.showSnackbar(msg)
                                                         } catch (e: Exception) {
                                                             val detail = e.stackTraceToString().take(500)
                                                             snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)

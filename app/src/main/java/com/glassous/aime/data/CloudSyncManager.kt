@@ -45,32 +45,127 @@ class CloudSyncManager(
     suspend fun manualSync(): Pair<Boolean, String> {
         return try {
             android.util.Log.d("CloudSyncManager", "Manual sync initiated")
-            syncOnce()
-            android.util.Log.d("CloudSyncManager", "Manual sync completed")
-            true to "同步完成"
+            val result = syncOnce()
+            android.util.Log.d("CloudSyncManager", "Manual sync completed with result: $result")
+            result
         } catch (e: Exception) {
             android.util.Log.e("CloudSyncManager", "Manual sync failed", e)
             false to "同步失败：${e.message}"
         }
     }
 
-    suspend fun syncOnce(forceAll: Boolean = false) {
+    suspend fun syncUploadOnly(forceAll: Boolean = false): Pair<Boolean, String> {
+        val token = authPreferences.accessToken.first()
+        if (token.isNullOrBlank()) {
+            return false to "未登录，无法上传"
+        }
+
+        return try {
+             kotlinx.coroutines.withContext(Dispatchers.IO) {
+                mutex.withLock {
+                     android.util.Log.d("CloudSyncManager", "Starting Upload Only... Token length: ${token.length}")
+                     
+                     // 3. 收集目前最新的本地数据
+                     val localAfterMerge = collectLocalBackup()
+                     val localBackupJson = gson.toJson(localAfterMerge)
+                     
+                    // 4. 获取同步开关设置
+                    val uploadHistory = if (forceAll) true else syncPreferences.uploadHistoryEnabled.first()
+                    val uploadModelConfig = if (forceAll) true else syncPreferences.uploadModelConfigEnabled.first()
+                    val uploadSelectedModel = if (forceAll) true else syncPreferences.uploadSelectedModelEnabled.first()
+                    val uploadApiKey = if (forceAll) true else syncPreferences.uploadApiKeyEnabled.first()
+
+                    // 5. 上传
+                    val (okUpload, uploadMsg) = supabaseService.uploadBackup(
+                        token = token,
+                        backupDataJson = localBackupJson,
+                        syncHistory = uploadHistory,
+                        syncModelConfig = uploadModelConfig,
+                        syncSelectedModel = uploadSelectedModel,
+                        syncApiKey = uploadApiKey
+                    )
+                    
+                    if (okUpload) {
+                        true to "仅上传成功"
+                    } else {
+                        if (uploadMsg.contains("无效会话") || uploadMsg.contains("Token过期")) {
+                            false to "登录失效，请退出并重新登录"
+                        } else {
+                            false to "上传失败: $uploadMsg"
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CloudSyncManager", "Upload Only failed", e)
+            false to "上传异常: ${e.message}"
+        }
+    }
+
+    suspend fun syncDownloadOnly(): Pair<Boolean, String> {
+        val token = authPreferences.accessToken.first()
+        if (token.isNullOrBlank()) {
+            return false to "未登录，无法下载"
+        }
+
+        return try {
+            kotlinx.coroutines.withContext(Dispatchers.IO) {
+                mutex.withLock {
+                    android.util.Log.d("CloudSyncManager", "Starting Download Only... Token length: ${token.length}")
+                    
+                    // 1. 下载云端备份
+                    val (okDownload, downloadMsg, remoteJson) = supabaseService.downloadBackup(token)
+                    
+                    if (okDownload && !remoteJson.isNullOrBlank()) {
+                         // 2. 合并
+                        val remoteBackup = try {
+                            gson.fromJson(remoteJson, BackupData::class.java)
+                        } catch (e: Exception) {
+                            null
+                        }
+                        
+                        if (remoteBackup != null) {
+                            mergeRemoteIntoLocal(remoteBackup)
+                            true to "仅下载并合并成功"
+                        } else {
+                            false to "下载成功但解析失败"
+                        }
+                    } else {
+                        if (downloadMsg.contains("无效会话") || downloadMsg.contains("Token过期")) {
+                            false to "登录失效，请退出并重新登录"
+                        } else {
+                            if (!okDownload) false to "下载失败: $downloadMsg" else true to "云端无数据"
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CloudSyncManager", "Download Only failed", e)
+            false to "下载异常: ${e.message}"
+        }
+    }
+
+    suspend fun syncOnce(forceAll: Boolean = false): Pair<Boolean, String> {
         val token = authPreferences.accessToken.first()
         if (token.isNullOrBlank()) {
             android.util.Log.w("CloudSyncManager", "Sync skipped: No access token available")
-            return
+            return false to "未登录"
         }
 
         android.util.Log.d("CloudSyncManager", "Starting sync process")
 
         // 使用 IO 线程执行，避免阻塞主线程
-        kotlinx.coroutines.withContext(Dispatchers.IO) {
+        return kotlinx.coroutines.withContext(Dispatchers.IO) {
             mutex.withLock {
                 try {
                     // 1. 下载云端备份
                     android.util.Log.d("CloudSyncManager", "Step 1: Downloading remote backup")
                     val (okDownload, downloadMsg, remoteJson) = supabaseService.downloadBackup(token)
                     android.util.Log.d("CloudSyncManager", "Download result: ok=$okDownload, message=$downloadMsg, hasData=${!remoteJson.isNullOrBlank()}")
+
+                    if (!okDownload && (downloadMsg.contains("无效会话") || downloadMsg.contains("Token过期"))) {
+                        return@withLock false to "设备登录已过期，只能同时登录6个设备，请重新登录"
+                    }
 
                     // 2. 如果下载成功且有数据，执行"增量合并"到本地数据库
                     // 关键点：这里不再清空本地数据，而是将云端的新数据插入本地
@@ -146,8 +241,14 @@ class CloudSyncManager(
 
                     if (okUpload) {
                         android.util.Log.i("CloudSyncManager", "Sync completed successfully")
+                        true to "同步完成"
                     } else {
                         android.util.Log.w("CloudSyncManager", "Sync completed with upload failure: $uploadMsg")
+                        if (uploadMsg.contains("无效会话") || uploadMsg.contains("Token过期")) {
+                            false to "设备登录已过期，只能同时登录6个设备，请重新登录"
+                        } else {
+                            false to "同步失败: 上传出错 ($uploadMsg)"
+                        }
                     }
 
                     // 移除：原来的 "upload 后再次 download 并 overwrite" 的逻辑
@@ -155,6 +256,7 @@ class CloudSyncManager(
                 } catch (e: Exception) {
                     android.util.Log.e("CloudSyncManager", "Sync failed with exception", e)
                     // 可以在这里添加日志或不需要处理，保持静默失败以免打扰用户
+                    false to "同步异常: ${e.message}"
                 }
             }
         }
