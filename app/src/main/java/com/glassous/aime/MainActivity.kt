@@ -40,6 +40,8 @@ import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
 
 import kotlinx.coroutines.flow.first
 
+import android.widget.Toast
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // 安装启动页 (必须在 super.onCreate 之前)
@@ -100,13 +102,13 @@ class MainActivity : ComponentActivity() {
                 else -> isSystemInDarkTheme() // THEME_SYSTEM
             }
 
-            // 应用启动时自动检查更新（延迟执行，避免影响启动速度）
+            // 应用启动时自动检查更新
             LaunchedEffect(Unit) {
-                // 延迟2秒检查，让应用先启动完成
-                kotlinx.coroutines.delay(2000)
+                // 延迟1秒检查，确保网络和组件准备就绪
+                kotlinx.coroutines.delay(1000)
                 
-                // 检查是否开启了自动检查更新
-                val enabled = versionUpdateViewModel.autoCheckUpdateEnabled.first()
+                // 直接从 Preferences 读取配置，避免 ViewModel StateFlow 初始值为 false 的问题
+                val enabled = (application as AIMeApplication).updatePreferences.autoCheckUpdateEnabled.first()
                 if (enabled) {
                     versionUpdateViewModel.checkForUpdates()
                 }
@@ -120,6 +122,11 @@ class MainActivity : ComponentActivity() {
                             updateInfo = state.updateInfo
                             showUpdateDialog = true
                         }
+                    }
+                    is UpdateCheckState.Error -> {
+                        // 如果自动检查失败（非手动触发），可以选择不打扰用户，或者记录日志
+                        // 这里为了调试方便，如果是开发版本可以弹出提示，但正式版最好静默
+                        // Toast.makeText(this@MainActivity, "检查更新失败: ${state.message}", Toast.LENGTH_SHORT).show()
                     }
                     else -> {
                         // 其他状态不处理
