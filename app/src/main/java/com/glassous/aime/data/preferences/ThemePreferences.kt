@@ -67,7 +67,7 @@ class ThemePreferences(private val context: Context) {
         .map { preferences -> preferences[MINIMAL_MODE] ?: false }
 
     val replyBubbleEnabled: Flow<Boolean> = context.dataStore.data
-        .map { preferences -> preferences[REPLY_BUBBLE_ENABLED] ?: true }
+        .map { preferences -> preferences[REPLY_BUBBLE_ENABLED] ?: false }
 
     val chatFontSize: Flow<Float> = context.dataStore.data
         .map { preferences -> preferences[CHAT_FONT_SIZE] ?: 16f }

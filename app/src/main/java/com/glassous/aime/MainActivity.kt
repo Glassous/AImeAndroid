@@ -38,6 +38,8 @@ import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
 
+import kotlinx.coroutines.flow.first
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // 安装启动页 (必须在 super.onCreate 之前)
@@ -84,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
             // 版本更新ViewModel
             val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
-                factory = VersionUpdateViewModelFactory(GitHubReleaseService())
+                factory = VersionUpdateViewModelFactory(GitHubReleaseService(), (application as AIMeApplication).updatePreferences)
             )
             val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
 
@@ -102,7 +104,12 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 // 延迟2秒检查，让应用先启动完成
                 kotlinx.coroutines.delay(2000)
-                versionUpdateViewModel.checkForUpdates()
+                
+                // 检查是否开启了自动检查更新
+                val enabled = versionUpdateViewModel.autoCheckUpdateEnabled.first()
+                if (enabled) {
+                    versionUpdateViewModel.checkForUpdates()
+                }
             }
 
             // 监听更新检查结果

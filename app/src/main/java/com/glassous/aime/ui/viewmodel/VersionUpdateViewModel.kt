@@ -7,9 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.glassous.aime.BuildConfig
 import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.model.VersionUpdateInfo
+import com.glassous.aime.data.preferences.UpdatePreferences
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 
 /**
@@ -26,12 +29,16 @@ sealed class UpdateCheckState {
  * 版本更新ViewModel
  */
 class VersionUpdateViewModel(
-    private val gitHubService: GitHubReleaseService
+    private val gitHubService: GitHubReleaseService,
+    private val updatePreferences: UpdatePreferences
 ) : ViewModel() {
     
     private val _updateCheckState = MutableStateFlow<UpdateCheckState>(UpdateCheckState.Idle)
     val updateCheckState: StateFlow<UpdateCheckState> = _updateCheckState.asStateFlow()
     
+    val autoCheckUpdateEnabled = updatePreferences.autoCheckUpdateEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     private val repoOwner = "Glassous"
     private val repoName = "AImeAndroid"
     
@@ -92,18 +99,25 @@ class VersionUpdateViewModel(
     fun resetState() {
         _updateCheckState.value = UpdateCheckState.Idle
     }
+
+    fun setAutoCheckUpdateEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            updatePreferences.setAutoCheckUpdateEnabled(enabled)
+        }
+    }
 }
 
 /**
  * VersionUpdateViewModel工厂
  */
 class VersionUpdateViewModelFactory(
-    private val gitHubService: GitHubReleaseService
+    private val gitHubService: GitHubReleaseService,
+    private val updatePreferences: UpdatePreferences
 ) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(VersionUpdateViewModel::class.java)) {
-            return VersionUpdateViewModel(gitHubService) as T
+            return VersionUpdateViewModel(gitHubService, updatePreferences) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

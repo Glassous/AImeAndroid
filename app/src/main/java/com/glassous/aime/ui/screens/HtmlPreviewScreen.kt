@@ -21,6 +21,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
 
+import androidx.compose.ui.graphics.toArgb
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HtmlPreviewScreen(
@@ -69,9 +71,10 @@ fun HtmlPreviewScreen(
 
     // 生成高亮HTML
     val isDarkTheme = isSystemInDarkTheme()
-    val highlightedHtml = remember(htmlCode, isDarkTheme) {
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val highlightedHtml = remember(htmlCode, isDarkTheme, surfaceColor) {
         val theme = if (isDarkTheme) "atom-one-dark" else "atom-one-light"
-        val bgColor = if (isDarkTheme) "#1c1b1f" else "#fffbff" // Match Material3 default background roughly
+        val bgColor = String.format("#%06X", (surfaceColor.toArgb() and 0xFFFFFF))
         val escapedCode = htmlCode.replace("&", "&amp;")
             .replace("<", "&lt;")
             .replace(">", "&gt;")
@@ -88,9 +91,9 @@ fun HtmlPreviewScreen(
             <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
             <script>hljs.highlightAll();</script>
             <style>
-                body { margin: 0; padding: 0; background-color: $bgColor; }
-                pre { margin: 0; padding: 16px; white-space: pre; overflow-x: auto; }
-                code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; line-height: 1.5; background-color: transparent !important; }
+                body { margin: 0; padding: 0; background-color: $bgColor; user-select: text; -webkit-user-select: text; }
+                pre { margin: 0; padding: 16px; white-space: pre; overflow-x: auto; user-select: text; -webkit-user-select: text; }
+                code { font-family: 'Fira Code', 'Consolas', monospace; font-size: 14px; line-height: 1.5; background-color: transparent !important; user-select: text; -webkit-user-select: text; }
             </style>
         </head>
         <body>
@@ -241,6 +244,7 @@ fun HtmlPreviewScreen(
                             settings.useWideViewPort = true
                             settings.builtInZoomControls = true
                             settings.displayZoomControls = false
+                            isLongClickable = true
                             setBackgroundColor(0x00000000)
                             sourceWebViewRef = this
                         }

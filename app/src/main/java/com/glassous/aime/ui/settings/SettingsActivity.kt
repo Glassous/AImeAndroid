@@ -115,7 +115,7 @@ fun SettingsContent(
         factory = DataSyncViewModelFactory(application)
     )
     val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
-        factory = VersionUpdateViewModelFactory(GitHubReleaseService())
+        factory = VersionUpdateViewModelFactory(GitHubReleaseService(), application.updatePreferences)
     )
 
     // 主题相关状态
@@ -148,6 +148,7 @@ fun SettingsContent(
 
     // Version Update States
     val updateCheckState by versionUpdateViewModel.updateCheckState.collectAsState()
+    val autoCheckUpdateEnabled by versionUpdateViewModel.autoCheckUpdateEnabled.collectAsState()
 
     // Data Sync Launchers
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
@@ -532,6 +533,31 @@ fun SettingsContent(
                             text = "v${BuildConfig.VERSION_NAME}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // 自动检查更新开关
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "自动检查更新",
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = "启动应用时自动检查新版本",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = autoCheckUpdateEnabled,
+                            onCheckedChange = { versionUpdateViewModel.setAutoCheckUpdateEnabled(it) }
                         )
                     }
 

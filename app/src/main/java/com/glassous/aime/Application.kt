@@ -35,6 +35,7 @@ class AIMeApplication : Application() {
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
     val authPreferences by lazy { AuthPreferences(this) }
     val syncPreferences by lazy { SyncPreferences(this) }
+    val updatePreferences by lazy { com.glassous.aime.data.preferences.UpdatePreferences(this) }
 
     val cloudSyncManager by lazy {
         CloudSyncManager(
