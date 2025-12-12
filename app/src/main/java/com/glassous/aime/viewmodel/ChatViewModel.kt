@@ -79,6 +79,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
+                _inputText.value = ""
+                
                 repository.sendMessage(
                     conversationId,
                     content,
@@ -93,7 +95,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _currentToolType.value = null
                     }
                 )
-                _inputText.value = ""
             } catch (e: Exception) {
                 // Handle error - could show a snackbar or error message
             } finally {
