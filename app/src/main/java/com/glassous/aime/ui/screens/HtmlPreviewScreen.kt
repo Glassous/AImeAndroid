@@ -109,7 +109,7 @@ fun HtmlPreviewScreen(
     }
 
     // 当切换到预览模式时加载HTML内容
-    LaunchedEffect(localIsSourceMode) {
+    LaunchedEffect(localIsSourceMode, webViewRef, htmlCode) {
         if (!localIsSourceMode) {
             loadHtmlContent()
         }
@@ -271,8 +271,6 @@ fun HtmlPreviewScreen(
                             settings.builtInZoomControls = true
                             settings.displayZoomControls = false
 
-                            // 允许WebView显示HTML背景颜色
-                            setBackgroundColor(0x00000000) // 设置透明背景
                             webViewRef = this
                         }
                     },
