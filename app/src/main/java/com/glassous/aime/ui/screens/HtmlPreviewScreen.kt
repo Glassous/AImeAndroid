@@ -27,6 +27,24 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.TransformOrigin
 
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.sp
+
+import android.webkit.JavascriptInterface
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+
+data class ConsoleLog(
+    val type: LogType,
+    val message: String,
+    val timestamp: String = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HH:mm:ss"))
+)
+
+enum class LogType {
+    LOG, ERROR, WARN, INFO
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,11 +60,49 @@ fun HtmlPreviewScreen(
     var showStatsDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var rotation by remember { mutableStateOf(0f) }
+    
+    // 控制台相关状态
+    var showConsoleBottomSheet by remember { mutableStateOf(false) }
+    val consoleLogs = remember { mutableStateListOf<ConsoleLog>() }
+    
+    // JavaScript接口
+    class ConsoleInterface {
+        @JavascriptInterface
+        fun log(message: String) {
+            consoleLogs.add(ConsoleLog(LogType.LOG, message))
+        }
+
+        @JavascriptInterface
+        fun error(message: String) {
+            consoleLogs.add(ConsoleLog(LogType.ERROR, message))
+            // 当发生错误时自动弹出控制台（可选，暂时不自动弹出以免打扰）
+            // showConsoleBottomSheet = true 
+        }
+
+        @JavascriptInterface
+        fun warn(message: String) {
+            consoleLogs.add(ConsoleLog(LogType.WARN, message))
+        }
+
+        @JavascriptInterface
+        fun info(message: String) {
+            consoleLogs.add(ConsoleLog(LogType.INFO, message))
+        }
+    }
+    
+    val consoleInterface = remember { ConsoleInterface() }
 
     // 复制HTML代码到剪贴板
     fun copyHtmlCode() {
         clipboardManager.setText(AnnotatedString(htmlCode))
         Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    }
+    
+    // 复制控制台日志
+    fun copyConsoleLogs() {
+        val logsText = consoleLogs.joinToString("\n") { "[${it.timestamp}] [${it.type}] ${it.message}" }
+        clipboardManager.setText(AnnotatedString(logsText))
+        Toast.makeText(context, "控制台日志已复制", Toast.LENGTH_SHORT).show()
     }
 
     // 保存文件
@@ -71,6 +127,7 @@ fun HtmlPreviewScreen(
     var sourceWebViewRef by remember { mutableStateOf<WebView?>(null) }
 
     fun refreshWebView() {
+        consoleLogs.clear() // 刷新时清空日志
         webViewRef?.reload()
         sourceWebViewRef?.reload()
     }
@@ -109,6 +166,68 @@ fun HtmlPreviewScreen(
         """.trimIndent()
     }
 
+    // 注入控制台捕获脚本
+    val consoleInjectionScript = """
+        <script>
+        (function() {
+            var oldLog = console.log;
+            var oldError = console.error;
+            var oldWarn = console.warn;
+            var oldInfo = console.info;
+
+            function formatArgs(args) {
+                return Array.from(args).map(arg => {
+                    if (typeof arg === 'object') {
+                        try {
+                            return JSON.stringify(arg);
+                        } catch(e) {
+                            return String(arg);
+                        }
+                    }
+                    return String(arg);
+                }).join(' ');
+            }
+
+            console.log = function() {
+                oldLog.apply(console, arguments);
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.log(formatArgs(arguments));
+                }
+            };
+            console.error = function() {
+                oldError.apply(console, arguments);
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.error(formatArgs(arguments));
+                }
+            };
+            console.warn = function() {
+                oldWarn.apply(console, arguments);
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.warn(formatArgs(arguments));
+                }
+            };
+            console.info = function() {
+                oldInfo.apply(console, arguments);
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.info(formatArgs(arguments));
+                }
+            };
+            
+            window.onerror = function(message, source, lineno, colno, error) {
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.error("Uncaught Error: " + message + " at " + source + ":" + lineno + ":" + colno);
+                }
+            };
+            
+            window.addEventListener('unhandledrejection', function(event) {
+                if (window.AndroidConsole) {
+                    window.AndroidConsole.error("Unhandled Rejection: " + event.reason);
+                }
+            });
+        })();
+        </script>
+    """.trimIndent()
+
     // 加载HTML内容
     fun loadHtmlContent() {
         val hasHtml = Regex("<\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(htmlCode)
@@ -123,7 +242,14 @@ fun HtmlPreviewScreen(
             Regex("<[A-Z]").containsMatchIn(htmlCode)
         )
 
-        val content = if (hasHtml) {
+        // Vue 检测逻辑
+        val isVue = !hasHtml && !isJsx && (
+            htmlCode.contains("<template>") ||
+            (htmlCode.contains("export default") && htmlCode.contains("defineComponent")) ||
+            htmlCode.contains("<script setup>")
+        )
+
+        var content = if (hasHtml) {
             htmlCode
         } else if (isJsx) {
             // JSX 预览模板
@@ -172,6 +298,55 @@ fun HtmlPreviewScreen(
             </body>
             </html>
             """.trimIndent()
+        } else if (isVue) {
+            // Vue 预览模板
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader/dist/vue3-sfc-loader.js"></script>
+                <style>
+                    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                    #app { padding: 16px; min-height: 100vh; box-sizing: border-box; }
+                </style>
+            </head>
+            <body>
+                <div id="app"></div>
+                
+                <!-- 隐藏的 Script 标签存储源码，避免转义问题 -->
+                <script type="text/plain" id="vue-content">
+${htmlCode.replace("</script>", "<\\/script>")}
+                </script>
+
+                <script>
+                    const options = {
+                        moduleCache: {
+                            vue: Vue
+                        },
+                        async getFile(url) {
+                            if (url === '/component.vue') {
+                                return document.getElementById('vue-content').textContent;
+                            }
+                        },
+                        addStyle(textContent) {
+                            const style = document.createElement('style');
+                            style.textContent = textContent;
+                            const ref = document.head.getElementsByTagName('style')[0] || null;
+                            document.head.insertBefore(style, ref);
+                        },
+                    }
+                    
+                    const { loadModule } = window['vue3-sfc-loader'];
+                    
+                    const app = Vue.createApp(Vue.defineAsyncComponent(() => loadModule('/component.vue', options)));
+                    app.mount('#app');
+                </script>
+            </body>
+            </html>
+            """.trimIndent()
         } else {
             """
             <!DOCTYPE html>
@@ -190,6 +365,14 @@ fun HtmlPreviewScreen(
             </html>
             """.trimIndent()
         }
+        
+        // 注入控制台脚本到 <head> 中
+        if (content.contains("<head>", ignoreCase = true)) {
+            content = content.replaceFirst(Regex("<head>", RegexOption.IGNORE_CASE), "<head>\n$consoleInjectionScript")
+        } else {
+            content = "$consoleInjectionScript\n$content"
+        }
+        
         webViewRef?.loadDataWithBaseURL("https://aime.local/", content, "text/html", "UTF-8", null)
     }
 
@@ -256,6 +439,13 @@ fun HtmlPreviewScreen(
                             if (localIsSourceMode) Icons.Filled.Visibility else Icons.Filled.Code,
                             contentDescription = if (localIsSourceMode) "切换到预览" else "切换到源码"
                         )
+                    }
+
+                    // 控制台按钮
+                    if (!localIsSourceMode) {
+                        IconButton(onClick = { showConsoleBottomSheet = true }) {
+                            Icon(Icons.Filled.BugReport, contentDescription = "控制台")
+                        }
                     }
 
                     // 刷新按钮
@@ -380,6 +570,8 @@ fun HtmlPreviewScreen(
                                 WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
                             }
 
+                            addJavascriptInterface(consoleInterface, "AndroidConsole")
+
                             webViewRef = this
                         }
                     },
@@ -393,6 +585,69 @@ fun HtmlPreviewScreen(
                             transformOrigin = TransformOrigin.Center
                         )
                 )
+            }
+        }
+    }
+
+    if (showConsoleBottomSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showConsoleBottomSheet = false },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .heightIn(max = 500.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 左上角复制按钮
+                    IconButton(onClick = { copyConsoleLogs() }) {
+                        Icon(Icons.Filled.ContentCopy, contentDescription = "复制日志")
+                    }
+                    Text("控制台", style = MaterialTheme.typography.titleLarge)
+                    // 右侧清空按钮
+                    IconButton(onClick = { consoleLogs.clear() }) {
+                        Icon(Icons.Filled.Delete, contentDescription = "清空日志")
+                    }
+                }
+                Divider(modifier = Modifier.padding(vertical = 8.dp))
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    items(consoleLogs) { log ->
+                        val color = when (log.type) {
+                            LogType.ERROR -> MaterialTheme.colorScheme.error
+                            LogType.WARN -> MaterialTheme.colorScheme.tertiary
+                            else -> MaterialTheme.colorScheme.onSurface
+                        }
+                        Text(
+                            text = "[${log.timestamp}] [${log.type}] ${log.message}",
+                            color = color,
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                        Divider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    }
+                    if (consoleLogs.isEmpty()) {
+                        item {
+                            Text(
+                                "暂无日志",
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxWidth(),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                        }
+                    }
+                }
             }
         }
     }

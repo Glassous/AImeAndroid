@@ -59,11 +59,20 @@ fun CodeBlockWithCopy(
         hasJsxLanguage || ((lowerCaseLang == "js" || lowerCaseLang == "javascript") && hasJsxContent)
     }
 
-    val isPreviewable = isHtmlCode || isJsxCode
+    // 检测是否为Vue代码块
+    val isVueCode = remember(code, language) {
+        val lowerCaseLang = language?.lowercase()
+        val hasVueLanguage = lowerCaseLang == "vue"
+        // 简单的 SFC 检测：包含 template 且 (包含 script 或 style 或 setup)
+        val hasVueContent = code.contains("<template>") && (code.contains("<script") || code.contains("<style"))
+        hasVueLanguage || hasVueContent
+    }
+
+    val isPreviewable = isHtmlCode || isJsxCode || isVueCode
 
     // 根据useCardStyle和isHtmlCode决定显示样式
     if (useCardStyle && isPreviewable) {
-        // 卡片样式：仅显示HTML/JSX代码提示和预览/源码按钮
+        // 卡片样式：仅显示HTML/JSX/Vue代码提示和预览/源码按钮
         Card(
             modifier = modifier
                 .fillMaxWidth()
@@ -79,20 +88,28 @@ fun CodeBlockWithCopy(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 左侧：HTML/JSX代码提示
+                // 左侧：HTML/JSX/Vue代码提示
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f, fill = false) // 允许左侧压缩，但不强制占位
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Code,
-                        contentDescription = if (isJsxCode) "JSX代码" else "HTML代码",
+                        contentDescription = when {
+                            isVueCode -> "Vue代码"
+                            isJsxCode -> "JSX代码"
+                            else -> "HTML代码"
+                        },
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isJsxCode) "JSX 代码" else "HTML 代码",
+                        text = when {
+                            isVueCode -> "Vue 代码"
+                            isJsxCode -> "JSX 代码"
+                            else -> "HTML 代码"
+                        },
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1
@@ -113,7 +130,11 @@ fun CodeBlockWithCopy(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Visibility,
-                                contentDescription = if (isJsxCode) "预览JSX" else "预览HTML",
+                                contentDescription = when {
+                                    isVueCode -> "预览Vue"
+                                    isJsxCode -> "预览JSX"
+                                    else -> "预览HTML"
+                                },
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -170,7 +191,7 @@ fun CodeBlockWithCopy(
                     .padding(4.dp),
                 horizontalArrangement = Arrangement.End
             ) {
-                // 预览按钮（仅当是HTML/JSX代码且提供了预览回调时显示）
+                // 预览按钮（仅当是HTML/JSX/Vue代码且提供了预览回调时显示）
                 if (isPreviewable && onPreview != null) {
                     IconButton(
                         onClick = onPreview,
@@ -179,7 +200,11 @@ fun CodeBlockWithCopy(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Preview,
-                            contentDescription = if (isJsxCode) "预览JSX" else "预览HTML",
+                            contentDescription = when {
+                                isVueCode -> "预览Vue"
+                                isJsxCode -> "预览JSX"
+                                else -> "预览HTML"
+                            },
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             modifier = Modifier.size(16.dp)
                         )
