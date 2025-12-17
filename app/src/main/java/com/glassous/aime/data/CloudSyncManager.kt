@@ -480,29 +480,24 @@ class CloudSyncManager(
             var hasNewMessage = false
             rc.messages.forEach { rm ->
                 // 判断是否重复
-                val isDuplicate = if (!rm.uuid.isNullOrBlank()) {
-                    // 优先使用 UUID 精确匹配
-                    rm.uuid in localUuids || rm.uuid in localDeletedUuids
+                // 1. 直接使用内容+时间戳的模糊匹配（放弃 UUID 匹配，解决用户反馈的重复问题）
+                // 允许 3 秒的时间戳误差，并忽略换行符差异
+                val rmContent = rm.content.replace("\r", "").trim()
+                val rmTime = rm.timestamp
+                
+                val foundInActive = localMessages.any { local ->
+                    local.isFromUser == rm.isFromUser &&
+                    local.content.replace("\r", "").trim() == rmContent &&
+                    kotlin.math.abs(local.timestamp.time - rmTime) < 3000
+                }
+                
+                val isDuplicate = if (foundInActive) {
+                    true
                 } else {
-                    // 若无 UUID（旧备份或云端未返回），降级使用内容+时间戳的模糊匹配
-                    // 允许 2 秒的时间戳误差，以解决浮点数转换精度问题
-                    val rmContent = rm.content.trim()
-                    val rmTime = rm.timestamp
-                    
-                    val foundInActive = localMessages.any { local ->
+                    localDeletedMessages.any { local ->
                         local.isFromUser == rm.isFromUser &&
-                        local.content.trim() == rmContent &&
-                        kotlin.math.abs(local.timestamp.time - rmTime) < 2000
-                    }
-                    
-                    if (foundInActive) {
-                        true
-                    } else {
-                        localDeletedMessages.any { local ->
-                            local.isFromUser == rm.isFromUser &&
-                            local.content.trim() == rmContent &&
-                            kotlin.math.abs(local.timestamp.time - rmTime) < 2000
-                        }
+                        local.content.replace("\r", "").trim() == rmContent &&
+                        kotlin.math.abs(local.timestamp.time - rmTime) < 3000
                     }
                 }
 

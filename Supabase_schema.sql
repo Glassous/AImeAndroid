@@ -61,6 +61,7 @@ CREATE TABLE public.chat_messages (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     conversation_id uuid NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
     user_id uuid NOT NULL REFERENCES public.accounts(id) ON DELETE CASCADE,
+    client_uuid uuid DEFAULT gen_random_uuid(),
     content text,
     is_from_user boolean DEFAULT false,
     timestamp timestamp with time zone,
@@ -122,6 +123,7 @@ CREATE INDEX idx_sessions_token ON public.account_sessions(token);
 CREATE INDEX idx_conversations_user ON public.conversations(user_id);
 CREATE UNIQUE INDEX idx_conversations_user_client_uuid ON public.conversations(user_id, client_uuid);
 CREATE INDEX idx_messages_conv ON public.chat_messages(conversation_id);
+CREATE INDEX idx_messages_client_uuid ON public.chat_messages(client_uuid);
 CREATE INDEX idx_model_groups_user ON public.model_groups(user_id);
 CREATE INDEX idx_models_user ON public.models(user_id);
 CREATE INDEX idx_user_settings_uid ON public.user_settings(user_id);
@@ -428,6 +430,17 @@ BEGIN
         IF (conv_record.value ? 'uuid') AND (conv_record.value->>'uuid') IS NOT NULL THEN
             SELECT id INTO conv_id FROM public.conversations WHERE user_id = uid AND client_uuid = (conv_record.value->>'uuid')::uuid LIMIT 1;
         END IF;
+
+        -- 如果没有 UUID 或 UUID 未找到，尝试通过"标题 + 最后消息时间"精确匹配
+        -- 这能解决 UUID 丢失或不一致时（如重新安装应用），能找回旧会话，避免重复创建
+        IF conv_id IS NULL THEN
+             SELECT id INTO conv_id FROM public.conversations 
+             WHERE user_id = uid 
+             AND title = (conv_record.value->>'title')
+             -- 增加时间校验，防止仅因标题相同（如 "New Chat"）就合并
+             AND abs(extract(epoch from last_message_time) - (((conv_record.value->>'lastMessageTime')::numeric)/1000)) < 2.0
+             LIMIT 1;
+        END IF;
         
         IF conv_id IS NOT NULL THEN
             UPDATE public.conversations SET
@@ -454,11 +467,12 @@ BEGIN
         END IF;
 
         -- 插入消息 (避免重复)
-        -- 使用更宽松的去重条件，防止浮点数精度问题
-        INSERT INTO public.chat_messages(conversation_id, user_id, content, is_from_user, timestamp, is_error, model_display_name)
+        -- 使用更宽松的去重条件，防止浮点数精度问题；放弃 UUID 强制匹配，改用内容+时间戳+发送方联合去重
+        INSERT INTO public.chat_messages(conversation_id, user_id, client_uuid, content, is_from_user, timestamp, is_error, model_display_name)
         SELECT 
           conv_id, 
           uid, 
+          COALESCE((m->>'uuid')::uuid, gen_random_uuid()),
           COALESCE(m->>'content', ''), 
           COALESCE((m->>'isFromUser')::boolean, false),
           to_timestamp((((COALESCE(m->>'timestamp', '0'))::numeric)/1000)::double precision), 
@@ -468,9 +482,14 @@ BEGIN
         WHERE NOT EXISTS (
             SELECT 1 FROM public.chat_messages cm 
             WHERE cm.conversation_id = conv_id AND cm.user_id = uid 
-            -- 比较时间戳 (误差 10ms) 和 内容
-            AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 0.01
-            AND cm.content = COALESCE(m->>'content', '')
+            AND (
+                -- 核心去重逻辑：内容相同 AND 发送方相同 AND 时间接近
+                (
+                    cm.content = COALESCE(m->>'content', '')
+                    AND cm.is_from_user = COALESCE((m->>'isFromUser')::boolean, false)
+                    AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 2.0
+                )
+            )
         );
 
         -- 更新已有消息的模型外显名称（如果之前为NULL且本次上传提供了值）
@@ -481,9 +500,11 @@ BEGIN
           AND cm.user_id = uid
           AND cm.model_display_name IS NULL
           AND (m ? 'modelDisplayName')
-          AND cm.content = COALESCE(m->>'content', '')
-          AND cm.is_from_user = COALESCE((m->>'isFromUser')::boolean, false)
-          AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 0.01;
+          AND (
+              cm.content = COALESCE(m->>'content', '')
+              AND cm.is_from_user = COALESCE((m->>'isFromUser')::boolean, false)
+              AND abs(extract(epoch from cm.timestamp) - (((COALESCE(m->>'timestamp', '0'))::numeric)/1000)) < 2.0
+          );
     END LOOP;
   END IF;
 
@@ -497,6 +518,7 @@ BEGIN
          'messages', (
             SELECT COALESCE(jsonb_agg(
               jsonb_build_object(
+                'uuid', m.client_uuid,
                 'content', m.content,
                 'isFromUser', m.is_from_user,
                 'timestamp', (extract(epoch from m.timestamp) * 1000)::bigint,
