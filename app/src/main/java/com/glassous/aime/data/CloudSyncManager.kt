@@ -471,27 +471,39 @@ class CloudSyncManager(
             
             // 准备去重集合
             val localUuids = localMessages.map { it.uuid }.toSet()
-            // 兼容旧数据的去重键：内容 + 时间戳（秒级） + 发送方
-            val localLegacyKeys = localMessages.map { msg ->
-                "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}"
-            }.toSet()
-
+            
             val localDeletedMessages = chatDao.getMessagesForConversationIncludingDeleted(convId).first()
                 .filter { it.isDeleted }
             
             val localDeletedUuids = localDeletedMessages.map { it.uuid }.toSet()
-            val localDeletedLegacyKeys = localDeletedMessages
-                .map { msg -> "${msg.content.trim()}_${msg.timestamp.time / 1000}_${msg.isFromUser}" }
-                .toSet()
 
             var hasNewMessage = false
             rc.messages.forEach { rm ->
-                // 判断是否重复：优先使用UUID，若无UUID（旧备份）则降级使用时间戳+内容
+                // 判断是否重复
                 val isDuplicate = if (!rm.uuid.isNullOrBlank()) {
+                    // 优先使用 UUID 精确匹配
                     rm.uuid in localUuids || rm.uuid in localDeletedUuids
                 } else {
-                    val rmKey = "${rm.content.trim()}_${rm.timestamp / 1000}_${rm.isFromUser}"
-                    rmKey in localLegacyKeys || rmKey in localDeletedLegacyKeys
+                    // 若无 UUID（旧备份或云端未返回），降级使用内容+时间戳的模糊匹配
+                    // 允许 2 秒的时间戳误差，以解决浮点数转换精度问题
+                    val rmContent = rm.content.trim()
+                    val rmTime = rm.timestamp
+                    
+                    val foundInActive = localMessages.any { local ->
+                        local.isFromUser == rm.isFromUser &&
+                        local.content.trim() == rmContent &&
+                        kotlin.math.abs(local.timestamp.time - rmTime) < 2000
+                    }
+                    
+                    if (foundInActive) {
+                        true
+                    } else {
+                        localDeletedMessages.any { local ->
+                            local.isFromUser == rm.isFromUser &&
+                            local.content.trim() == rmContent &&
+                            kotlin.math.abs(local.timestamp.time - rmTime) < 2000
+                        }
+                    }
                 }
 
                 // 检查是否已存在相同的消息
