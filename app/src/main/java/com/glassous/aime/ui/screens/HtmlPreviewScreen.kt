@@ -112,8 +112,66 @@ fun HtmlPreviewScreen(
     // 加载HTML内容
     fun loadHtmlContent() {
         val hasHtml = Regex("<\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(htmlCode)
+
+        // JSX 检测逻辑
+        val isJsx = !hasHtml && (
+            htmlCode.contains("import React") ||
+            htmlCode.contains("from 'react'") ||
+            htmlCode.contains("from \"react\"") ||
+            htmlCode.contains("export default") ||
+            htmlCode.contains("className=") ||
+            Regex("<[A-Z]").containsMatchIn(htmlCode)
+        )
+
         val content = if (hasHtml) {
             htmlCode
+        } else if (isJsx) {
+            // JSX 预览模板
+            """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.23.5/babel.min.js"></script>
+                <style>
+                    body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+                    #root { padding: 16px; height: 100vh; box-sizing: border-box; }
+                </style>
+            </head>
+            <body>
+                <div id="root"></div>
+                <script>
+                    window.exports = {};
+                    window.module = { exports: window.exports };
+                    window.require = (name) => {
+                        if (name === 'react') return window.React;
+                        if (name === 'react-dom') return window.ReactDOM;
+                        return {};
+                    };
+                </script>
+                <script type="text/babel" data-presets="react,env">
+                    ${htmlCode.replace("</script>", "<\\/script>")}
+
+                    // 尝试渲染默认导出
+                    setTimeout(() => {
+                        const App = module.exports.default || window.exports.default;
+                        const rootElement = document.getElementById('root');
+                        if (App && rootElement && rootElement.innerHTML === "") {
+                            try {
+                                const root = ReactDOM.createRoot(rootElement);
+                                root.render(React.createElement(App));
+                            } catch (e) {
+                                console.error("Auto-render failed:", e);
+                            }
+                        }
+                    }, 100);
+                </script>
+            </body>
+            </html>
+            """.trimIndent()
         } else {
             """
             <!DOCTYPE html>
