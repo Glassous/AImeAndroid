@@ -3,6 +3,9 @@ package com.glassous.aime.ui.screens
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
+import android.webkit.WebSettings
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -20,6 +23,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 
 import androidx.compose.ui.graphics.toArgb
 
@@ -36,6 +41,7 @@ fun HtmlPreviewScreen(
     var localIsSourceMode by remember { mutableStateOf(isSourceMode) }
     var showStatsDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
+    var rotation by remember { mutableStateOf(0f) }
 
     // 复制HTML代码到剪贴板
     fun copyHtmlCode() {
@@ -105,7 +111,28 @@ fun HtmlPreviewScreen(
 
     // 加载HTML内容
     fun loadHtmlContent() {
-        webViewRef?.loadDataWithBaseURL(null, htmlCode, "text/html", "UTF-8", null)
+        val hasHtml = Regex("<\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(htmlCode)
+        val content = if (hasHtml) {
+            htmlCode
+        } else {
+            """
+            <!DOCTYPE html>
+            <html lang="zh-CN">
+            <head>
+                <meta charset="utf-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+                <style>
+                    html,body{height:100%}
+                    body{margin:0;padding:0}
+                </style>
+            </head>
+            <body>
+            $htmlCode
+            </body>
+            </html>
+            """.trimIndent()
+        }
+        webViewRef?.loadDataWithBaseURL("https://aime.local/", content, "text/html", "UTF-8", null)
     }
 
     // 当切换到预览模式时加载HTML内容
@@ -177,6 +204,9 @@ fun HtmlPreviewScreen(
                     IconButton(onClick = { refreshWebView() }) {
                         Icon(Icons.Filled.Refresh, contentDescription = "刷新")
                     }
+                    IconButton(onClick = { rotation = (rotation + 90f) % 360f }) {
+                        Icon(Icons.Filled.RotateRight, contentDescription = "旋转")
+                    }
 
                     // 更多选项
                     Box {
@@ -246,13 +276,24 @@ fun HtmlPreviewScreen(
                             settings.displayZoomControls = false
                             isLongClickable = true
                             setBackgroundColor(0x00000000)
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                                WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+                            }
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
+                            }
                             sourceWebViewRef = this
                         }
                     },
                     update = { view ->
                         view.loadDataWithBaseURL(null, highlightedHtml, "text/html", "UTF-8", null)
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            rotationZ = rotation,
+                            transformOrigin = TransformOrigin.Center
+                        )
                 )
             } else {
                 // 预览模式：显示WebView
@@ -267,9 +308,19 @@ fun HtmlPreviewScreen(
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.allowFileAccess = true
+                            settings.loadsImagesAutomatically = true
+                            settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
                             settings.supportZoom()
                             settings.builtInZoomControls = true
                             settings.displayZoomControls = false
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                                WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+                            }
+                            if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+                                WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false)
+                            }
 
                             webViewRef = this
                         }
@@ -277,7 +328,12 @@ fun HtmlPreviewScreen(
                     update = {
                         // 移除自动加载，改为通过LaunchedEffect加载
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            rotationZ = rotation,
+                            transformOrigin = TransformOrigin.Center
+                        )
                 )
             }
         }

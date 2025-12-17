@@ -105,6 +105,9 @@ dependencies {
     // SplashScreen
     implementation("androidx.core:core-splashscreen:1.0.1")
 
+    // AndroidX WebKit
+    implementation("androidx.webkit:webkit:1.14.0")
+
     
 
     // Markdown rendering

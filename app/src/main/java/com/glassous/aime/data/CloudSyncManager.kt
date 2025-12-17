@@ -414,13 +414,8 @@ class CloudSyncManager(
                 android.util.Log.d("CloudSyncManager", "Skip remote conversation due to local tombstone: ${rc.title}")
                 return@forEach
             }
-            // 尝试通过UUID匹配，如果云端没有UUID（旧版备份），则降级到标题匹配
             val matched = localConversations.firstOrNull { lc ->
-                if (!rc.uuid.isNullOrBlank()) {
-                    lc.uuid == rc.uuid
-                } else {
-                    lc.title == rc.title
-                }
+                !rc.uuid.isNullOrBlank() && lc.uuid == rc.uuid
             }
 
             val convId = if (matched == null) {
