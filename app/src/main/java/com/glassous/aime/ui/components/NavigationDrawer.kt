@@ -31,11 +31,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
@@ -64,15 +59,8 @@ fun NavigationDrawer(
     onNewConversation: () -> Unit,
     onDeleteConversation: (Long) -> Unit,
     onEditConversationTitle: (Long, String) -> Unit,
-    onGenerateShareCode: (Long, (String?) -> Unit) -> Unit,
-    onImportSharedConversation: (String, (Long?) -> Unit) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
-    hideImportSharedButton: Boolean,
     onNavigateToSettings: () -> Unit,
-    onSync: () -> Unit,
-    sidebarSyncButtonEnabled: Boolean,
-    isLoggedIn: Boolean,
-    isSyncing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
@@ -106,8 +94,6 @@ fun NavigationDrawer(
                 // 注意：start/end 需要适配系统手势区域，但这里侧边栏已经有宽度限制，通常保留 16dp 即可
                 .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp)
         ) {
-            var showImportDialog by remember { mutableStateOf(false) }
-            var importCode by remember { mutableStateOf("") }
 
             // Header with AIme text and buttons in one row
             Row(
@@ -127,7 +113,7 @@ fun NavigationDrawer(
                     color = MaterialTheme.colorScheme.onSurface
                 )
 
-                // Buttons section: 设置 -> 获取 -> 新建
+                // Buttons section: 设置 -> 新建
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -146,57 +132,7 @@ fun NavigationDrawer(
                         )
                     }
 
-                    // 1.5 同步按钮
-                    if (isLoggedIn && sidebarSyncButtonEnabled) {
-                        val rotation by if (isSyncing) {
-                            val infiniteTransition = rememberInfiniteTransition(label = "sync_rotation")
-                            infiniteTransition.animateFloat(
-                                initialValue = 0f,
-                                targetValue = 360f,
-                                animationSpec = infiniteRepeatable(
-                                    animation = tween(1000, easing = LinearEasing)
-                                ),
-                                label = "rotation"
-                            )
-                        } else {
-                            remember { mutableStateOf(0f) }
-                        }
-
-                        IconButton(
-                            onClick = { if (!isSyncing) onSync() },
-                            modifier = Modifier.size(40.dp),
-                            colors = IconButtonDefaults.iconButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Sync,
-                                contentDescription = "一键同步",
-                                modifier = Modifier
-                                    .size(20.dp)
-                                    .rotate(rotation)
-                            )
-                        }
-                    }
-
-                    // 2. 获取分享按钮
-                    if (!hideImportSharedButton) {
-                        IconButton(
-                            onClick = { showImportDialog = true },
-                            modifier = Modifier.size(40.dp), // 1:1 square
-                            colors = IconButtonDefaults.iconButtonColors(
-                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "获取分享的对话",
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-
-                    // 3. 新建对话按钮
+                    // 2. 新建对话按钮
                     IconButton(
                         onClick = onNewConversation,
                         modifier = Modifier.size(40.dp), // 1:1 square
@@ -215,13 +151,6 @@ fun NavigationDrawer(
 
             // moved declarations above
             val context = LocalContext.current
-            val importJsonLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-                if (uri != null) {
-                    val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() } ?: ""
-                    val code = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(json.toByteArray(Charsets.UTF_8))
-                    importCode = code
-                }
-            }
 
             // 获取导航栏高度
             val bottomPadding = windowInsets.asPaddingValues().calculateBottomPadding()
@@ -245,11 +174,6 @@ fun NavigationDrawer(
                             onEditTitle = { conversationId, newTitle ->
                                 onEditConversationTitle(conversationId, newTitle)
                             },
-                            onShare = { convId, onCode ->
-                                onGenerateShareCode(convId) { code ->
-                                    onCode(code)
-                                }
-                            },
                             onGenerateLongImage = onGenerateLongImage
                         )
                     }
@@ -266,48 +190,6 @@ fun NavigationDrawer(
                     )
                 }
             }
-
-            if (showImportDialog) {
-                AlertDialog(
-                    onDismissRequest = { showImportDialog = false },
-                    title = { Text("获取分享的对话") },
-                    text = {
-                        Column {
-                            OutlinedTextField(
-                                value = importCode,
-                                onValueChange = { importCode = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                label = { Text("粘贴分享码") }
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                TextButton(onClick = { importJsonLauncher.launch(arrayOf("application/json")) }) {
-                                    Text("从JSON文件获取")
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                onImportSharedConversation(importCode) { _ ->
-                                    showImportDialog = false
-                                    importCode = ""
-                                }
-                            }
-                        ) {
-                            Text("插入")
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showImportDialog = false }) { Text("取消") }
-                    }
-                )
-            }
         }
     }
 }
@@ -321,7 +203,6 @@ private fun ConversationItem(
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onEditTitle: (Long, String) -> Unit,
-    onShare: (Long, (String?) -> Unit) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -330,24 +211,13 @@ private fun ConversationItem(
 
     // 弹窗状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    var showShareDialog by remember { mutableStateOf(false) }
-    var shareCode by remember { mutableStateOf<String?>(null) }
-    var shareJson by remember { mutableStateOf<String>("") }
 
     val context = LocalContext.current
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
-        if (uri != null) {
-            context.contentResolver.openOutputStream(uri)?.use { os ->
-                os.write(shareJson.toByteArray(Charsets.UTF_8))
-            }
-            showShareDialog = false
-        }
-    }
 
     // 滑动相关状态
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
-    val actionWidth = 150.dp // 三个按钮的总宽度
+    val actionWidth = 100.dp // 两个按钮的总宽度
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -394,33 +264,6 @@ private fun ConversationItem(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-
-            // 分享按钮
-            IconButton(
-                onClick = {
-                    scope.launch { offsetX.animateTo(0f) } // 点击后关闭侧滑
-                    onShare(conversation.id) { code ->
-                        shareCode = code
-                        if (code != null) {
-                            try {
-                                shareJson = String(java.util.Base64.getUrlDecoder().decode(code), Charsets.UTF_8)
-                            } catch (_: Exception) {
-                                shareJson = String(java.util.Base64.getDecoder().decode(code), Charsets.UTF_8)
-                            }
-                        } else {
-                            shareJson = ""
-                        }
-                        showShareDialog = true
-                    }
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "分享",
-                    tint = MaterialTheme.colorScheme.secondary,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -619,88 +462,6 @@ private fun ConversationItem(
                 ) {
                     Text("取消")
                 }
-            }
-        )
-    }
-
-    // 分享弹窗
-    if (showShareDialog) {
-        AlertDialog(
-            onDismissRequest = { showShareDialog = false },
-            title = { Text("分享对话") },
-            text = {
-                Column {
-                    val scrollState = rememberScrollState()
-                    Box(
-                        modifier = Modifier
-                            .heightIn(max = 240.dp)
-                            .verticalScroll(scrollState)
-                    ) {
-                        Text(
-                            text = conversation.title,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // 操作按钮区域
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // 第一行：导出与分享文本
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                                    exportLauncher.launch("${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) { 
-                                Text("导出JSON") 
-                            }
-                            
-                            OutlinedButton(
-                                onClick = {
-                                    val sanitizedTitle = conversation.title.replace(Regex("[\\/:*?\"<>|]"), "_")
-                                    val cacheFile = File(context.cacheDir, "${sanitizedTitle}-${System.currentTimeMillis()}.json")
-                                    cacheFile.writeText(shareJson, Charsets.UTF_8)
-                                    val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", cacheFile)
-                                    val intent = Intent(Intent.ACTION_SEND).apply {
-                                        type = "application/json"
-                                        putExtra(Intent.EXTRA_STREAM, uri)
-                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                    }
-                                    context.startActivity(Intent.createChooser(intent, "分享对话 JSON"))
-                                    showShareDialog = false
-                                },
-                                modifier = Modifier.weight(1f)
-                            ) { 
-                                Text("分享文本") 
-                            }
-                        }
-
-                        // 第二行：生成截图分享（独占一行）
-                        Button(
-                            onClick = {
-                                showShareDialog = false
-                                onGenerateLongImage(conversation.id)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("生成截图分享")
-                        }
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showShareDialog = false }) { Text("关闭") }
             }
         )
     }

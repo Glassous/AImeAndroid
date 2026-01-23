@@ -111,7 +111,6 @@ fun ChatScreen(
     val chatFontSize by themePreferences.chatFontSize.collectAsState(initial = 16f)
     // 新增：读取聊天页面UI透明度
     val chatUiOverlayAlpha by themePreferences.chatUiOverlayAlpha.collectAsState(initial = 0.5f)
-    val hideImportSharedButton by themePreferences.hideImportSharedButton.collectAsState(initial = false)
 
     // 新增：读取顶部栏汉堡菜单与模型文字按钮透明度，以及输入框内部透明度
     val topBarHamburgerAlpha by themeViewModel.topBarHamburgerAlpha.collectAsState()
@@ -119,13 +118,6 @@ fun ChatScreen(
     val chatInputInnerAlpha by themeViewModel.chatInputInnerAlpha.collectAsState()
     // 新增：HTML代码块卡片显示设置
     val htmlCodeBlockCardEnabled by themeViewModel.htmlCodeBlockCardEnabled.collectAsState()
-    // 新增：侧边栏同步按钮设置 (从极简模式配置中读取)
-    val sidebarSyncButtonEnabled = if (minimalMode) !minimalModeConfig.hideSidebarSyncButton else true
-
-    // 登录状态
-    val app = context.applicationContext as AIMeApplication
-    val isLoggedIn by remember(app) { app.authPreferences.accessToken.map { !it.isNullOrEmpty() } }.collectAsState(initial = false)
-    var isSyncing by remember { mutableStateOf(false) }
 
     // 新增：读取聊天页面单独全屏显示设置
     val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
@@ -293,20 +285,6 @@ fun ChatScreen(
                     onEditConversationTitle = { conversationId, newTitle ->
                         chatViewModel.updateConversationTitle(conversationId, newTitle)
                     },
-                    onGenerateShareCode = { convId, onResult ->
-                        chatViewModel.generateShareCode(convId) { code ->
-                            onResult(code)
-                        }
-                    },
-                    onImportSharedConversation = { code, onResult ->
-                        chatViewModel.importSharedConversation(code, { newId ->
-                            onResult(newId)
-                            if (newId != null) {
-                                chatViewModel.selectConversation(newId)
-                                scope.launch { drawerState.close() }
-                            }
-                        })
-                    },
                     onGenerateLongImage = { convId ->
                         chatViewModel.selectConversation(convId)
                         scope.launch {
@@ -314,27 +292,7 @@ fun ChatScreen(
                             showLongImageDialog = true
                         }
                     },
-                    hideImportSharedButton = hideImportSharedButton,
-                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
-                    onSync = {
-                        scope.launch {
-                            if (!isSyncing) {
-                                isSyncing = true
-                                try {
-                                    val (ok, msg) = app.cloudSyncManager.manualSync()
-                                    snackbarHostState.showSnackbar(if (ok) "同步完成" else ("同步失败：$msg"))
-                                } catch (e: Exception) {
-                                    val detail = e.stackTraceToString().take(500)
-                                    snackbarHostState.showSnackbar("同步失败：" + (e.message ?: "未知错误") + "\n详情：" + detail)
-                                } finally {
-                                    isSyncing = false
-                                }
-                            }
-                        }
-                    },
-                    sidebarSyncButtonEnabled = sidebarSyncButtonEnabled,
-                    isLoggedIn = isLoggedIn,
-                    isSyncing = isSyncing
+                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
                 )
             }
         ) {
@@ -766,12 +724,15 @@ fun ChatScreen(
                                     )
                                 },
                                 onEditUserMessage = { id, text -> 
-                                    chatViewModel.editUserMessageAndResend(
-                                        id,
-                                        text,
-                                        selectedTool,
-                                        isAutoMode = isAutoSelected
-                                    )
+                                    currentConversationId?.let { convId ->
+                                        chatViewModel.resendMessage(
+                                            convId,
+                                            id,
+                                            text,
+                                            selectedTool,
+                                            isAutoMode = isAutoSelected
+                                        )
+                                    }
                                 },
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,

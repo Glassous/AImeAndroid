@@ -78,13 +78,6 @@ fun ModelConfigScreen(
         }
     }
 
-    // 云端同步结果回调
-    val onSyncResult: (Boolean, String) -> Unit = { success, message ->
-        scope.launch {
-            snackbarHostState.showSnackbar(message)
-        }
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
@@ -131,8 +124,8 @@ fun ModelConfigScreen(
                         ModelGroupCard(
                             group = group,
                             onAddModel = { viewModel.showAddModelDialog(group.id) },
-                            onDeleteGroup = { viewModel.deleteGroup(group, onSyncResult) },
-                            onDeleteModel = { viewModel.deleteModel(it, onSyncResult) },
+                            onDeleteGroup = { viewModel.deleteGroup(group) },
+                            onDeleteModel = { viewModel.deleteModel(it) },
                             onEditGroup = { viewModel.showEditGroupDialog(it) },
                             onEditModel = { viewModel.showEditModelDialog(it) },
                             viewModel = viewModel
@@ -148,7 +141,7 @@ fun ModelConfigScreen(
         CreateGroupDialog(
             onDismiss = { viewModel.hideCreateGroupDialog() },
             onConfirm = { name, baseUrl, apiKey, providerUrl ->
-                viewModel.createGroup(name, baseUrl, apiKey, providerUrl, onSyncResult)
+                viewModel.createGroup(name, baseUrl, apiKey, providerUrl)
             }
         )
     }
@@ -158,7 +151,7 @@ fun ModelConfigScreen(
         AddModelDialog(
             onDismiss = { viewModel.hideAddModelDialog() },
             onConfirm = { name, modelName, remark ->
-                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName, remark, onSyncResult)
+                viewModel.addModelToGroup(uiState.selectedGroupId!!, name, modelName, remark)
             }
         )
     }
@@ -169,7 +162,7 @@ fun ModelConfigScreen(
             group = uiState.selectedGroup!!,
             onDismiss = { viewModel.hideEditGroupDialog() },
             onConfirm = { name, baseUrl, apiKey, providerUrl ->
-                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey, providerUrl, onSyncResult)
+                viewModel.updateGroup(uiState.selectedGroup!!.id, name, baseUrl, apiKey, providerUrl)
             }
         )
     }
@@ -185,8 +178,7 @@ fun ModelConfigScreen(
                     uiState.selectedModel!!.groupId,
                     name,
                     modelName,
-                    remark,
-                    onSyncResult
+                    remark
                 )
             }
         )

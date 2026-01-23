@@ -38,21 +38,6 @@
 
         
         <activity
-            android:name=".ui.settings.AuthActivity"
-            android:exported="false"
-            android:label="账号登录"
-            android:theme="@style/Theme.AIme" />
-        <activity
-            android:name=".ui.settings.ForgotPasswordActivity"
-            android:exported="false"
-            android:label="找回密码"
-            android:theme="@style/Theme.AIme" />
-        <activity
-            android:name=".ui.settings.RegisterActivity"
-            android:exported="false"
-            android:label="账号注册"
-            android:theme="@style/Theme.AIme" />
-        <activity
             android:name=".ui.settings.SettingsActivity"
             android:exported="false"
             android:label="设置"

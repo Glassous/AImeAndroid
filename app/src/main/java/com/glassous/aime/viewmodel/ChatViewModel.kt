@@ -7,9 +7,11 @@ import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.Conversation
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
@@ -132,27 +134,32 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun editUserMessageAndResend(messageId: Long, newContent: String, selectedTool: Tool? = null, isAutoMode: Boolean = false, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    fun resendMessage(
+        conversationId: Long,
+        userMessageId: Long,
+        newContent: String,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false
+    ) {
+        if (_isLoading.value) return
+        _isLoading.value = true
         viewModelScope.launch {
-            _isLoading.value = true
             try {
-                val msg = repository.getMessageById(messageId)
-                if (msg != null && msg.isFromUser) {
-                    repository.editUserMessageAndResend(
-                        msg.conversationId,
-                        msg.id,
-                        newContent,
-                        selectedTool,
-                        isAutoMode,
+                withContext(Dispatchers.IO) {
+                     repository.editUserMessageAndResend(
+                        conversationId = conversationId,
+                        userMessageId = userMessageId,
+                        newContent = newContent,
+                        selectedTool = selectedTool,
+                        isAutoMode = isAutoMode,
                         onToolCallStart = { type ->
-                            _currentToolType.value = type
                             _toolCallInProgress.value = true
+                            _currentToolType.value = type
                         },
                         onToolCallEnd = {
                             _toolCallInProgress.value = false
                             _currentToolType.value = null
-                        },
-                        onSyncResult = onSyncResult
+                        }
                     )
                 }
             } catch (_: Exception) {
@@ -175,9 +182,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = ""
     }
     
-    fun deleteConversation(conversationId: Long, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    fun deleteConversation(conversationId: Long) {
         viewModelScope.launch {
-            repository.deleteConversation(conversationId, onSyncResult)
+            repository.deleteConversation(conversationId)
             // If we deleted the current conversation, clear the selection
             if (_currentConversationId.value == conversationId) {
                 _currentConversationId.value = null
@@ -185,31 +192,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateConversationTitle(conversationId: Long, newTitle: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    fun updateConversationTitle(conversationId: Long, newTitle: String) {
         viewModelScope.launch {
-            repository.updateConversationTitle(conversationId, newTitle, onSyncResult)
-        }
-    }
-
-    fun generateShareCode(conversationId: Long, onResult: (String?) -> Unit) {
-        viewModelScope.launch {
-            try {
-                val code = repository.generateShareCode(conversationId)
-                onResult(code)
-            } catch (_: Exception) {
-                onResult(null)
-            }
-        }
-    }
-
-    fun importSharedConversation(code: String, onResult: (Long?) -> Unit, onSyncResult: ((Boolean, String) -> Unit)? = null) {
-        viewModelScope.launch {
-            try {
-                val newId = repository.importSharedConversation(code, onSyncResult)
-                onResult(newId)
-            } catch (_: Exception) {
-                onResult(null)
-            }
+            repository.updateConversationTitle(conversationId, newTitle)
         }
     }
 }

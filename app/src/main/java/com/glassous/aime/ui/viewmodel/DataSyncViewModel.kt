@@ -41,25 +41,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
     private val chatDao: ChatDao = app.database.chatDao()
     private val modelDao: ModelConfigDao = app.database.modelConfigDao()
     private val modelPreferences: ModelPreferences = app.modelPreferences
-    private val cloudSyncManager = app.cloudSyncManager
 
     private val gson: Gson = GsonBuilder().create()
-
-    /** 仅上传（增量，用于排查问题） */
-    fun syncUploadOnly(onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val (success, message) = cloudSyncManager.syncUploadOnly(forceAll = false)
-            onResult(success, message)
-        }
-    }
-
-    /** 仅下载（增量，用于排查问题） */
-    fun syncDownloadOnly(onResult: (Boolean, String) -> Unit) {
-        viewModelScope.launch {
-            val (success, message) = cloudSyncManager.syncDownloadOnly()
-            onResult(success, message)
-        }
-    }
 
     /** 导出到指定Uri（SAF CreateDocument返回） */
     fun exportToUri(context: Context, uri: Uri, onResult: (Boolean, String) -> Unit) {

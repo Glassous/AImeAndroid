@@ -8,15 +8,6 @@ plugins {
 
 import java.util.Properties
 
-val envProps = Properties().apply {
-    val envFile = rootProject.file(".env.local")
-    if (envFile.exists()) {
-        load(envFile.inputStream())
-    }
-}
-val SUPABASE_URL: String = (envProps.getProperty("SUPABASE_URL") ?: "")
-val SUPABASE_ANON_KEY: String = (envProps.getProperty("SUPABASE_ANON_KEY") ?: "")
-
 android {
     namespace = "com.glassous.aime"
     compileSdk = 36
@@ -29,9 +20,6 @@ android {
         versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        buildConfigField("String", "SUPABASE_URL", "\"${SUPABASE_URL}\"")
-        buildConfigField("String", "SUPABASE_ANON_KEY", "\"${SUPABASE_ANON_KEY}\"")
     }
 
     buildTypes {

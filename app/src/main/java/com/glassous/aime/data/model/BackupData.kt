@@ -12,8 +12,7 @@ data class BackupData(
     @SerializedName("models") val models: List<Model>,
     @SerializedName("selectedModelId") val selectedModelId: String?,
     @SerializedName("conversations") val conversations: List<BackupConversation>,
-    @SerializedName("apiKeys") val apiKeys: List<ApiKey>? = null,
-    @SerializedName("userProfile") val userProfile: UserProfile? = null
+    @SerializedName("apiKeys") val apiKeys: List<ApiKey>? = null
 )
 
 data class BackupConversation(

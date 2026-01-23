@@ -185,10 +185,6 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch { themePreferences.setChatFullscreen(enabled) }
     }
 
-    fun setHideImportSharedButton(enabled: Boolean) {
-        viewModelScope.launch { themePreferences.setHideImportSharedButton(enabled) }
-    }
-
     fun setThemeAdvancedExpanded(expanded: Boolean) {
         viewModelScope.launch { themePreferences.setThemeAdvancedExpanded(expanded) }
     }

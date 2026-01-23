@@ -40,27 +40,6 @@ class ChatRepository(
         return chatDao.getAllConversations()
     }
 
-    suspend fun generateShareCode(conversationId: Long): String {
-        val conversation = chatDao.getConversation(conversationId)
-            ?: throw IllegalArgumentException("Conversation not found")
-        val messages = chatDao.getMessagesForConversation(conversationId).first()
-        val payload = com.glassous.aime.data.model.SharedConversationPayload(
-            title = conversation.title,
-            messages = messages.map {
-                com.glassous.aime.data.model.SharedMessage(
-                    content = it.content,
-                    isFromUser = it.isFromUser,
-                    timestamp = it.timestamp.time,
-                    isError = if (it.isError) true else null
-                )
-            }
-        )
-        val gson = Gson()
-        val json = gson.toJson(payload)
-        return java.util.Base64.getUrlEncoder().withoutPadding()
-            .encodeToString(json.toByteArray(Charsets.UTF_8))
-    }
-
     suspend fun sendMessage(
         conversationId: Long,
         message: String,
@@ -1344,46 +1323,7 @@ class ChatRepository(
         return conversation.copy(id = conversationId)
     }
 
-    suspend fun importSharedConversation(code: String, onSyncResult: ((Boolean, String) -> Unit)? = null): Long {
-        return withContext(Dispatchers.IO) {
-            val decoded = try {
-                val bytes = java.util.Base64.getUrlDecoder().decode(code)
-                String(bytes, Charsets.UTF_8)
-            } catch (e: Exception) {
-                val bytes = java.util.Base64.getDecoder().decode(code)
-                String(bytes, Charsets.UTF_8)
-            }
-            val gson = Gson()
-            val reader = JsonReader(StringReader(decoded)).apply { isLenient = true }
-            val type = object : TypeToken<com.glassous.aime.data.model.SharedConversationPayload>() {}.type
-            val payload: com.glassous.aime.data.model.SharedConversationPayload = gson.fromJson(reader, type)
-
-            val newConversation = Conversation(
-                title = payload.title.ifBlank { "新对话" },
-                lastMessage = "",
-                lastMessageTime = Date(),
-                messageCount = 0
-            )
-            val newId = chatDao.insertConversation(newConversation)
-
-            payload.messages.forEach { m ->
-                val msg = ChatMessage(
-                    conversationId = newId,
-                    content = m.content,
-                    isFromUser = m.isFromUser,
-                    timestamp = m.timestamp?.let { Date(it) } ?: Date(),
-                    isError = m.isError == true
-                )
-                chatDao.insertMessage(msg)
-            }
-
-            refreshConversationMetadata(newId)
-
-            newId
-        }
-    }
-
-    suspend fun updateConversationTitle(conversationId: Long, newTitle: String, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    suspend fun updateConversationTitle(conversationId: Long, newTitle: String) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
             val updatedConversation = conversation.copy(title = newTitle)
@@ -1425,7 +1365,7 @@ class ChatRepository(
         return chatDao.getMessageCount(conversationId) > 0
     }
 
-    suspend fun deleteConversation(conversationId: Long, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    suspend fun deleteConversation(conversationId: Long) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
             val now = java.util.Date()
@@ -1452,8 +1392,7 @@ class ChatRepository(
         selectedTool: Tool? = null,
         isAutoMode: Boolean = false,
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
-        onToolCallEnd: (() -> Unit)? = null,
-        onSyncResult: ((Boolean, String) -> Unit)? = null
+        onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
         return try {
             // 获取完整历史

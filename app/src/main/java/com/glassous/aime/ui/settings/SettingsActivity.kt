@@ -48,8 +48,6 @@ import com.glassous.aime.ui.components.TransparencySettingDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
-import com.glassous.aime.ui.viewmodel.AuthViewModel
-import com.glassous.aime.ui.viewmodel.AuthViewModelFactory
 import com.glassous.aime.ui.viewmodel.DataSyncViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModelFactory
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
@@ -108,9 +106,6 @@ fun SettingsContent(
     val scope = rememberCoroutineScope()
 
     // ViewModels
-    val authViewModel: AuthViewModel = viewModel(
-        factory = AuthViewModelFactory(application)
-    )
     val syncViewModel: DataSyncViewModel = viewModel(
         factory = DataSyncViewModelFactory(application)
     )
@@ -133,9 +128,6 @@ fun SettingsContent(
     val themeAdvancedExpanded by themeViewModel.themeAdvancedExpanded.collectAsState()
     val minimalModeConfig by themeViewModel.minimalModeConfig.collectAsState()
     val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
-
-    val isLoggedIn by authViewModel.isLoggedIn.collectAsState(initial = false)
-    val userEmail by authViewModel.email.collectAsState(initial = null)
 
     // Dialog States
     var showFontSizeDialog by remember { mutableStateOf(false) }
@@ -200,45 +192,6 @@ fun SettingsContent(
                 ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // --- 账号部分 ---
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "用户账号",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        text = if (isLoggedIn) ("已登录：" + (userEmail ?: "")) else "未登录",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    if (isLoggedIn) {
-                        Button(
-                            onClick = {
-                                val intent = Intent(context, AuthActivity::class.java)
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("打开账号管理") }
-                    } else {
-                        Button(
-                            onClick = {
-                                val intent = Intent(context, AuthActivity::class.java)
-                                context.startActivity(intent)
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) { Text("登录 / 注册") }
-                    }
-                }
-            }
-
             // --- 主题设置 ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -374,20 +327,6 @@ fun SettingsContent(
                         )
                     }
                     Spacer(modifier = Modifier.height(8.dp))
-                    // 分享按钮开关
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(text = "显示“获取分享对话”按钮", style = MaterialTheme.typography.titleSmall)
-                        }
-                        Switch(
-                            checked = !hideImportSharedButton,
-                            onCheckedChange = { themeViewModel.setHideImportSharedButton(!it) }
-                        )
-                    }
                     // 字体设置入口
                     Row(
                         modifier = Modifier.fillMaxWidth().clickable { showFontSizeDialog = true }.padding(vertical = 12.dp),
@@ -480,7 +419,7 @@ fun SettingsContent(
                 }
             }
 
-            // --- 本地同步 ---
+            // --- 数据备份 ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -488,7 +427,7 @@ fun SettingsContent(
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(
-                        text = "本地同步",
+                        text = "数据备份",
                         style = MaterialTheme.typography.titleMedium,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )

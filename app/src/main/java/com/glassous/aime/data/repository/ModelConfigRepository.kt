@@ -50,12 +50,12 @@ class ModelConfigRepository(
     }
     
     // 更新分组
-    suspend fun updateGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    suspend fun updateGroup(group: ModelGroup) {
         modelConfigDao.updateGroup(group)
     }
     
     // 删除分组（同时删除组内所有模型）
-    suspend fun deleteGroup(group: ModelGroup, onSyncResult: ((Boolean, String) -> Unit)? = null) {
+    suspend fun deleteGroup(group: ModelGroup) {
         val now = System.currentTimeMillis()
         modelConfigDao.markModelsDeletedByGroupId(group.id, now)
         modelConfigDao.markGroupDeleted(group.id, now)
