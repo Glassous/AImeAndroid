@@ -96,7 +96,7 @@ class ModelConfigRepository(
 
     // 预设数据种子：插入几组默认模型分组与模型（可删除）
     suspend fun seedDefaultPresets() {
-        val existingGroups = modelConfigDao.getAllGroups().first()
+        val existingGroups = modelConfigDao.getAllGroupsIncludingDeleted().first()
 
         // Helper to find or create group by name
         suspend fun ensureGroup(
@@ -120,7 +120,7 @@ class ModelConfigRepository(
 
         // Helper to insert model if missing by modelName
         suspend fun ensureModel(groupId: String, name: String, modelName: String, remark: String? = null) {
-            val existingModels = modelConfigDao.getModelsByGroupId(groupId).first()
+            val existingModels = modelConfigDao.getModelsByGroupIdIncludingDeleted(groupId).first()
             val exists = existingModels.any { it.modelName == modelName }
             if (exists) return
             modelConfigDao.insertModel(
