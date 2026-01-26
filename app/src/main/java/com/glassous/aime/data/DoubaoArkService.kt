@@ -107,6 +107,7 @@ class DoubaoArkService(
         val accumulatedToolCalls = mutableMapOf<Int, AccToolCall>()
         var hasEmittedToolCalls = false
         var accFunctionCall: AccToolCall? = null
+        var isThinking = false
         try {
             while (true) {
                 val line = source.readUtf8Line() ?: break
@@ -149,8 +150,27 @@ class DoubaoArkService(
                         val choices = chunk?.choices ?: emptyList()
                         choices.forEach { choice ->
                             val delta = choice.delta
+                            
+                            val reasoning = delta?.reasoning
+                            if (!reasoning.isNullOrEmpty()) {
+                                if (!isThinking) {
+                                    val startTag = "<think>"
+                                    finalText.append(startTag)
+                                    onDelta(startTag)
+                                    isThinking = true
+                                }
+                                finalText.append(reasoning)
+                                onDelta(reasoning)
+                            }
+
                             val content = delta?.content
-                            if (content != null) {
+                            if (!content.isNullOrEmpty()) {
+                                if (isThinking) {
+                                    val endTag = "</think>"
+                                    finalText.append(endTag)
+                                    onDelta(endTag)
+                                    isThinking = false
+                                }
                                 finalText.append(content)
                                 onDelta(content)
                             }
