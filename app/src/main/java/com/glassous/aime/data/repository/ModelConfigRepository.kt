@@ -140,11 +140,32 @@ class ModelConfigRepository(
             baseUrl = "https://openrouter.ai/api/v1/chat/completions",
             providerUrl = "https://openrouter.ai/"
         )
-        ensureModel(openRouter.id, "GPT-5", "openai/gpt-5", "$1.25/M input tokens $10/M output tokens")
-        ensureModel(openRouter.id, "GPT-5-mini", "openai/gpt-5-mini", "$0.25/M input tokens $2/M output tokens")
-        ensureModel(openRouter.id, "Grok-4-fast", "x-ai/grok-4-fast", "$0.20/M input tokens $0.50/M output tokens")
-        ensureModel(openRouter.id, "Gemini-2.5-flash", "google/gemini-2.5-flash", "$0.30/M input tokens $2.50/M output tokens $1.238/K input imgs")
-        ensureModel(openRouter.id, "Claude-haiku-4.5", "anthropic/claude-haiku-4.5", "$1/M input tokens $5/M output tokens")
+        ensureModel(openRouter.id, "Gemini 3 Pro", "google/gemini-3-pro-preview", "$2/M input tokens $12/M output tokens")
+        ensureModel(openRouter.id, "Gemini 3 Flash", "google/gemini-3-flash-preview", "$0.50/M input tokens $3/M output tokens")
+        ensureModel(openRouter.id, "Gemini 2.5 flash Lite", "google/gemini-2.5-flash-lite", "$0.10/M input tokens $0.40/M output tokens")
+        ensureModel(openRouter.id, "GPT 5.2", "openai/gpt-5.2", "$1.75/M input tokens $14/M output tokens")
+        ensureModel(openRouter.id, "GPT 5.2 Chat", "openai/gpt-5.2-chat", "$1.75/M input tokens $14/M output tokens")
+        ensureModel(openRouter.id, "GPT 5.2 Pro", "openai/gpt-5.2-pro", "$21/M input tokens $168/M output tokens")
+        ensureModel(openRouter.id, "GPT 5.1", "openai/gpt-5.1", "$1.25/M input tokens $10/M output tokens")
+        ensureModel(openRouter.id, "GPT 5 Mini", "openai/gpt-5-mini", "$0.25/M input tokens $2/M output tokens")
+        ensureModel(openRouter.id, "GPT 5 Nano", "openai/gpt-5-nano", "$0.05/M input tokens $0.40/M output tokens")
+        ensureModel(openRouter.id, "Claude Sonnet 4.5", "anthropic/claude-sonnet-4.5", "$3/M input tokens $15/M output tokens")
+        ensureModel(openRouter.id, "Claude Opus 4.5", "anthropic/claude-opus-4.5", "$5/M input tokens $25/M output tokens")
+        ensureModel(openRouter.id, "Claude haiku 4.5", "anthropic/claude-haiku-4.5", "$1/M input tokens $5/M output tokens")
+        ensureModel(openRouter.id, "Grok 4", "x-ai/grok-4", "$3/M input tokens $15/M output tokens")
+        ensureModel(openRouter.id, "Grok 4.1 Fast", "x-ai/grok-4.1-fast", "$0.20/M input tokens $0.50/M output tokens")
+        ensureModel(openRouter.id, "Grok Code Fast 1", "x-ai/grok-code-fast-1", "$0.20/M input tokens $1.50/M output tokens")
+        ensureModel(openRouter.id, "DeepSeek V3.2", "deepseek/deepseek-v3.2", "$0.25/M input tokens $0.38/M output tokens")
+        ensureModel(openRouter.id, "DeepSeek R1 0528", "deepseek/deepseek-r1-0528", "$0.40/M input tokens $1.75/M output tokens")
+        ensureModel(openRouter.id, "Qwen3 Max", "qwen/qwen3-max", "$3/M input tokens $15/M output tokens")
+        ensureModel(openRouter.id, "Kimi K2.5", "moonshotai/kimi-k2.5", "$0.60/M input tokens $3/M output tokens")
+        ensureModel(openRouter.id, "Kimi K2 Thinking", "moonshotai/kimi-k2-thinking", "$0.40/M input tokens $1.75/M output tokens")
+        ensureModel(openRouter.id, "Kimi K2", "moonshotai/kimi-k2-0905", "$0.39/M input tokens $1.90/M output tokens")
+        ensureModel(openRouter.id, "MiniMax M2.1", "minimax/minimax-m2.1", "$0.27/M input tokens $1.10/M output tokens")
+        ensureModel(openRouter.id, "GLM 4.7", "z-ai/glm-4.7", "$0.40/M input tokens $1.50/M output tokens")
+        ensureModel(openRouter.id, "GLM 4.7 Flash", "z-ai/glm-4.7-flash", "$0.07/M input tokens $0.40/M output tokens")
+        ensureModel(openRouter.id, "MiMo V2 Flash", "xiaomi/mimo-v2-flash", "$0.40/M input tokens $1.50/M output tokens")
+        ensureModel(openRouter.id, "Devstral 2 2512", "mistralai/devstral-2512", "$0.40/M input tokens $1.50/M output tokens")
 
         // 2. 阿里云
         val aliyun = ensureGroup(
@@ -152,8 +173,12 @@ class ModelConfigRepository(
             baseUrl = "https://dashscope.aliyuncs.com/compatible-mode/v1",
             providerUrl = "https://bailian.console.aliyun.com/?tab=model#/model-market/all"
         )
+        ensureModel(aliyun.id, "Qwen3-MAX", "qwen3-max-2026-01-23")
+        ensureModel(aliyun.id, "Deepseek V3.2", "deepseek-v3.2")
+        ensureModel(aliyun.id, "GLM 4.7", "glm-4.7")
+        ensureModel(aliyun.id, "MiniMax M2.1", "MiniMax-M2.1")
+        ensureModel(aliyun.id, "Kimi K2 Thinking", "kimi-k2-thinking")
         ensureModel(aliyun.id, "Qwen-flash", "qwen-flash")
-        ensureModel(aliyun.id, "Qwen3-MAX", "qwen3-max")
         ensureModel(aliyun.id, "Qwen-plus", "qwen-plus")
 
         // 3. DeepSeek
@@ -171,8 +196,44 @@ class ModelConfigRepository(
             baseUrl = "https://ark.cn-beijing.volces.com/api/v3",
             providerUrl = "https://www.volcengine.com/product/ark"
         )
-        ensureModel(doubao.id, "doubao-seed-1-6-251015", "doubao-seed-1-6-251015")
-        ensureModel(doubao.id, "doubao-seed-1-6-flash-250828", "doubao-seed-1-6-flash-250828")
-        ensureModel(doubao.id, "doubao-seed-1-6-lite-251015", "doubao-seed-1-6-lite-251015")
+        ensureModel(doubao.id, "豆包 Seed 1.8", "doubao-seed-1-8-251228")
+        ensureModel(doubao.id, "豆包 Seed 1.6", "doubao-seed-1-6-251015")
+        ensureModel(doubao.id, "豆包 Seed 1.6 Flash", "doubao-seed-1-6-flash-250828")
+        ensureModel(doubao.id, "豆包 Seed 1.6 Lite", "doubao-seed-1-6-lite-251015")
+        ensureModel(doubao.id, "Deepseek V3.2", "deepseek-v3-2-251201")
+        ensureModel(doubao.id, "GLM 4.7", "glm-4-7-251222")
+
+        // 5. Moonshot
+        val moonshot = ensureGroup(
+            name = "Moonshot",
+            baseUrl = "https://api.moonshot.cn",
+            providerUrl = "https://platform.moonshot.cn/docs/overview"
+        )
+        ensureModel(moonshot.id, "Kimi K2.5", "kimi-k2.5")
+        ensureModel(moonshot.id, "Kimi K2", "kimi-k2-0905-preview")
+        ensureModel(moonshot.id, "Kimi K2 Turbo", "kimi-k2-turbo-preview")
+        ensureModel(moonshot.id, "Kimi K2 Thinking", "kimi-k2-thinking")
+        ensureModel(moonshot.id, "Kimi K2 Thinking Turbo", "kimi-k2-thinking-turbo")
+
+        // 6. 智谱
+        val zhipu = ensureGroup(
+            name = "智谱",
+            baseUrl = "https://open.bigmodel.cn/api/paas/v4",
+            providerUrl = "https://bigmodel.cn/"
+        )
+        ensureModel(zhipu.id, "GLM 4.7", "glm-4.7")
+        ensureModel(zhipu.id, "GLM 4.7 Flash", "glm-4.7-flash")
+        ensureModel(zhipu.id, "GLM 4.7 FlashX", "glm-4.7-flashx")
+        ensureModel(zhipu.id, "GLM 4.6", "glm-4.6")
+
+        // 7. MiniMax
+        val minimax = ensureGroup(
+            name = "MiniMax",
+            baseUrl = "https://api.minimaxi.com/v1",
+            providerUrl = "https://platform.minimaxi.com/user-center/basic-information"
+        )
+        ensureModel(minimax.id, "MiniMax M2.1", "MiniMax-M2.1")
+        ensureModel(minimax.id, "MiniMax M2.1 Lightning", "MiniMax-M2.1-lightning")
+        ensureModel(minimax.id, "MiniMax M2", "MiniMax-M2")
     }
 }
