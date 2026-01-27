@@ -32,7 +32,8 @@ fun ExpandableReplyBox(
     modifier: Modifier = Modifier,
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
-    useCardStyleForHtmlCode: Boolean = false
+    useCardStyleForHtmlCode: Boolean = false,
+    forceExpanded: Boolean = false // 新增：强制展开参数
 ) {
     // 定义解析结果变量
     var preText by remember { mutableStateOf("") }
@@ -208,8 +209,11 @@ fun ExpandableReplyBox(
     var hasAutoCollapsed by remember { mutableStateOf(false) }
 
     // 监听状态变化自动折叠：当正式回复开始出现时，自动收起思考过程
-    LaunchedEffect(officialText) {
-        if (!officialText.isNullOrBlank()) {
+    LaunchedEffect(officialText, forceExpanded) {
+        if (forceExpanded) {
+            // 如果强制展开，则始终保持展开状态
+            expanded = true
+        } else if (!officialText.isNullOrBlank()) {
             if (!hasAutoCollapsed) {
                 expanded = false
                 hasAutoCollapsed = true

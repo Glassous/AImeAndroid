@@ -46,7 +46,9 @@ fun MessageBubble(
     // 新增：HTML 源码预览回调
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     // 新增：是否使用卡片样式显示 HTML 代码块
-    useCardStyleForHtmlCode: Boolean = false
+    useCardStyleForHtmlCode: Boolean = false,
+    // 新增：强制展开深度思考区域
+    forceExpandReply: Boolean = false
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -122,7 +124,8 @@ fun MessageBubble(
                             onLongClick = { showDialog = true },
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
-                            useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                            forceExpanded = forceExpandReply
                         )
                         } else {
                             StreamingMarkdownRenderer(
@@ -173,7 +176,8 @@ fun MessageBubble(
                                 modifier = Modifier.fillMaxWidth(),
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                forceExpanded = forceExpandReply
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件

@@ -217,7 +217,7 @@ private fun ConversationItem(
     // 滑动相关状态
     val density = LocalDensity.current
     val viewConfiguration = LocalViewConfiguration.current
-    val actionWidth = 100.dp // 两个按钮的总宽度
+    val actionWidth = 150.dp // 三个按钮的总宽度
     val actionWidthPx = with(density) { actionWidth.toPx() }
     val offsetX = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
@@ -264,6 +264,21 @@ private fun ConversationItem(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "删除",
                     tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            
+            // 分享按钮（放到最右边）
+            IconButton(
+                onClick = {
+                    scope.launch { offsetX.animateTo(0f) }
+                    onGenerateLongImage(conversation.id)
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "分享",
+                    tint = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.size(20.dp)
                 )
             }
