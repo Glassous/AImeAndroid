@@ -185,6 +185,36 @@ class ModelConfigViewModel(
     fun clearError() {
         _uiState.value = _uiState.value.copy(error = null)
     }
+
+    // 显示恢复预设确认对话框
+    fun showResetConfirmDialog() {
+        _uiState.value = _uiState.value.copy(showResetConfirmDialog = true)
+    }
+
+    // 隐藏恢复预设确认对话框
+    fun hideResetConfirmDialog() {
+        _uiState.value = _uiState.value.copy(showResetConfirmDialog = false)
+    }
+
+    // 恢复为预设模型
+    fun resetToDefaultPresets() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isLoading = true)
+                repository.resetToDefaultPresets()
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    showResetConfirmDialog = false
+                )
+            } catch (e: Exception) {
+                _uiState.value = _uiState.value.copy(
+                    error = e.message,
+                    isLoading = false,
+                    showResetConfirmDialog = false
+                )
+            }
+        }
+    }
 }
 
 // UI状态数据类
@@ -195,6 +225,7 @@ data class ModelConfigUiState(
     val showAddModelDialog: Boolean = false,
     val showEditGroupDialog: Boolean = false,
     val showEditModelDialog: Boolean = false,
+    val showResetConfirmDialog: Boolean = false,
     val selectedGroupId: String? = null,
     val selectedGroup: ModelGroup? = null,
     val selectedModel: Model? = null

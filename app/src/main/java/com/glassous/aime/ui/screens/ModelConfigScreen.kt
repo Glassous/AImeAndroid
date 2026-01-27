@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -88,6 +89,9 @@ fun ModelConfigScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = { viewModel.showResetConfirmDialog() }) {
+                        Icon(Icons.Filled.Refresh, contentDescription = "恢复预设")
+                    }
                     IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
                         Icon(Icons.Filled.Add, contentDescription = "添加分组")
                     }
@@ -184,11 +188,47 @@ fun ModelConfigScreen(
         )
     }
 
+    // 恢复预设确认对话框
+    if (uiState.showResetConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { viewModel.hideResetConfirmDialog() },
+            title = { Text("确认恢复预设") },
+            text = { 
+                Text("此操作将删除所有现有的模型配置，并恢复为预设模型。此操作不可撤销，确定要继续吗？") 
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.resetToDefaultPresets() }
+                ) {
+                    Text("确认恢复", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideResetConfirmDialog() }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     // 错误提示
     uiState.error?.let { error ->
         LaunchedEffect(error) {
-            // 这里可以显示 SnackBar 或其他错误提示
+            snackbarHostState.showSnackbar(
+                message = error,
+                duration = SnackbarDuration.Short
+            )
             viewModel.clearError()
+        }
+    }
+
+    // 加载状态
+    if (uiState.isLoading) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
         }
     }
 }

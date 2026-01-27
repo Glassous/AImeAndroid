@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 interface ModelConfigDao {
     
     // 模型分组操作
-    @Query("SELECT * FROM model_groups WHERE isDeleted = 0 ORDER BY createdAt DESC")
+    @Query("SELECT * FROM model_groups WHERE isDeleted = 0 ORDER BY createdAt ASC")
     fun getAllGroups(): Flow<List<ModelGroup>>
     
     @Query("SELECT * FROM model_groups WHERE id = :groupId AND isDeleted = 0")
@@ -25,7 +25,7 @@ interface ModelConfigDao {
     suspend fun markGroupDeleted(groupId: String, deletedAt: Long)
     
     // 模型操作
-    @Query("SELECT * FROM models WHERE groupId = :groupId AND isDeleted = 0 ORDER BY createdAt DESC")
+    @Query("SELECT * FROM models WHERE groupId = :groupId AND isDeleted = 0 ORDER BY createdAt ASC")
     fun getModelsByGroupId(groupId: String): Flow<List<Model>>
     
     @Query("SELECT * FROM models WHERE id = :modelId")

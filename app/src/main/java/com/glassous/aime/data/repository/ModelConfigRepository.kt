@@ -236,4 +236,14 @@ class ModelConfigRepository(
         ensureModel(minimax.id, "MiniMax M2.1 Lightning", "MiniMax-M2.1-lightning")
         ensureModel(minimax.id, "MiniMax M2", "MiniMax-M2")
     }
+
+    // 恢复为预设模型：删除所有现有数据并重新插入预设数据
+    suspend fun resetToDefaultPresets() {
+        // 删除所有现有数据
+        modelConfigDao.deleteAllModels()
+        modelConfigDao.deleteAllGroups()
+        
+        // 重新插入预设数据
+        seedDefaultPresets()
+    }
 }
