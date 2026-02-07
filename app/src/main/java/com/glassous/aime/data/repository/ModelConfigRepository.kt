@@ -150,7 +150,7 @@ class ModelConfigRepository(
         ensureModel(openRouter.id, "GPT 5 Mini", "openai/gpt-5-mini", "$0.25/M input tokens $2/M output tokens")
         ensureModel(openRouter.id, "GPT 5 Nano", "openai/gpt-5-nano", "$0.05/M input tokens $0.40/M output tokens")
         ensureModel(openRouter.id, "Claude Sonnet 4.5", "anthropic/claude-sonnet-4.5", "$3/M input tokens $15/M output tokens")
-        ensureModel(openRouter.id, "Claude Opus 4.5", "anthropic/claude-opus-4.5", "$5/M input tokens $25/M output tokens")
+        ensureModel(openRouter.id, "Claude Opus 4.6", "anthropic/claude-opus-4.6", "$5/M input tokens $25/M output tokens")
         ensureModel(openRouter.id, "Claude haiku 4.5", "anthropic/claude-haiku-4.5", "$1/M input tokens $5/M output tokens")
         ensureModel(openRouter.id, "Grok 4", "x-ai/grok-4", "$3/M input tokens $15/M output tokens")
         ensureModel(openRouter.id, "Grok 4.1 Fast", "x-ai/grok-4.1-fast", "$0.20/M input tokens $0.50/M output tokens")
