@@ -19,8 +19,7 @@ data class MinimalModeConfig(
     val hideToolIcon: Boolean = false,
     // 新增配置项
     val hideModelSelectionText: Boolean = false,   // 隐藏模型选择按钮文字
-    val hideInputPlaceholder: Boolean = false,      // 隐藏输入框占位符
-    val hideSidebarSyncButton: Boolean = false      // 隐藏侧边栏同步按钮
+    val hideInputPlaceholder: Boolean = false       // 隐藏输入框提示文字
 )
 
 /**
@@ -94,13 +93,6 @@ fun getMinimalModeItems(config: MinimalModeConfig): List<MinimalModeItem> {
             description = "输入框中的\"输入消息...\"占位符文字",
             icon = Icons.Filled.TextFields,
             isEnabled = config.hideInputPlaceholder
-        ),
-        MinimalModeItem(
-            id = "sidebar_sync_button",
-            name = "侧边栏同步按钮",
-            description = "侧边栏顶部的云端同步按钮",
-            icon = Icons.Filled.Sync,
-            isEnabled = config.hideSidebarSyncButton
         )
     )
 }

@@ -43,6 +43,9 @@ class ThemePreferences(private val context: Context) {
         private val MONOCHROME_THEME = booleanPreferencesKey("monochrome_theme")
         // --- 新增：HTML代码块卡片显示开关 ---
         private val HTML_CODE_BLOCK_CARD_ENABLED = booleanPreferencesKey("html_code_block_card_enabled")
+
+        // 配置 Json 实例以忽略未知键
+        private val json = Json { ignoreUnknownKeys = true }
     }
 
     val selectedTheme: Flow<String> = context.dataStore.data
@@ -101,7 +104,7 @@ class ThemePreferences(private val context: Context) {
             val configJson = preferences[MINIMAL_MODE_CONFIG]
             if (configJson != null) {
                 try {
-                    Json.decodeFromString<MinimalModeConfig>(configJson)
+                    json.decodeFromString<MinimalModeConfig>(configJson)
                 } catch (e: Exception) {
                     MinimalModeConfig()
                 }
@@ -167,6 +170,6 @@ class ThemePreferences(private val context: Context) {
     }
 
     suspend fun setMinimalModeConfig(config: MinimalModeConfig) {
-        context.dataStore.edit { preferences -> preferences[MINIMAL_MODE_CONFIG] = Json.encodeToString(config) }
+        context.dataStore.edit { preferences -> preferences[MINIMAL_MODE_CONFIG] = json.encodeToString(config) }
     }
 }
