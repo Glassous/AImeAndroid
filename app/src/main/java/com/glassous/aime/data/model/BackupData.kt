@@ -12,7 +12,39 @@ data class BackupData(
     @SerializedName("models") val models: List<Model>,
     @SerializedName("selectedModelId") val selectedModelId: String?,
     @SerializedName("conversations") val conversations: List<BackupConversation>,
-    @SerializedName("apiKeys") val apiKeys: List<ApiKey>? = null
+    @SerializedName("appSettings") val appSettings: AppSettings? = null
+)
+
+data class AppSettings(
+    @SerializedName("theme") val theme: ThemeSettings? = null,
+    @SerializedName("context") val context: ContextSettings? = null,
+    @SerializedName("update") val update: UpdateSettings? = null
+)
+
+data class ThemeSettings(
+    @SerializedName("selectedTheme") val selectedTheme: String? = null,
+    @SerializedName("monochromeTheme") val monochromeTheme: Boolean? = null,
+    @SerializedName("htmlCodeBlockCardEnabled") val htmlCodeBlockCardEnabled: Boolean? = null,
+    @SerializedName("minimalMode") val minimalMode: Boolean? = null,
+    @SerializedName("replyBubbleEnabled") val replyBubbleEnabled: Boolean? = null,
+    @SerializedName("chatFontSize") val chatFontSize: Float? = null,
+    @SerializedName("chatUiOverlayAlpha") val chatUiOverlayAlpha: Float? = null,
+    @SerializedName("topBarHamburgerAlpha") val topBarHamburgerAlpha: Float? = null,
+    @SerializedName("topBarModelTextAlpha") val topBarModelTextAlpha: Float? = null,
+    @SerializedName("chatInputInnerAlpha") val chatInputInnerAlpha: Float? = null,
+    @SerializedName("minimalModeFullscreen") val minimalModeFullscreen: Boolean? = null,
+    @SerializedName("chatFullscreen") val chatFullscreen: Boolean? = null,
+    @SerializedName("hideImportSharedButton") val hideImportSharedButton: Boolean? = null,
+    @SerializedName("themeAdvancedExpanded") val themeAdvancedExpanded: Boolean? = null,
+    @SerializedName("minimalModeConfig") val minimalModeConfig: MinimalModeConfig? = null
+)
+
+data class ContextSettings(
+    @SerializedName("maxContextMessages") val maxContextMessages: Int? = null
+)
+
+data class UpdateSettings(
+    @SerializedName("autoCheckUpdateEnabled") val autoCheckUpdateEnabled: Boolean? = null
 )
 
 data class BackupConversation(
@@ -33,9 +65,4 @@ data class BackupMessage(
     @SerializedName("timestamp") val timestamp: Long,
     @SerializedName("isError") val isError: Boolean?,
     @SerializedName("modelDisplayName") val modelDisplayName: String? = null
-)
-
-data class ApiKey(
-    @SerializedName("platform") val platform: String,
-    @SerializedName("apiKey") val apiKey: String
 )

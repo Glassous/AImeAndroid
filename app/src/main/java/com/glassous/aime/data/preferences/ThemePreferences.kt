@@ -165,6 +165,10 @@ class ThemePreferences(private val context: Context) {
         context.dataStore.edit { preferences -> preferences[CHAT_FULLSCREEN] = enabled }
     }
 
+    suspend fun setHideImportSharedButton(enabled: Boolean) {
+        context.dataStore.edit { preferences -> preferences[HIDE_IMPORT_SHARED_BUTTON] = enabled }
+    }
+
     suspend fun setThemeAdvancedExpanded(expanded: Boolean) {
         context.dataStore.edit { preferences -> preferences[THEME_ADVANCED_EXPANDED] = expanded }
     }

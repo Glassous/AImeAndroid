@@ -22,6 +22,13 @@ import com.glassous.aime.data.model.BackupData
 import com.glassous.aime.data.model.BackupConversation
 import com.glassous.aime.data.model.BackupMessage
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.data.preferences.ContextPreferences
+import com.glassous.aime.data.preferences.UpdatePreferences
+import com.glassous.aime.data.model.AppSettings
+import com.glassous.aime.data.model.ThemeSettings
+import com.glassous.aime.data.model.ContextSettings
+import com.glassous.aime.data.model.UpdateSettings
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -33,14 +40,17 @@ import java.util.Date
 
 /**
  * 本地数据同步（导入/导出）ViewModel
- * 导出：模型分组与模型、全部会话及消息
- * 导入：覆盖/追加模型分组与模型；会话作为新会话导入，消息关联到新会话
+ * 导出：模型分组与模型、全部会话及消息、应用设置
+ * 导入：覆盖/追加模型分组与模型；会话作为新会话导入，消息关联到新会话；恢复应用设置
  */
 class DataSyncViewModel(application: Application) : AndroidViewModel(application) {
     private val app = (application as AIMeApplication)
     private val chatDao: ChatDao = app.database.chatDao()
     private val modelDao: ModelConfigDao = app.database.modelConfigDao()
     private val modelPreferences: ModelPreferences = app.modelPreferences
+    private val themePreferences = ThemePreferences(application)
+    private val contextPreferences = app.contextPreferences
+    private val updatePreferences = app.updatePreferences
 
     private val gson: Gson = GsonBuilder().create()
 
@@ -55,6 +65,39 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     models.addAll(m)
                 }
                 val selectedModelId = modelPreferences.selectedModelId.first()
+
+                // Collect App Settings
+                val themeSettings = ThemeSettings(
+                    selectedTheme = themePreferences.selectedTheme.first(),
+                    monochromeTheme = themePreferences.monochromeTheme.first(),
+                    htmlCodeBlockCardEnabled = themePreferences.htmlCodeBlockCardEnabled.first(),
+                    minimalMode = themePreferences.minimalMode.first(),
+                    replyBubbleEnabled = themePreferences.replyBubbleEnabled.first(),
+                    chatFontSize = themePreferences.chatFontSize.first(),
+                    chatUiOverlayAlpha = themePreferences.chatUiOverlayAlpha.first(),
+                    topBarHamburgerAlpha = themePreferences.topBarHamburgerAlpha.first(),
+                    topBarModelTextAlpha = themePreferences.topBarModelTextAlpha.first(),
+                    chatInputInnerAlpha = themePreferences.chatInputInnerAlpha.first(),
+                    minimalModeFullscreen = themePreferences.minimalModeFullscreen.first(),
+                    chatFullscreen = themePreferences.chatFullscreen.first(),
+                    hideImportSharedButton = themePreferences.hideImportSharedButton.first(),
+                    themeAdvancedExpanded = themePreferences.themeAdvancedExpanded.first(),
+                    minimalModeConfig = themePreferences.minimalModeConfig.first()
+                )
+
+                val contextSettings = ContextSettings(
+                    maxContextMessages = contextPreferences.maxContextMessages.first()
+                )
+
+                val updateSettings = UpdateSettings(
+                    autoCheckUpdateEnabled = updatePreferences.autoCheckUpdateEnabled.first()
+                )
+
+                val appSettings = AppSettings(
+                    theme = themeSettings,
+                    context = contextSettings,
+                    update = updateSettings
+                )
 
                 val conversations = chatDao.getAllConversations().first()
                 val backupConversations = mutableListOf<BackupConversation>()
@@ -86,7 +129,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     modelGroups = groups,
                     models = models,
                     selectedModelId = selectedModelId,
-                    conversations = backupConversations
+                    conversations = backupConversations,
+                    appSettings = appSettings
                 )
 
                 context.contentResolver.openOutputStream(uri)?.use { os ->
@@ -153,6 +197,33 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                 // 恢复选中模型
                 if (backup.selectedModelId != null) {
                     modelPreferences.setSelectedModelId(backup.selectedModelId)
+                }
+
+                // 恢复应用设置
+                backup.appSettings?.let { settings ->
+                    settings.theme?.let { theme ->
+                        theme.selectedTheme?.let { themePreferences.setTheme(it) }
+                        theme.monochromeTheme?.let { themePreferences.setMonochromeTheme(it) }
+                        theme.htmlCodeBlockCardEnabled?.let { themePreferences.setHtmlCodeBlockCardEnabled(it) }
+                        theme.minimalMode?.let { themePreferences.setMinimalMode(it) }
+                        theme.replyBubbleEnabled?.let { themePreferences.setReplyBubbleEnabled(it) }
+                        theme.chatFontSize?.let { themePreferences.setChatFontSize(it) }
+                        theme.chatUiOverlayAlpha?.let { themePreferences.setChatUiOverlayAlpha(it) }
+                        theme.topBarHamburgerAlpha?.let { themePreferences.setTopBarHamburgerAlpha(it) }
+                        theme.topBarModelTextAlpha?.let { themePreferences.setTopBarModelTextAlpha(it) }
+                        theme.chatInputInnerAlpha?.let { themePreferences.setChatInputInnerAlpha(it) }
+                        theme.minimalModeFullscreen?.let { themePreferences.setMinimalModeFullscreen(it) }
+                        theme.chatFullscreen?.let { themePreferences.setChatFullscreen(it) }
+                        theme.hideImportSharedButton?.let { themePreferences.setHideImportSharedButton(it) }
+                        theme.themeAdvancedExpanded?.let { themePreferences.setThemeAdvancedExpanded(it) }
+                        theme.minimalModeConfig?.let { themePreferences.setMinimalModeConfig(it) }
+                    }
+                    settings.context?.let { ctx ->
+                        ctx.maxContextMessages?.let { contextPreferences.setMaxContextMessages(it) }
+                    }
+                    settings.update?.let { upd ->
+                        upd.autoCheckUpdateEnabled?.let { updatePreferences.setAutoCheckUpdateEnabled(it) }
+                    }
                 }
 
                 // 导入会话与消息（覆盖模式）
