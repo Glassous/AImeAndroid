@@ -292,7 +292,10 @@ fun ChatScreen(
                             showLongImageDialog = true
                         }
                     },
-                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) }
+                    onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
+                    onGenerateTitle = { conversationId, onTitleGenerated ->
+                        chatViewModel.generateConversationTitle(conversationId, onTitleGenerated)
+                    }
                 )
             }
         ) {

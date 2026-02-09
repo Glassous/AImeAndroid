@@ -231,6 +231,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             repository.updateConversationTitle(conversationId, newTitle)
         }
     }
+
+    fun generateConversationTitle(conversationId: Long, onTitleGenerated: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                repository.generateConversationTitle(conversationId, onTitleGenerated)
+            } catch (e: Exception) {
+                // 如果生成失败，返回默认标题
+                onTitleGenerated("新对话")
+            }
+        }
+    }
 }
 
 class ChatViewModelFactory : ViewModelProvider.Factory {

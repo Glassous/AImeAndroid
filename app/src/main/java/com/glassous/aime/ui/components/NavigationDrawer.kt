@@ -61,6 +61,7 @@ fun NavigationDrawer(
     onEditConversationTitle: (Long, String) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
     onNavigateToSettings: () -> Unit,
+    onGenerateTitle: (Long, (String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
@@ -174,7 +175,8 @@ fun NavigationDrawer(
                             onEditTitle = { conversationId, newTitle ->
                                 onEditConversationTitle(conversationId, newTitle)
                             },
-                            onGenerateLongImage = onGenerateLongImage
+                            onGenerateLongImage = onGenerateLongImage,
+                            onGenerateTitle = onGenerateTitle
                         )
                     }
                 }
@@ -204,10 +206,12 @@ private fun ConversationItem(
     onDelete: () -> Unit,
     onEditTitle: (Long, String) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
+    onGenerateTitle: (Long, (String) -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
     var editingTitle by remember { mutableStateOf(conversation.title) }
+    var isGeneratingTitle by remember { mutableStateOf(false) }
 
     // 弹窗状态
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -405,7 +409,36 @@ private fun ConversationItem(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        )
+                        ),
+                        trailingIcon = {
+                            // 魔法棒图标按钮 - 用于AI生成标题
+                            IconButton(
+                                onClick = {
+                                    isGeneratingTitle = true
+                                    onGenerateTitle(conversation.id) { generatedTitle ->
+                                        editingTitle = generatedTitle
+                                        isGeneratingTitle = false
+                                    }
+                                },
+                                enabled = !isGeneratingTitle,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                if (isGeneratingTitle) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Star,
+                                        contentDescription = "AI生成标题",
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
+                        }
                     )
 
                     // 编辑状态下的确认/取消按钮

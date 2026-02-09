@@ -1343,6 +1343,89 @@ class ChatRepository(
         }
     }
 
+    suspend fun generateConversationTitle(conversationId: Long, onTitleGenerated: (String) -> Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                // 获取当前选中的模型配置
+                val selectedModelId = modelPreferences.selectedModelId.first()
+                if (selectedModelId.isNullOrBlank()) {
+                    onTitleGenerated("新对话")
+                    return@withContext
+                }
+                
+                val model = modelConfigRepository.getModelById(selectedModelId)
+                if (model == null) {
+                    onTitleGenerated("新对话")
+                    return@withContext
+                }
+                
+                val group = modelConfigRepository.getGroupById(model.groupId)
+                if (group == null) {
+                    onTitleGenerated("新对话")
+                    return@withContext
+                }
+
+                // 获取对话中用户发送的消息内容
+                val messages = chatDao.getMessagesForConversation(conversationId).first()
+                val userMessages = messages.filter { it.isFromUser }
+                
+                if (userMessages.isEmpty()) {
+                    onTitleGenerated("新对话")
+                    return@withContext
+                }
+
+                // 构建提示词：仅使用用户发送的内容
+                val userContent = userMessages.joinToString("\n") { it.content }
+                val prompt = "请根据以下对话内容生成一个简短的标题（不超过20个字），只返回标题本身，不要有任何其他内容：\n\n$userContent"
+
+                val titleMessages = listOf(
+                    OpenAiChatMessage(role = "user", content = prompt)
+                )
+
+                // 使用流式输出生成标题
+                val titleBuilder = StringBuilder()
+                var insideThinkTag = false
+                
+                // 根据 baseUrl 判断提供商类型
+                if (group.baseUrl.contains("volces", ignoreCase = true)) {
+                    // 豆包服务
+                    doubaoService.streamChatCompletions(
+                        baseUrl = group.baseUrl,
+                        apiKey = group.apiKey,
+                        model = model.modelName,
+                        messages = titleMessages,
+                        tools = null,
+                        toolChoice = null,
+                        onDelta = { delta ->
+                            titleBuilder.append(delta)
+                            // 过滤掉 <think> 标签内容
+                            val filtered = filterThinkTags(titleBuilder.toString())
+                            onTitleGenerated(filtered.trim())
+                        }
+                    )
+                } else {
+                    // OpenAI 兼容服务
+                    openAiService.streamChatCompletions(
+                        baseUrl = group.baseUrl,
+                        apiKey = group.apiKey,
+                        model = model.modelName,
+                        messages = titleMessages,
+                        tools = null,
+                        toolChoice = null,
+                        onDelta = { delta ->
+                            titleBuilder.append(delta)
+                            // 过滤掉 <think> 标签内容
+                            val filtered = filterThinkTags(titleBuilder.toString())
+                            onTitleGenerated(filtered.trim())
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                onTitleGenerated("新对话")
+            }
+        }
+    }
+
     private suspend fun updateConversationAfterMessage(conversationId: Long, message: String) {
         val conversation = chatDao.getConversation(conversationId)
         if (conversation != null) {
@@ -2908,5 +2991,14 @@ class ChatRepository(
             onDelta = onDelta,
             onToolCall = onToolCall
         )
+    }
+
+    /**
+     * 过滤掉 <think> 标签及其内容
+     */
+    private fun filterThinkTags(text: String): String {
+        // 使用正则表达式移除 <think>...</think> 标签及其内容
+        return text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("<think>.*", RegexOption.DOT_MATCHES_ALL), "") // 处理未闭合的标签
     }
 }
