@@ -32,6 +32,7 @@ class AIMeApplication : Application() {
 
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
     val updatePreferences by lazy { com.glassous.aime.data.preferences.UpdatePreferences(this) }
+    val privacyPreferences by lazy { com.glassous.aime.data.preferences.PrivacyPreferences(this) }
 
     // Repository instance
     val repository by lazy { 

@@ -30,10 +30,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.UpdateDialog
 import com.glassous.aime.ui.navigation.AppNavigation
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
+import com.glassous.aime.ui.viewmodel.PrivacyUiState
+import com.glassous.aime.ui.viewmodel.PrivacyViewModel
+import com.glassous.aime.ui.viewmodel.PrivacyViewModelFactory
 import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModel
 import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
@@ -67,11 +71,15 @@ class MainActivity : ComponentActivity() {
 
         // 1. 在 onCreate 早期初始化 ViewModel
         val themeViewModel = ViewModelProvider(this)[ThemeViewModel::class.java]
+        val privacyViewModel = ViewModelProvider(
+            this,
+            PrivacyViewModelFactory((application as AIMeApplication).privacyPreferences)
+        )[PrivacyViewModel::class.java]
 
         // 2. 关键修复：让启动页一直显示，直到主题配置加载完成 (isReady = true)
         // 这避免了 "闪烁" 问题（先显示 Material You 颜色，然后突然变黑白）
         splashScreen.setKeepOnScreenCondition {
-            !themeViewModel.isReady.value
+            !themeViewModel.isReady.value || privacyViewModel.uiState.value is PrivacyUiState.Loading
         }
 
         setContent {
@@ -82,6 +90,7 @@ class MainActivity : ComponentActivity() {
 
             val selectedTheme by themeViewModel.selectedTheme.collectAsState()
             val monochromeTheme by themeViewModel.monochromeTheme.collectAsState()
+            val privacyUiState by privacyViewModel.uiState.collectAsState()
 
             val minimalMode by themeViewModel.minimalMode.collectAsState()
             val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
@@ -165,21 +174,34 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppNavigation()
+                    when (privacyUiState) {
+                        is PrivacyUiState.Agreed -> {
+                            AppNavigation()
 
-                    // 显示更新对话框
-                    if (showUpdateDialog && updateInfo != null) {
-                        UpdateDialog(
-                            updateInfo = updateInfo!!,
-                            onDismiss = {
-                                showUpdateDialog = false
-                                versionUpdateViewModel.resetState()
-                            },
-                            onDownload = { downloadUrl ->
-                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
-                                startActivity(intent)
+                            // 显示更新对话框
+                            if (showUpdateDialog && updateInfo != null) {
+                                UpdateDialog(
+                                    updateInfo = updateInfo!!,
+                                    onDismiss = {
+                                        showUpdateDialog = false
+                                        versionUpdateViewModel.resetState()
+                                    },
+                                    onDownload = { downloadUrl ->
+                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+                                        startActivity(intent)
+                                    }
+                                )
                             }
-                        )
+                        }
+                        is PrivacyUiState.NotAgreed -> {
+                            PrivacyPolicyDialog(
+                                isFirstRun = true,
+                                onAgree = { privacyViewModel.setPrivacyPolicyAgreed(true) },
+                                onDisagree = { finish() },
+                                onDismissRequest = {}
+                            )
+                        }
+                        else -> { /* Loading */ }
                     }
                 }
             }

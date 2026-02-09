@@ -44,6 +44,7 @@ import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.ui.components.ContextLimitSettingDialog
 import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
+import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
@@ -134,6 +135,7 @@ fun SettingsContent(
     var showTransparencyDialog by remember { mutableStateOf(false) }
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     var showContextLimitDialog by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
@@ -663,11 +665,51 @@ fun SettingsContent(
                 }
             }
 
+            // --- 关于 ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        text = "关于",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showPrivacyPolicyDialog = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "隐私政策",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Icon(
+                            imageVector = Icons.Filled.ChevronRight,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
 
     // --- Dialogs ---
+
+    if (showPrivacyPolicyDialog) {
+        PrivacyPolicyDialog(
+            onDismissRequest = { showPrivacyPolicyDialog = false }
+        )
+    }
 
     if (showFontSizeDialog) {
         FontSizeSettingDialog(
