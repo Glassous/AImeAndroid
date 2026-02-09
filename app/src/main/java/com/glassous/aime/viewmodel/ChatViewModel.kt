@@ -170,6 +170,40 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun retryFailedMessage(
+        conversationId: Long,
+        failedMessageId: Long,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false
+    ) {
+        if (_isLoading.value) return
+        _isLoading.value = true
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    repository.retryFailedMessage(
+                        conversationId = conversationId,
+                        failedMessageId = failedMessageId,
+                        selectedTool = selectedTool,
+                        isAutoMode = isAutoMode,
+                        onToolCallStart = { type ->
+                            _toolCallInProgress.value = true
+                            _currentToolType.value = type
+                        },
+                        onToolCallEnd = {
+                            _toolCallInProgress.value = false
+                            _currentToolType.value = null
+                        }
+                    )
+                }
+            } catch (_: Exception) {
+                // swallow for now; UI可通过错误消息提示
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
     fun selectConversation(conversationId: Long) {
         _currentConversationId.value = conversationId
     }

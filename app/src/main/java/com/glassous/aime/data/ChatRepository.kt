@@ -745,10 +745,21 @@ class ChatRepository(
 
                 Result.success(finalUpdated)
             } catch (e: Exception) {
-                // 如果走到这里，说明主流调用与回调均失败
+                // 调用失败，保存详细错误信息
+                val errorMessage = when {
+                    e.message?.contains("HTTP 401") == true -> "认证失败：API Key 无效或已过期"
+                    e.message?.contains("HTTP 403") == true -> "访问被拒绝：没有权限访问该模型"
+                    e.message?.contains("HTTP 429") == true -> "请求过于频繁：已达到速率限制"
+                    e.message?.contains("HTTP 500") == true || e.message?.contains("HTTP 502") == true || 
+                    e.message?.contains("HTTP 503") == true -> "服务器错误：模型服务暂时不可用"
+                    e.message?.contains("timeout") == true -> "请求超时：网络连接超时"
+                    e.message?.contains("Connection") == true -> "网络错误：无法连接到服务器"
+                    else -> "生成失败：${e.message ?: "未知错误"}"
+                }
                 val errorUpdated = assistantMessage.copy(
-                    content = "生成失败：${e.message}",
-                    isError = true
+                    content = errorMessage,
+                    isError = true,
+                    errorDetails = e.message
                 )
                 chatDao.updateMessage(errorUpdated)
                 Result.failure(e)
@@ -1382,6 +1393,420 @@ class ChatRepository(
     // Added: update message content
     suspend fun updateMessage(message: ChatMessage) {
         chatDao.updateMessage(message)
+    }
+
+    // Added: retry failed assistant message
+    suspend fun retryFailedMessage(
+        conversationId: Long,
+        failedMessageId: Long,
+        selectedTool: Tool? = null,
+        isAutoMode: Boolean = false,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null
+    ): Result<Unit> {
+        return try {
+            val history = chatDao.getMessagesForConversation(conversationId).first()
+            val targetIndex = history.indexOfFirst { it.id == failedMessageId }
+            if (targetIndex == -1) return Result.failure(IllegalArgumentException("Message not found"))
+            val target = history[targetIndex]
+            if (target.isFromUser) return Result.failure(IllegalArgumentException("Cannot retry user message"))
+            if (!target.isError) return Result.failure(IllegalArgumentException("Message is not an error"))
+
+            // 找到前一条用户消息
+            var prevUserIndex = -1
+            for (i in targetIndex - 1 downTo 0) {
+                if (history[i].isFromUser && !history[i].isError) {
+                    prevUserIndex = i
+                    break
+                }
+            }
+            if (prevUserIndex == -1) {
+                val lastValidUserIndex = history.indexOfLast { it.isFromUser && !it.isError }
+                if (lastValidUserIndex != -1) {
+                    prevUserIndex = lastValidUserIndex
+                } else {
+                    chatDao.updateMessage(
+                        target.copy(
+                            content = "无法重新发送：缺少用户消息。",
+                            isError = true
+                        )
+                    )
+                    return Result.failure(IllegalStateException("No user messages in conversation"))
+                }
+            }
+
+            // 删除失败的消息及其后的所有消息
+            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+
+            // 获取用户消息内容
+            val userMessage = history[prevUserIndex].content
+
+            // 解析模型配置
+            val selectedModelId = modelPreferences.selectedModelId.first()
+            if (selectedModelId.isNullOrBlank()) {
+                val errorMessage = ChatMessage(
+                    conversationId = conversationId,
+                    content = "请先选择模型（设置→模型配置）",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    isError = true
+                )
+                chatDao.insertMessage(errorMessage)
+                return Result.failure(IllegalStateException("No selected model"))
+            }
+            val model = modelConfigRepository.getModelById(selectedModelId)
+                ?: run {
+                    val errorMessage = ChatMessage(
+                        conversationId = conversationId,
+                        content = "所选模型不存在或已删除，请重新选择。",
+                        isFromUser = false,
+                        timestamp = Date(),
+                        isError = true
+                    )
+                    chatDao.insertMessage(errorMessage)
+                    return Result.failure(IllegalStateException("Selected model not found"))
+                }
+            val group = modelConfigRepository.getGroupById(model.groupId)
+                ?: run {
+                    val errorMessage = ChatMessage(
+                        conversationId = conversationId,
+                        content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。",
+                        isFromUser = false,
+                        timestamp = Date(),
+                        isError = true
+                    )
+                    chatDao.insertMessage(errorMessage)
+                    return Result.failure(IllegalStateException("Model group not found"))
+                }
+
+            // 构造上下文
+            val contextMessagesBase = history.take(prevUserIndex + 1)
+                .filter { !it.isError }
+                .map {
+                    OpenAiChatMessage(
+                        role = if (it.isFromUser) "user" else "assistant",
+                        content = it.content
+                    )
+                }
+            val contextMessages = limitContext(contextMessagesBase)
+            val messagesWithBias = contextMessages.toMutableList()
+
+            // 关键词意图识别
+            val weatherKeywords = listOf(
+                "天气", "气温", "气候", "下雨", "降雨", "降雪", "风力", "空气质量",
+                "雾霾", "穿衣", "紫外线", "晴", "阴", "多云", "预报", "未来",
+                "今日", "明天", "后天", "温度", "湿度"
+            )
+            val isWeatherIntent = weatherKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+            val stockKeywords = listOf(
+                "股票", "股价", "证券", "行情", "涨跌", "K线", "成交量", "成交额", "换手率",
+                "300", "600", "SH", "SZ", "同花顺", "东财", "收盘", "开盘", "历史"
+            )
+            val isStockIntent = stockKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+            val goldKeywords = listOf(
+                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
+                "购买黄金", "投资黄金", "金饰", "贵金属"
+            )
+            val isGoldIntent = goldKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+            val hsKeywords = listOf(
+                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
+            )
+            val isHsIntent = hsKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+            val tikuKeywords = listOf(
+                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
+            )
+            val isTikuIntent = tikuKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+            val lotteryKeywords = listOf(
+                "彩票", "彩票开奖", "开奖", "开奖公告", "开奖时间", "开奖号码", "中奖号码", "中奖",
+                "快乐8", "双色球", "大乐透", "福彩3D", "排列3", "排列5", "七乐彩", "7星彩", "七星彩", "胜负彩", "进球彩", "半全场",
+                "kl8", "ssq", "dlt", "fc3d", "pl3", "pl5", "qlc", "qxc", "sfc", "jqc", "bqc",
+                "第"
+            )
+            val isLotteryIntent = lotteryKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
+
+            // 构建工具定义
+            val webSearchTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "web_search",
+                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "query" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                            )
+                        ),
+                        required = listOf("query")
+                    )
+                )
+            )
+            val cityWeatherTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "city_weather",
+                    description = "查询指定城市未来几天天气与空气质量。使用中文城市或区县名，如\"滕州市\"。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "city" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "目标城市或区县中文名称"
+                            )
+                        ),
+                        required = listOf("city")
+                    )
+                )
+            )
+            val stockDataTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "stock_query",
+                    description = "查询指定证券代码的历史行情数据（开盘/收盘/振幅等）。适用于用户询问股价走势、成交量、涨跌幅等问题。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "secid" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "证券代码，例如：300033"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "返回条数，默认30"
+                            )
+                        ),
+                        required = listOf("secid")
+                    )
+                )
+            )
+            val goldPriceTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "gold_price",
+                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = emptyMap(),
+                        required = null
+                    )
+                )
+            )
+            val hsTicketTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "hs_ticket_query",
+                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "from" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "出发城市或车站中文名称"
+                            ),
+                            "to" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "目的城市或车站中文名称"
+                            ),
+                            "date" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
+                            )
+                        ),
+                        required = listOf("from", "to")
+                    )
+                )
+            )
+            val baiduTikuTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "baidu_tiku",
+                    description = "检索题库并返回题干/选项/答案。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "question" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "完整题干文本"
+                            )
+                        ),
+                        required = listOf("question")
+                    )
+                )
+            )
+            val lotteryTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "lottery_query",
+                    description = "查询指定彩种的最近开奖信息。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "get" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "彩种缩写：kl8、ssq、dlt、fc3d、pl3、pl5、qlc、qxc、sfc、jqc、bqc"
+                            ),
+                            "num" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "integer",
+                                description = "查询天数（1-100），默认5"
+                            )
+                        ),
+                        required = listOf("get")
+                    )
+                )
+            )
+            val tools = when {
+                selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
+                selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
+                selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
+                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
+                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
+                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
+                selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
+                isAutoMode -> when {
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                }
+                else -> null
+            }
+
+            // 添加系统提示
+            if (isAutoMode && isWeatherIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话与天气相关，请优先考虑调用工具 city_weather 获取指定城市的天气与空气质量信息。若城市不明确，请礼貌询问或依据上下文推测。"
+                    )
+                )
+            }
+            if (isAutoMode && isStockIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及股票/股价，请优先考虑调用工具 stock_query 获取指定证券的历史行情数据。若未明确证券代码，请礼貌询问或结合上下文推测（如名称/代码）。"
+                    )
+                )
+            }
+            if (isAutoMode && isGoldIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isHsIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
+                    )
+                )
+            }
+            if (isAutoMode && isTikuIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
+                    )
+                )
+            }
+            if (isAutoMode && isLotteryIntent) {
+                messagesWithBias.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及彩票开奖，请优先考虑调用工具 lottery_query 进行查询。若未明确彩种或期数，请礼貌询问或根据上下文推测。"
+                    )
+                )
+            }
+
+            // 插入新的助手消息占位
+            var assistantMessage = ChatMessage(
+                conversationId = conversationId,
+                content = "正在重新生成...",
+                isFromUser = false,
+                timestamp = Date(),
+                modelDisplayName = model.name
+            )
+            val assistantId = chatDao.insertMessage(assistantMessage)
+            assistantMessage = assistantMessage.copy(id = assistantId)
+
+            val aggregated = StringBuilder()
+            var lastUpdateTime = 0L
+            val updateInterval = 0L
+            var preLabelAdded = false
+            var postLabelAdded = false
+
+            withContext(Dispatchers.IO) {
+                try {
+                    streamWithFallback(
+                        primaryGroup = group,
+                        primaryModel = model,
+                        messages = messagesWithBias,
+                        tools = tools,
+                        toolChoice = if (tools != null) "auto" else null,
+                        onDelta = { delta ->
+                            aggregated.append(delta)
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastUpdateTime >= updateInterval) {
+                                val updated = assistantMessage.copy(content = aggregated.toString())
+                                chatDao.updateMessage(updated)
+                                lastUpdateTime = currentTime
+                            }
+                        },
+                        onToolCall = { toolCall ->
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                                "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
+                                "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
+                                "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
+                                "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
+                                "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
+                                else -> {}
+                            }
+                            // 注意：工具调用在重试时不再处理，只进行简单的文本生成
+                            // 如果需要工具调用，用户可以使用"重新生成"功能
+                            onToolCallEnd?.invoke()
+                        }
+                    )
+
+                    // 最终更新
+                    val finalUpdated = assistantMessage.copy(
+                        content = if (aggregated.isEmpty()) "生成失败或内容为空" else aggregated.toString()
+                    )
+                    chatDao.updateMessage(finalUpdated)
+                    updateConversationAfterMessage(conversationId, userMessage)
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    // 重试失败，保存详细错误信息
+                    val errorMessage = when {
+                        e.message?.contains("HTTP 401") == true -> "认证失败：API Key 无效或已过期"
+                        e.message?.contains("HTTP 403") == true -> "访问被拒绝：没有权限访问该模型"
+                        e.message?.contains("HTTP 429") == true -> "请求过于频繁：已达到速率限制"
+                        e.message?.contains("HTTP 500") == true || e.message?.contains("HTTP 502") == true || 
+                        e.message?.contains("HTTP 503") == true -> "服务器错误：模型服务暂时不可用"
+                        e.message?.contains("timeout") == true -> "请求超时：网络连接超时"
+                        e.message?.contains("Connection") == true -> "网络错误：无法连接到服务器"
+                        else -> "生成失败：${e.message ?: "未知错误"}"
+                    }
+                    val errorUpdated = assistantMessage.copy(
+                        content = errorMessage,
+                        isError = true,
+                        errorDetails = e.message
+                    )
+                    chatDao.updateMessage(errorUpdated)
+                    Result.failure(e)
+                }
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     // Added: edit user message and resend from original position
@@ -2450,7 +2875,7 @@ class ChatRepository(
         return null
     }
 
-    // 统一的流式调用，失败时自动回调至豆包（Ark）
+    // 统一的流式调用，失败时不再自动回调，而是抛出异常让上层处理
     private suspend fun streamWithFallback(
         primaryGroup: ModelGroup,
         primaryModel: Model,
@@ -2472,48 +2897,16 @@ class ChatRepository(
                 onToolCall = onToolCall
             )
         }
-        return try {
-            openAiService.streamChatCompletions(
-                baseUrl = primaryGroup.baseUrl,
-                apiKey = primaryGroup.apiKey,
-                model = primaryModel.modelName,
-                messages = messages,
-                tools = tools,
-                toolChoice = toolChoice,
-                onDelta = onDelta,
-                onToolCall = onToolCall
-            )
-        } catch (e: Exception) {
-            val fallback = findDoubaoFallbackModel()
-            if (fallback != null) {
-                val (dg, dm) = fallback
-                doubaoService.streamChatCompletions(
-                    baseUrl = dg.baseUrl,
-                    apiKey = dg.apiKey,
-                    model = dm.modelName,
-                    messages = messages,
-                    tools = null, // 回调不传工具，避免循环/兼容性问题
-                    toolChoice = null,
-                    onDelta = onDelta,
-                    onToolCall = { /* 回调阶段忽略工具调用 */ }
-                )
-            } else {
-                throw e
-            }
-        }
-    }
-
-    private suspend fun findDoubaoFallbackModel(): Pair<ModelGroup, Model>? {
-        val groups = modelConfigRepository.getAllGroups().first()
-        val doubaoGroup = groups.find {
-            it.baseUrl.contains("ark.cn-beijing.volces.com") ||
-            it.name.contains("豆包") ||
-            it.name.contains("Volc", ignoreCase = true) ||
-            it.name.contains("Ark", ignoreCase = true)
-        } ?: return null
-        val models = modelConfigRepository.getModelsByGroupId(doubaoGroup.id).first()
-        val m = models.firstOrNull() ?: return null
-        if (doubaoGroup.apiKey.isBlank() || m.modelName.isBlank()) return null
-        return doubaoGroup to m
+        // 直接调用OpenAI服务，失败时抛出异常
+        return openAiService.streamChatCompletions(
+            baseUrl = primaryGroup.baseUrl,
+            apiKey = primaryGroup.apiKey,
+            model = primaryModel.modelName,
+            messages = messages,
+            tools = tools,
+            toolChoice = toolChoice,
+            onDelta = onDelta,
+            onToolCall = onToolCall
+        )
     }
 }

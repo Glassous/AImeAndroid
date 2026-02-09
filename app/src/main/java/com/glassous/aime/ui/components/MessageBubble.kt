@@ -32,6 +32,7 @@ fun MessageBubble(
     onShowDetails: (Long) -> Unit,
     onRegenerate: ((Long) -> Unit)? = null,
     onEditUserMessage: ((Long, String) -> Unit)? = null,
+    onRetryFailed: ((Long) -> Unit)? = null,
     modifier: Modifier = Modifier,
     // 新增：控制 AI 回复是否以气泡展示
     replyBubbleEnabled: Boolean = true,
@@ -68,7 +69,7 @@ fun MessageBubble(
         }
     }
 
-    val useBubble = message.isFromUser || replyBubbleEnabled
+    val useBubble = message.isFromUser || replyBubbleEnabled || message.isError
 
     Row(
         modifier = modifier
@@ -138,6 +139,22 @@ fun MessageBubble(
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode
                             )
+                        }
+
+                        // 如果是错误消息且不是用户消息，显示重新发送按钮
+                        if (message.isError && !message.isFromUser) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Button(
+                                onClick = { onRetryFailed?.invoke(message.id) },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error
+                                )
+                            ) {
+                                Icon(Icons.Filled.Refresh, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("重新发送")
+                            }
                         }
                     }
                 }

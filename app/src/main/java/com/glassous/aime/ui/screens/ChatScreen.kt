@@ -734,6 +734,16 @@ fun ChatScreen(
                                         )
                                     }
                                 },
+                                onRetryFailed = { failedMessageId ->
+                                    currentConversationId?.let { convId ->
+                                        chatViewModel.retryFailedMessage(
+                                            convId,
+                                            failedMessageId,
+                                            selectedTool,
+                                            isAutoMode = isAutoSelected
+                                        )
+                                    }
+                                },
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
                                 isStreaming = isStreamingMessage,
