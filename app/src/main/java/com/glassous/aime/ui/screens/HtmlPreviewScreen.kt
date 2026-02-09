@@ -31,6 +31,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.sp
 
 import android.webkit.JavascriptInterface
+import android.content.Intent
+import androidx.core.content.FileProvider
+import java.io.File
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.lazy.LazyColumn
@@ -130,6 +133,29 @@ fun HtmlPreviewScreen(
         consoleLogs.clear() // 刷新时清空日志
         webViewRef?.reload()
         sourceWebViewRef?.reload()
+    }
+
+    // 在浏览器打开
+    fun openInBrowser() {
+        try {
+            val fileName = "preview_${System.currentTimeMillis()}.html"
+            val file = File(context.cacheDir, fileName)
+            file.writeText(htmlCode)
+
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                file
+            )
+
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "text/html")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(context, "打开失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     // 生成高亮HTML
@@ -465,6 +491,15 @@ ${htmlCode.replace("</script>", "<\\/script>")}
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
+                            // 在浏览器打开
+                            DropdownMenuItem(
+                                text = { Text("在浏览器打开") },
+                                onClick = {
+                                    openInBrowser()
+                                    showMenu = false
+                                },
+                                leadingIcon = { Icon(Icons.Filled.OpenInBrowser, null) }
+                            )
                             // 复制源码
                             DropdownMenuItem(
                                 text = { Text("复制源码") },
