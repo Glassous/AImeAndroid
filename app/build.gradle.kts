@@ -7,6 +7,18 @@ plugins {
 }
 
 import java.util.Properties
+import java.io.FileInputStream
+
+val envProps = Properties()
+val envLocalFile = rootProject.file(".env.local")
+if (envLocalFile.exists()) {
+    envProps.load(FileInputStream(envLocalFile))
+} else {
+    val envExampleFile = rootProject.file(".env.example")
+    if (envExampleFile.exists()) {
+        envProps.load(FileInputStream(envExampleFile))
+    }
+}
 
 android {
     namespace = "com.glassous.aime"
@@ -20,6 +32,9 @@ android {
         versionName = "2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        val defaultModelsUrl = envProps.getProperty("DEFAULT_MODELS_URL", "")
+        buildConfigField("String", "DEFAULT_MODELS_URL", "\"$defaultModelsUrl\"")
     }
 
     buildTypes {

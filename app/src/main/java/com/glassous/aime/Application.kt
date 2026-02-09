@@ -45,13 +45,5 @@ class AIMeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // 预设分组与模型的初始化（后台）
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                modelConfigRepository.seedDefaultPresets()
-            } catch (_: Exception) {
-                // 忽略预设插入失败，不影响应用启动
-            }
-        }
     }
 }

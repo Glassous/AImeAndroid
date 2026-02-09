@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.repository.FetchStatus
 import com.glassous.aime.data.repository.ModelConfigRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -15,6 +16,10 @@ import kotlinx.coroutines.launch
 class ModelConfigViewModel(
     private val repository: ModelConfigRepository
 ) : ViewModel() {
+    
+    // Fetch Status
+    private val _fetchStatus = MutableStateFlow<FetchStatus>(FetchStatus.Idle)
+    val fetchStatus = _fetchStatus.asStateFlow()
     
     // 所有分组
     val groups = repository.getAllGroups()
@@ -196,24 +201,20 @@ class ModelConfigViewModel(
         _uiState.value = _uiState.value.copy(showResetConfirmDialog = false)
     }
 
-    // 恢复为预设模型
-    fun resetToDefaultPresets() {
+    // 从云端获取最新模型
+    fun fetchLatestModels() {
         viewModelScope.launch {
-            try {
-                _uiState.value = _uiState.value.copy(isLoading = true)
-                repository.resetToDefaultPresets()
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    showResetConfirmDialog = false
-                )
-            } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    error = e.message,
-                    isLoading = false,
-                    showResetConfirmDialog = false
-                )
-            }
+            _uiState.value = _uiState.value.copy(showResetConfirmDialog = false)
+            repository.fetchAndMergeModels()
+                .collect { status ->
+                    _fetchStatus.value = status
+                }
         }
+    }
+    
+    // 关闭获取进度弹窗
+    fun closeFetchDialog() {
+        _fetchStatus.value = FetchStatus.Idle
     }
 }
 

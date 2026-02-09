@@ -41,7 +41,9 @@ import com.glassous.aime.ui.components.EditGroupDialog
 import com.glassous.aime.ui.components.EditModelDialog
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
-import kotlinx.coroutines.launch
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import com.glassous.aime.data.repository.FetchStatus
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -56,6 +58,7 @@ fun ModelConfigScreen(
 
     val uiState by viewModel.uiState.collectAsState()
     val groups by viewModel.groups.collectAsState()
+    val fetchStatus by viewModel.fetchStatus.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -90,7 +93,7 @@ fun ModelConfigScreen(
                 },
                 actions = {
                     IconButton(onClick = { viewModel.showResetConfirmDialog() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "恢复预设")
+                        Icon(Icons.Filled.Refresh, contentDescription = "获取最新推荐模型")
                     }
                     IconButton(onClick = { viewModel.showCreateGroupDialog() }) {
                         Icon(Icons.Filled.Add, contentDescription = "添加分组")
@@ -188,19 +191,88 @@ fun ModelConfigScreen(
         )
     }
 
+    // 进度弹窗
+    if (fetchStatus !is FetchStatus.Idle) {
+        AlertDialog(
+            onDismissRequest = { 
+                // 仅在成功或失败时允许点击外部关闭
+                if (fetchStatus is FetchStatus.Success || fetchStatus is FetchStatus.Error) {
+                    viewModel.closeFetchDialog() 
+                }
+            },
+            title = {
+                when (fetchStatus) {
+                    is FetchStatus.Fetching -> Text("正在获取模型列表...")
+                    is FetchStatus.Merging -> Text("正在更新本地数据...")
+                    is FetchStatus.Success -> Text("更新完成")
+                    is FetchStatus.Error -> Text("更新失败")
+                    else -> {}
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    when (val status = fetchStatus) {
+                        is FetchStatus.Fetching -> {
+                            CircularProgressIndicator()
+                            Text("正在连接服务器获取最新配置...")
+                        }
+                        is FetchStatus.Merging -> {
+                            LinearProgressIndicator(
+                                progress = status.current.toFloat() / status.total.toFloat(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Text("正在处理第 ${status.current}/${status.total} 个分组...")
+                        }
+                        is FetchStatus.Success -> {
+                            Icon(
+                                imageVector = Icons.Filled.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text("成功更新模型配置！")
+                            Text("新增模型数量: ${status.newModelsCount}")
+                        }
+                        is FetchStatus.Error -> {
+                            Icon(
+                                imageVector = Icons.Filled.Warning,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Text("发生错误: ${status.message}")
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                if (fetchStatus is FetchStatus.Success || fetchStatus is FetchStatus.Error) {
+                    TextButton(onClick = { viewModel.closeFetchDialog() }) {
+                        Text("关闭")
+                    }
+                }
+            }
+        )
+    }
+
     // 恢复预设确认对话框
     if (uiState.showResetConfirmDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.hideResetConfirmDialog() },
-            title = { Text("确认恢复预设") },
+            title = { Text("获取最新推荐模型") },
             text = { 
-                Text("此操作将删除所有现有的模型配置，并恢复为预设模型。此操作不可撤销，确定要继续吗？") 
+                Text("将从云端获取最新推荐模型并合并到本地列表，现有配置不会丢失。") 
             },
             confirmButton = {
                 TextButton(
-                    onClick = { viewModel.resetToDefaultPresets() }
+                    onClick = { viewModel.fetchLatestModels() }
                 ) {
-                    Text("确认恢复", color = MaterialTheme.colorScheme.error)
+                    Text("确认获取")
                 }
             },
             dismissButton = {
