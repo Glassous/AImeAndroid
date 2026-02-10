@@ -46,7 +46,8 @@ import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
-import com.glassous.aime.ui.components.TitleGenerationModelDialog
+import com.glassous.aime.ui.components.TitleGenerationModelSelectionDialog
+import com.glassous.aime.ui.components.TitleGenerationContextStrategyDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
@@ -143,8 +144,23 @@ fun SettingsContent(
     
     // Title Generation Model State
     val titleGenerationModelId by application.modelPreferences.titleGenerationModelId.collectAsState(initial = null)
-    var showTitleGenModelDialog by remember { mutableStateOf(false) }
+    val titleGenerationContextStrategy by application.modelPreferences.titleGenerationContextStrategy.collectAsState(initial = 0)
+    val titleGenerationContextN by application.modelPreferences.titleGenerationContextN.collectAsState(initial = 20)
+    val titleGenerationAutoGenerate by application.modelPreferences.titleGenerationAutoGenerate.collectAsState(initial = false)
+    var showTitleGenModelSelectionDialog by remember { mutableStateOf(false) }
+    var showTitleGenContextStrategyDialog by remember { mutableStateOf(false) }
     var titleGenModelName by remember { mutableStateOf("跟随当前模型") }
+
+    val contextStrategyLabel = remember(titleGenerationContextStrategy, titleGenerationContextN) {
+        when (titleGenerationContextStrategy) {
+            0 -> "仅发送消息"
+            1 -> "发送消息 + 回复前${titleGenerationContextN}字"
+            2 -> "发送消息 + 回复后${titleGenerationContextN}字"
+            3 -> "发送消息 + 回复前后${titleGenerationContextN}字"
+            4 -> "全部上下文"
+            else -> "未知"
+        }
+    }
 
     LaunchedEffect(titleGenerationModelId) {
         if (titleGenerationModelId == null) {
@@ -443,11 +459,10 @@ fun SettingsContent(
                 }
             }
             
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // Removed extra spacer to reduce gap as requested
             // --- Title Generation Model ---
             Card(
-                modifier = Modifier.fillMaxWidth().clickable { showTitleGenModelDialog = true },
+                modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
             ) {
@@ -458,25 +473,81 @@ fun SettingsContent(
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     Text(
-                        text = "选择用于生成对话标题的模型",
+                        text = "配置生成对话标题时的模型和上下文策略",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Row 1: Model Selection
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTitleGenModelSelectionDialog = true }
+                            .padding(vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                          Column(Modifier.weight(1f)) {
-                            Text(text = "当前设定", style = MaterialTheme.typography.titleSmall)
+                            Text(text = "生成模型", style = MaterialTheme.typography.titleSmall)
                             Text(
                                 text = titleGenModelName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
-                        TextButton(onClick = { showTitleGenModelDialog = true }) { Text("设置") }
+                        TextButton(onClick = { showTitleGenModelSelectionDialog = true }) { Text("修改") }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Row 2: Context Strategy
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showTitleGenContextStrategyDialog = true }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                         Column(Modifier.weight(1f)) {
+                            Text(text = "上下文策略", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = contextStrategyLabel,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { showTitleGenContextStrategyDialog = true }) { Text("修改") }
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+                    // Row 3: Auto Generate Switch
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                         Column(Modifier.weight(1f)) {
+                            Text(text = "自动生成标题", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = "首轮对话完成后自动生成",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = titleGenerationAutoGenerate,
+                            onCheckedChange = { 
+                                scope.launch { 
+                                    application.modelPreferences.setTitleGenerationAutoGenerate(it) 
+                                }
+                            }
+                        )
                     }
                 }
             }
@@ -771,16 +842,31 @@ fun SettingsContent(
         )
     }
 
-    if (showTitleGenModelDialog) {
-        TitleGenerationModelDialog(
+    if (showTitleGenModelSelectionDialog) {
+        TitleGenerationModelSelectionDialog(
             currentModelId = titleGenerationModelId,
             modelViewModel = modelConfigViewModel,
-            onDismiss = { showTitleGenModelDialog = false },
+            onDismiss = { showTitleGenModelSelectionDialog = false },
             onConfirm = { newId ->
                 scope.launch {
                     application.modelPreferences.setTitleGenerationModelId(newId)
                 }
-                showTitleGenModelDialog = false
+                showTitleGenModelSelectionDialog = false
+            }
+        )
+    }
+
+    if (showTitleGenContextStrategyDialog) {
+        TitleGenerationContextStrategyDialog(
+            currentStrategy = titleGenerationContextStrategy,
+            currentN = titleGenerationContextN,
+            onDismiss = { showTitleGenContextStrategyDialog = false },
+            onConfirm = { newStrategy, newN ->
+                scope.launch {
+                    application.modelPreferences.setTitleGenerationContextStrategy(newStrategy)
+                    application.modelPreferences.setTitleGenerationContextN(newN)
+                }
+                showTitleGenContextStrategyDialog = false
             }
         )
     }

@@ -22,6 +22,8 @@ import java.util.Locale
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -61,7 +63,7 @@ fun NavigationDrawer(
     onEditConversationTitle: (Long, String) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
     onNavigateToSettings: () -> Unit,
-    onGenerateTitle: (Long, (String) -> Unit) -> Unit,
+    onGenerateTitle: (Long, (String) -> Unit, () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     // 获取当前窗口的 WindowInsets（用于后续判断导航栏位置）
@@ -206,7 +208,7 @@ private fun ConversationItem(
     onDelete: () -> Unit,
     onEditTitle: (Long, String) -> Unit,
     onGenerateLongImage: (Long) -> Unit,
-    onGenerateTitle: (Long, (String) -> Unit) -> Unit,
+    onGenerateTitle: (Long, (String) -> Unit, () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
@@ -410,15 +412,19 @@ private fun ConversationItem(
                             focusedBorderColor = MaterialTheme.colorScheme.primary,
                             unfocusedBorderColor = MaterialTheme.colorScheme.outline
                         ),
+                        readOnly = isGeneratingTitle,
                         trailingIcon = {
                             // 魔法棒图标按钮 - 用于AI生成标题
                             IconButton(
                                 onClick = {
                                     isGeneratingTitle = true
-                                    onGenerateTitle(conversation.id) { generatedTitle ->
-                                        editingTitle = generatedTitle
+                                    onGenerateTitle(conversation.id, { generatedTitle ->
+                                        if (generatedTitle.isNotEmpty()) {
+                                            editingTitle = generatedTitle
+                                        }
+                                    }, {
                                         isGeneratingTitle = false
-                                    }
+                                    })
                                 },
                                 enabled = !isGeneratingTitle,
                                 modifier = Modifier.size(32.dp)
@@ -442,33 +448,41 @@ private fun ConversationItem(
                     )
 
                     // 编辑状态下的确认/取消按钮
-                    IconButton(
-                        onClick = {
-                            onEditTitle(conversation.id, editingTitle)
-                            isEditing = false
-                        },
-                        modifier = Modifier.size(32.dp)
+                    AnimatedVisibility(
+                        visible = !isGeneratingTitle,
+                        enter = fadeIn() + expandHorizontally(),
+                        exit = fadeOut() + shrinkHorizontally()
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "确认",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            editingTitle = conversation.title
-                            isEditing = false
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "取消",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    onEditTitle(conversation.id, editingTitle)
+                                    isEditing = false
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "确认",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    editingTitle = conversation.title
+                                    isEditing = false
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "取消",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
                     }
                 } else {
                     Text(

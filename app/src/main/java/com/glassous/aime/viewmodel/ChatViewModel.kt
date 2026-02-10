@@ -97,6 +97,10 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         _currentToolType.value = null
                     }
                 )
+                
+                launch {
+                    repository.tryAutoGenerateTitle(conversationId)
+                }
             } catch (e: Exception) {
                 // Handle error - could show a snackbar or error message
             } finally {
@@ -232,13 +236,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun generateConversationTitle(conversationId: Long, onTitleGenerated: (String) -> Unit) {
+    fun generateConversationTitle(conversationId: Long, onTitleGenerated: (String) -> Unit, onComplete: (() -> Unit)? = null) {
         viewModelScope.launch {
             try {
                 repository.generateConversationTitle(conversationId, onTitleGenerated)
             } catch (e: Exception) {
                 // 如果生成失败，返回默认标题
                 onTitleGenerated("新对话")
+            } finally {
+                onComplete?.invoke()
             }
         }
     }

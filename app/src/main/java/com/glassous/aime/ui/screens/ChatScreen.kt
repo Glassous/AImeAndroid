@@ -293,8 +293,8 @@ fun ChatScreen(
                         }
                     },
                     onNavigateToSettings = { context.startActivity(Intent(context, SettingsActivity::class.java)) },
-                    onGenerateTitle = { conversationId, onTitleGenerated ->
-                        chatViewModel.generateConversationTitle(conversationId, onTitleGenerated)
+                    onGenerateTitle = { conversationId, onTitleGenerated, onComplete ->
+                        chatViewModel.generateConversationTitle(conversationId, onTitleGenerated, onComplete)
                     }
                 )
             }

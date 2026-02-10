@@ -1380,18 +1380,99 @@ class ChatRepository(
                     return@withContext
                 }
 
-                // 获取对话中用户发送的消息内容
+                // 获取对话中所有消息内容
                 val messages = chatDao.getMessagesForConversation(conversationId).first()
-                val userMessages = messages.filter { it.isFromUser }
                 
-                if (userMessages.isEmpty()) {
+                if (messages.isEmpty()) {
                     onTitleGenerated("新对话")
                     return@withContext
                 }
 
-                // 构建提示词：仅使用用户发送的内容
-                val userContent = userMessages.joinToString("\n") { it.content }
-                val prompt = "请根据以下对话内容生成一个简短的标题（不超过20个字），只返回标题本身，不要有任何其他内容：\n\n$userContent"
+                // 获取策略和N值
+                val contextStrategy = modelPreferences.titleGenerationContextStrategy.first()
+                val contextN = modelPreferences.titleGenerationContextN.first()
+
+                // 构建提示词上下文
+                val contextContent = StringBuilder()
+                
+                for (message in messages) {
+                    if (message.isFromUser) {
+                        contextContent.append("User: ${message.content}\n")
+                    } else {
+                        // AI回复处理
+                        val content = message.content
+                        if (contextStrategy == 0) {
+                            // 策略0：仅发送消息（AI回复不包含）
+                            continue 
+                        } else if (contextStrategy == 4) {
+                            // 策略4：全部上下文
+                            contextContent.append("AI: $content\n")
+                        } else {
+                            // 截取逻辑
+                            val len = content.length
+                            val sb = StringBuilder()
+                            
+                            // 前N字
+                            if (contextStrategy == 1 || contextStrategy == 3) {
+                                if (len <= contextN) {
+                                    sb.append(content)
+                                } else {
+                                    sb.append(content.substring(0, contextN))
+                                    if (contextStrategy == 1) sb.append("...")
+                                }
+                            }
+                            
+                            // ... 连接符 (如果是前后N字且中间有省略)
+                            if (contextStrategy == 3 && len > 2 * contextN) {
+                                sb.append(" ... ")
+                            }
+
+                            // 后N字
+                            if (contextStrategy == 2 || contextStrategy == 3) {
+                                if (len <= contextN) {
+                                    if (contextStrategy == 2) sb.append(content)
+                                    // if strategy 3, already appended above or overlap handled logic below
+                                    // 简化逻辑：如果是3且长度小，上面已经加了，这里不需要重复
+                                    // 但为了严谨：
+                                    // 策略3：前N + 后N。如果总长度 <= 2N，直接显示全部。
+                                    // 如果总长度 > 2N，显示 前N ... 后N
+                                } else {
+                                    sb.append(content.substring(len - contextN))
+                                }
+                            }
+                            
+                            // 修正策略3的逻辑：
+                            // 上面的逻辑在策略3时有点问题。重写截取部分：
+                            var processedContent = ""
+                            if (contextStrategy == 1) { // 前N
+                                processedContent = if (len <= contextN) content else "${content.substring(0, contextN)}..."
+                            } else if (contextStrategy == 2) { // 后N
+                                processedContent = if (len <= contextN) content else "...${content.substring(len - contextN)}"
+                            } else if (contextStrategy == 3) { // 前后N
+                                processedContent = if (len <= 2 * contextN) {
+                                    content
+                                } else {
+                                    "${content.substring(0, contextN)} ... ${content.substring(len - contextN)}"
+                                }
+                            }
+                            
+                            contextContent.append("AI: $processedContent\n")
+                        }
+                    }
+                }
+
+                if (contextContent.isEmpty()) {
+                    // 如果过滤后没有内容（例如只有AI回复且策略为0），尝试回退到仅用户
+                    val userMessages = messages.filter { it.isFromUser }
+                    if (userMessages.isNotEmpty()) {
+                        contextContent.append(userMessages.joinToString("\n") { "User: ${it.content}" })
+                    } else {
+                        onTitleGenerated("新对话")
+                        return@withContext
+                    }
+                }
+
+                val prompt = "请根据以下对话内容生成一个简短的标题（不超过20个字），只返回标题本身，不要有任何其他内容：\n\n$contextContent"
 
                 val titleMessages = listOf(
                     OpenAiChatMessage(role = "user", content = prompt)
@@ -1437,6 +1518,24 @@ class ChatRepository(
                 }
             } catch (e: Exception) {
                 onTitleGenerated("新对话")
+            }
+        }
+    }
+
+    suspend fun tryAutoGenerateTitle(conversationId: Long) {
+        val autoGen = modelPreferences.titleGenerationAutoGenerate.first()
+        if (!autoGen) return
+
+        val messages = chatDao.getMessagesForConversation(conversationId).first()
+        val validUserMessages = messages.count { it.isFromUser && !it.isError }
+        
+        if (validUserMessages == 1) {
+            var finalTitle = ""
+            generateConversationTitle(conversationId) { title ->
+                finalTitle = title
+            }
+            if (finalTitle.isNotBlank() && finalTitle != "新对话") {
+                updateConversationTitle(conversationId, finalTitle)
             }
         }
     }
