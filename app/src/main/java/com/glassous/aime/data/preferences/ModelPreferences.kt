@@ -15,11 +15,17 @@ class ModelPreferences(private val context: Context) {
 
     companion object {
         private val SELECTED_MODEL_ID = stringPreferencesKey("selected_model_id")
+        private val TITLE_GENERATION_MODEL_ID = stringPreferencesKey("title_generation_model_id")
     }
 
     val selectedModelId: Flow<String?> = context.dataStore.data
         .map { preferences ->
             preferences[SELECTED_MODEL_ID]
+        }
+
+    val titleGenerationModelId: Flow<String?> = context.dataStore.data
+        .map { preferences ->
+            preferences[TITLE_GENERATION_MODEL_ID]
         }
 
     suspend fun setSelectedModelId(modelId: String?) {
@@ -29,6 +35,16 @@ class ModelPreferences(private val context: Context) {
                 if (current != null) preferences.remove(SELECTED_MODEL_ID)
             } else {
                 if (current != modelId) preferences[SELECTED_MODEL_ID] = modelId
+            }
+        }
+    }
+
+    suspend fun setTitleGenerationModelId(modelId: String?) {
+        context.dataStore.edit { preferences ->
+            if (modelId == null) {
+                preferences.remove(TITLE_GENERATION_MODEL_ID)
+            } else {
+                preferences[TITLE_GENERATION_MODEL_ID] = modelId
             }
         }
     }

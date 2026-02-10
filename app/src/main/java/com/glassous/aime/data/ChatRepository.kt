@@ -1346,14 +1346,29 @@ class ChatRepository(
     suspend fun generateConversationTitle(conversationId: Long, onTitleGenerated: (String) -> Unit) {
         withContext(Dispatchers.IO) {
             try {
-                // 获取当前选中的模型配置
-                val selectedModelId = modelPreferences.selectedModelId.first()
-                if (selectedModelId.isNullOrBlank()) {
+                // 1. Determine which model ID to use
+                val titleGenModelId = modelPreferences.titleGenerationModelId.first()
+                var targetModelId = titleGenModelId
+
+                // If specific model set, check if exists
+                if (!targetModelId.isNullOrBlank()) {
+                     val model = modelConfigRepository.getModelById(targetModelId)
+                     if (model == null) {
+                         targetModelId = null // Fallback to default
+                     }
+                }
+
+                // If null (either not set or deleted), use selected model
+                if (targetModelId == null) {
+                    targetModelId = modelPreferences.selectedModelId.first()
+                }
+
+                if (targetModelId.isNullOrBlank()) {
                     onTitleGenerated("新对话")
                     return@withContext
                 }
                 
-                val model = modelConfigRepository.getModelById(selectedModelId)
+                val model = modelConfigRepository.getModelById(targetModelId)
                 if (model == null) {
                     onTitleGenerated("新对话")
                     return@withContext

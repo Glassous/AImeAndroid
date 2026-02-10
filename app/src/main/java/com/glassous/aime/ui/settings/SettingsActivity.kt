@@ -46,6 +46,7 @@ import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
+import com.glassous.aime.ui.components.TitleGenerationModelDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
@@ -113,6 +114,9 @@ fun SettingsContent(
     val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
         factory = VersionUpdateViewModelFactory(GitHubReleaseService(), application.updatePreferences)
     )
+    val modelConfigViewModel: ModelConfigViewModel = viewModel(
+        factory = ModelConfigViewModelFactory(application.modelConfigRepository)
+    )
 
     // 主题相关状态
     val selectedTheme by themeViewModel.selectedTheme.collectAsState()
@@ -136,6 +140,24 @@ fun SettingsContent(
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     var showContextLimitDialog by remember { mutableStateOf(false) }
     var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
+    
+    // Title Generation Model State
+    val titleGenerationModelId by application.modelPreferences.titleGenerationModelId.collectAsState(initial = null)
+    var showTitleGenModelDialog by remember { mutableStateOf(false) }
+    var titleGenModelName by remember { mutableStateOf("跟随当前模型") }
+
+    LaunchedEffect(titleGenerationModelId) {
+        if (titleGenerationModelId == null) {
+            titleGenModelName = "跟随当前模型"
+        } else {
+            val model = application.modelConfigRepository.getModelById(titleGenerationModelId!!)
+            if (model != null) {
+                titleGenModelName = model.name
+            } else {
+                titleGenModelName = "跟随当前模型 (原模型已删除)"
+            }
+        }
+    }
 
     val snackbarHostState = remember { SnackbarHostState() }
     val contextLimit by application.contextPreferences.maxContextMessages.collectAsState(initial = 5)
@@ -417,6 +439,44 @@ fun SettingsContent(
                             )
                         }
                         TextButton(onClick = { showContextLimitDialog = true }) { Text("设置") }
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // --- Title Generation Model ---
+            Card(
+                modifier = Modifier.fillMaxWidth().clickable { showTitleGenModelDialog = true },
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        text = "标题生成设置",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "选择用于生成对话标题的模型",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                         Column(Modifier.weight(1f)) {
+                            Text(text = "当前设定", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                text = titleGenModelName,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(onClick = { showTitleGenModelDialog = true }) { Text("设置") }
                     }
                 }
             }
@@ -708,6 +768,20 @@ fun SettingsContent(
     if (showPrivacyPolicyDialog) {
         PrivacyPolicyDialog(
             onDismissRequest = { showPrivacyPolicyDialog = false }
+        )
+    }
+
+    if (showTitleGenModelDialog) {
+        TitleGenerationModelDialog(
+            currentModelId = titleGenerationModelId,
+            modelViewModel = modelConfigViewModel,
+            onDismiss = { showTitleGenModelDialog = false },
+            onConfirm = { newId ->
+                scope.launch {
+                    application.modelPreferences.setTitleGenerationModelId(newId)
+                }
+                showTitleGenModelDialog = false
+            }
         )
     }
 
