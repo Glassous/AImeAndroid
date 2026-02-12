@@ -500,8 +500,6 @@ fun SettingsContent(
                         TextButton(onClick = { showTitleGenModelSelectionDialog = true }) { Text("修改") }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-
                     // Row 2: Context Strategy
                     Row(
                         modifier = Modifier
@@ -521,8 +519,6 @@ fun SettingsContent(
                         }
                         TextButton(onClick = { showTitleGenContextStrategyDialog = true }) { Text("修改") }
                     }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
 
                     // Row 3: Auto Generate Switch
                     Row(
