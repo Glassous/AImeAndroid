@@ -86,7 +86,8 @@ class ModelConfigRepository(
     
     // 更新分组
     suspend fun updateGroup(group: ModelGroup) {
-        modelConfigDao.updateGroup(group)
+        // 更新时间戳，使其排在最前
+        modelConfigDao.updateGroup(group.copy(createdAt = System.currentTimeMillis()))
     }
     
     // 删除分组（同时删除组内所有模型）
@@ -112,7 +113,8 @@ class ModelConfigRepository(
     
     // 更新模型
     suspend fun updateModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
-        modelConfigDao.updateModel(model)
+        // 更新时间戳，使其排在最前
+        modelConfigDao.updateModel(model.copy(createdAt = System.currentTimeMillis()))
     }
     
     // 删除模型
@@ -156,10 +158,15 @@ class ModelConfigRepository(
             val existingGroups = modelConfigDao.getAllGroups().first()
             var newModelsCount = 0
             val totalGroups = remoteConfig.groups.size
+            val baseTime = System.currentTimeMillis()
             
             remoteConfig.groups.forEachIndexed { index, remoteGroup ->
                 emit(FetchStatus.Merging(index + 1, totalGroups))
                 
+                // 为了保持云端列表的顺序（DESC排序下），我们需要赋予递减的时间戳
+                // 使用较大的间隔以确保组之间有空间
+                val groupTime = baseTime - index * 100000L
+
                 // 查找或创建分组
                 var group = existingGroups.find { it.name == remoteGroup.name }
                 val groupId: String
@@ -172,19 +179,29 @@ class ModelConfigRepository(
                         name = remoteGroup.name,
                         baseUrl = remoteGroup.baseUrl,
                         apiKey = "",
-                        providerUrl = remoteGroup.providerUrl
+                        providerUrl = remoteGroup.providerUrl,
+                        createdAt = groupTime
                     )
                     modelConfigDao.insertGroup(group)
                 } else {
                     groupId = group.id
+                    // 更新分组信息和时间戳以保持顺序
+                    val updatedGroup = group.copy(
+                        baseUrl = remoteGroup.baseUrl,
+                        providerUrl = remoteGroup.providerUrl,
+                        createdAt = groupTime
+                    )
+                    modelConfigDao.updateGroup(updatedGroup)
                 }
 
                 // 处理该分组下的模型
                 val existingModels = modelConfigDao.getModelsByGroupId(groupId).first()
                 
-                remoteGroup.models.forEach { remoteModel ->
-                    val modelExists = existingModels.any { it.modelName == remoteModel.modelName }
-                    if (!modelExists) {
+                remoteGroup.models.forEachIndexed { modelIndex, remoteModel ->
+                    val modelTime = groupTime - modelIndex * 1000L
+                    val existingModel = existingModels.find { it.modelName == remoteModel.modelName }
+                    
+                    if (existingModel == null) {
                         // 插入新模型
                         modelConfigDao.insertModel(
                             Model(
@@ -192,10 +209,19 @@ class ModelConfigRepository(
                                 groupId = groupId,
                                 name = remoteModel.name,
                                 modelName = remoteModel.modelName,
-                                remark = remoteModel.remark
+                                remark = remoteModel.remark,
+                                createdAt = modelTime
                             )
                         )
                         newModelsCount++
+                    } else {
+                        // 更新现有模型以保持顺序
+                        val updatedModel = existingModel.copy(
+                            name = remoteModel.name,
+                            remark = remoteModel.remark,
+                            createdAt = modelTime
+                        )
+                        modelConfigDao.updateModel(updatedModel)
                     }
                 }
             }
