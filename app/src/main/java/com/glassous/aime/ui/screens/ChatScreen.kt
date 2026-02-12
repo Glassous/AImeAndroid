@@ -186,7 +186,7 @@ fun ChatScreen(
     val dialogBlurState = remember { mutableStateOf(false) }
 
     // 检查是否需要显示回到底部按钮
-    val showScrollToBottomButton by remember {
+    val showScrollToBottomButton by remember(listState) {
         derivedStateOf {
             val layoutInfo = listState.layoutInfo
             val visibleItems = layoutInfo.visibleItemsInfo
@@ -234,34 +234,34 @@ fun ChatScreen(
     // 流式输出时的自动滚动逻辑：保持滚动直到发送气泡到达顶部栏下方
     LaunchedEffect(currentMessages.lastOrNull()?.content?.length, isLoading) {
         // 如果用户正在拖拽，或者正在进行非自动滚动的滑动（例如惯性滑动），则不进行自动滚动
-        // 注意：animateScrollToItem也会导致isScrollInProgress为true，所以我们主要依靠isDragged来判断用户的主动交互
         if (isDragged) return@LaunchedEffect
 
         if (isLoading && currentMessages.isNotEmpty()) {
-            // User message is the one before the streaming message (last)
-            // In LazyColumn, Spacer is index 0.
-            // User Message Index = (currentMessages.size - 2) + 1 = currentMessages.size - 1
-            // e.g. Size=2 (User, AI). User is index 0 in list. Index 1 in LazyColumn. Size-1 = 1. Correct.
-            val userMsgIndex = currentMessages.size - 1 
-            
             val layoutInfo = listState.layoutInfo
-            val visibleItems = layoutInfo.visibleItemsInfo
-            
-            val userItem = visibleItems.find { it.index == userMsgIndex }
-            
-            val shouldScroll = if (userItem != null) {
-                // If User message is visible, scroll only if it is below the Top Bar
-                // Stop scrolling if it reaches the Top Bar (offset <= height)
-                userItem.offset > topBarHeightPx
+            val totalItemsCount = layoutInfo.totalItemsCount
+            val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()
+
+            if (lastVisibleItem == null || totalItemsCount == 0) return@LaunchedEffect
+
+            // 检查是否在底部
+            // 策略：只要用户能看到底部 Spacer，或者能看到最后一条消息且距离底部不远，就判定为在底部
+            val isAtBottom = if (lastVisibleItem.index == totalItemsCount - 1) {
+                // 看到的是 Spacer，肯定在底部
+                true
+            } else if (lastVisibleItem.index == totalItemsCount - 2) {
+                // 看到的是最后一条消息
+                // 检查这条消息的底部是否接近视口底部
+                // 允许一定的溢出（因为刚生成了新文本，可能刚被顶出去）
+                val viewportBottom = layoutInfo.viewportEndOffset
+                val itemBottom = lastVisibleItem.offset + lastVisibleItem.size
+                // 阈值设为 500px (约等于几行文本的高度)，如果超出太多说明用户在往上看
+                (itemBottom - viewportBottom) < 200
             } else {
-                // If User message is not visible
-                val firstVisible = visibleItems.firstOrNull()?.index ?: 0
-                // If scrolled off top (firstVisible > userMsgIndex), STOP scrolling
-                // If scrolled off bottom (firstVisible <= userMsgIndex), keep scrolling
-                firstVisible <= userMsgIndex
+                // 看到的不是最后两条，说明滑上去了
+                false
             }
-            
-            if (shouldScroll) {
+
+            if (isAtBottom) {
                 listState.animateScrollToItem(
                     index = currentMessages.size + 1, // Scroll to bottom spacer
                     scrollOffset = 0
