@@ -837,9 +837,20 @@ fun ChatScreen(
             sharedUrl = sharedUrl,
             onShareLink = {
                 val title = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
+                
+                // Aggregate distinct model names from messages
+                val distinctModels = currentMessages
+                    .filter { !it.isFromUser && !it.modelDisplayName.isNullOrBlank() }
+                    .mapNotNull { it.modelDisplayName }
+                    .distinct()
+                    .joinToString(", ")
+                
+                // Fallback to selected model if no messages have model info
+                val modelsToShare = if (distinctModels.isNotBlank()) distinctModels else selectedModelDisplayName
+
                 chatViewModel.shareConversation(
                     title = title,
-                    model = selectedModelDisplayName,
+                    model = modelsToShare,
                     messages = currentMessages,
                     onSuccess = { url ->
                         sharedUrl = url
