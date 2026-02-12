@@ -2,6 +2,8 @@ package com.glassous.aime.ui.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -161,7 +163,7 @@ fun ChatScreen(
         }
     }
 
-    val listState = rememberLazyListState()
+    val listState = key(currentConversationId) { rememberLazyListState() }
     // 监听用户拖拽状态
     val isDragged by listState.interactionSource.collectIsDraggedAsState()
     
@@ -207,14 +209,23 @@ fun ChatScreen(
     // 长图分享预览弹窗状态
     var showLongImageDialog by remember { mutableStateOf(false) }
 
+    // 内容淡入动画状态
+    val contentAlpha = remember { Animatable(0f) }
+
+    // 切换对话时触发淡入动画
+    LaunchedEffect(currentConversationId) {
+        contentAlpha.snapTo(0f)
+        contentAlpha.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(durationMillis = 300)
+        )
+    }
+
     // 进入对话时滚动到最新消息（仅在对话切换时触发）
     LaunchedEffect(currentConversationId) {
         if (currentMessages.isNotEmpty()) {
-            kotlinx.coroutines.delay(100)
-            listState.animateScrollToItem(
-                index = currentMessages.size + 1,
-                scrollOffset = 0
-            )
+            kotlinx.coroutines.delay(50)
+            listState.scrollToItem(index = currentMessages.size + 1)
         }
     }
 
@@ -674,6 +685,7 @@ fun ChatScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
+                            .alpha(contentAlpha.value)
                     ) {
                         if (!(minimalMode && minimalModeConfig.hideWelcomeText)) {
                             Column(
@@ -697,7 +709,7 @@ fun ChatScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxSize()
-                            ,
+                            .alpha(contentAlpha.value),
                         contentPadding = PaddingValues(
                             top = 8.dp,
                             bottom = 6.dp
