@@ -811,7 +811,7 @@ fun ChatScreen(
 
     // 长图分享预览弹窗
     if (showLongImageDialog) {
-        com.glassous.aime.ui.components.LongImagePreviewDialog(
+        com.glassous.aime.ui.components.LongImagePreviewBottomSheet(
             messages = currentMessages,
             onDismiss = { showLongImageDialog = false },
             chatFontSize = chatFontSize,

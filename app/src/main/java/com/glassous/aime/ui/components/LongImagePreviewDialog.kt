@@ -2,9 +2,11 @@ package com.glassous.aime.ui.components
 
 import android.content.ContentValues
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color as AndroidColor
+import android.net.Uri
 import android.os.Environment
 import android.provider.MediaStore
 import android.view.View
@@ -12,30 +14,36 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.DialogProperties
+import androidx.core.content.FileProvider
 import com.glassous.aime.data.ChatMessage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LongImagePreviewDialog(
+fun LongImagePreviewBottomSheet(
     messages: List<ChatMessage>,
     onDismiss: () -> Unit,
     chatFontSize: Float = 16f,
@@ -48,55 +56,32 @@ fun LongImagePreviewDialog(
     
     // We use a reference to the ComposeView that we will capture
     var captureView by remember { mutableStateOf<View?>(null) }
+    
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    // 使用 BasicAlertDialog 替代 Dialog，保持与长按弹窗一致的样式
-    BasicAlertDialog(
+    ModalBottomSheet(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
+        sheetState = sheetState,
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
-        Surface(
-            shape = AlertDialogDefaults.shape,
-            color = AlertDialogDefaults.containerColor,
-            tonalElevation = AlertDialogDefaults.TonalElevation,
+        Column(
             modifier = Modifier
-                .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.9f)
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f) // Occupy 90% of screen height
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Toolbar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text("关闭")
-                    }
-                    Text("生成长图预览", style = MaterialTheme.typography.titleMedium)
-                    TextButton(
-                        onClick = {
-                            if (!isGenerating && captureView != null) {
-                                isGenerating = true
-                                scope.launch {
-                                    saveBitmapToGallery(context, captureView!!)
-                                    isGenerating = false
-                                    onDismiss()
-                                }
-                            }
-                        },
-                        enabled = !isGenerating
-                    ) {
-                        Text(if (isGenerating) "保存中..." else "保存到相册")
-                    }
-                }
-
+            // Image Preview Area
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            ) {
                 Box(
                     modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
+                        .fillMaxSize()
                         .verticalScroll(rememberScrollState())
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 ) {
                     AndroidView(
                         factory = { ctx ->
@@ -170,51 +155,148 @@ fun LongImagePreviewDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                
+                // Floating Drag Handle
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 16.dp)
+                        .size(width = 32.dp, height = 4.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    shape = CircleShape
+                ) {}
+            }
+
+            // Bottom Action Bar
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .navigationBarsPadding(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Cancel Button (Left)
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "取消",
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+
+                // Action Buttons (Right)
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Save Button
+                    Surface(
+                        onClick = {
+                            if (!isGenerating && captureView != null) {
+                                isGenerating = true
+                                scope.launch {
+                                    val bitmap = captureBitmapFromView(captureView!!)
+                                    if (bitmap != null) {
+                                        saveBitmapToGallery(context, bitmap)
+                                    } else {
+                                        Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
+                                    }
+                                    isGenerating = false
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                             if (isGenerating) {
+                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                             } else {
+                                 Icon(
+                                     imageVector = Icons.Default.Download,
+                                     contentDescription = "保存",
+                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                 )
+                             }
+                        }
+                    }
+
+                    // Share Button
+                    Surface(
+                        onClick = {
+                            if (!isGenerating && captureView != null) {
+                                isGenerating = true
+                                scope.launch {
+                                    val bitmap = captureBitmapFromView(captureView!!)
+                                    if (bitmap != null) {
+                                        shareBitmap(context, bitmap)
+                                    } else {
+                                        Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
+                                    }
+                                    isGenerating = false
+                                }
+                            }
+                        },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "分享",
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
 
-suspend fun saveBitmapToGallery(context: Context, view: View) {
+suspend fun captureBitmapFromView(view: View): Bitmap? = withContext(Dispatchers.Main) {
+    try {
+        val widthSpec = View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY)
+        val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        view.measure(widthSpec, heightSpec)
+        
+        val width = view.measuredWidth
+        val height = view.measuredHeight
+        
+        if (width <= 0 || height <= 0) return@withContext null
+
+        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(AndroidColor.WHITE)
+        
+        val oldLeft = view.left
+        val oldTop = view.top
+        val oldRight = view.right
+        val oldBottom = view.bottom
+        
+        view.layout(0, 0, width, height)
+        view.draw(canvas)
+        
+        view.layout(oldLeft, oldTop, oldRight, oldBottom)
+        return@withContext bitmap
+    } catch (e: Exception) {
+        e.printStackTrace()
+        return@withContext null
+    }
+}
+
+suspend fun saveBitmapToGallery(context: Context, bitmap: Bitmap) {
     withContext(Dispatchers.IO) {
         try {
-            // Measure the view with unspecified height to get full height
-            // Since it's in a verticalScroll, it might already be measured fully?
-            // But to be safe and ensure we capture full content even if not fully scrolled:
-            
-            val widthSpec = View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY)
-            val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-            view.measure(widthSpec, heightSpec)
-            
-            val width = view.measuredWidth
-            val height = view.measuredHeight
-            
-            if (width <= 0 || height <= 0) {
-                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "生成失败：内容为空", Toast.LENGTH_SHORT).show()
-                }
-                return@withContext
-            }
-
-            // Create Bitmap
-            val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            // Draw white background
-            canvas.drawColor(AndroidColor.WHITE)
-            
-            // Layout to full size
-            val oldLeft = view.left
-            val oldTop = view.top
-            val oldRight = view.right
-            val oldBottom = view.bottom
-            
-            view.layout(0, 0, width, height)
-            view.draw(canvas)
-            
-            // Restore layout (though we are dismissing anyway)
-            view.layout(oldLeft, oldTop, oldRight, oldBottom)
-
-            // Save to MediaStore
             val filename = "AIme_Share_${System.currentTimeMillis()}.png"
             val values = ContentValues().apply {
                 put(MediaStore.Images.Media.DISPLAY_NAME, filename)
@@ -239,6 +321,45 @@ suspend fun saveBitmapToGallery(context: Context, view: View) {
             e.printStackTrace()
             withContext(Dispatchers.Main) {
                 Toast.makeText(context, "保存出错: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
+suspend fun shareBitmap(context: Context, bitmap: Bitmap) {
+    withContext(Dispatchers.IO) {
+        try {
+            val cachePath = File(context.cacheDir, "images")
+            if (!cachePath.exists()) {
+                cachePath.mkdirs()
+            }
+            // Use a unique name or overwrite? Overwriting is fine for temp share, prevents cache bloat.
+            // But if user shares multiple times concurrently (unlikely), unique is safer.
+            // Let's use "share_preview.png" and overwrite to keep cache clean.
+            val file = File(cachePath, "share_preview.png")
+            val stream = FileOutputStream(file)
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
+            stream.close()
+
+            val authority = "${context.packageName}.fileprovider"
+            val contentUri = FileProvider.getUriForFile(context, authority, file)
+
+            if (contentUri != null) {
+                val shareIntent = Intent().apply {
+                    action = Intent.ACTION_SEND
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    setDataAndType(contentUri, context.contentResolver.getType(contentUri))
+                    putExtra(Intent.EXTRA_STREAM, contentUri)
+                    type = "image/png"
+                }
+                withContext(Dispatchers.Main) {
+                    context.startActivity(Intent.createChooser(shareIntent, "分享预览"))
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "分享失败: ${e.message}", Toast.LENGTH_SHORT).show()
             }
         }
     }
