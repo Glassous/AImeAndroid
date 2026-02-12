@@ -19,3 +19,11 @@ data class SharedConversationRequest(
 data class SharedConversationResponse(
     val id: String
 )
+
+@Serializable
+data class SharedConversationRow(
+    val id: String,
+    val title: String,
+    val model: String? = null,
+    val messages: List<SharedMessageDto>
+)

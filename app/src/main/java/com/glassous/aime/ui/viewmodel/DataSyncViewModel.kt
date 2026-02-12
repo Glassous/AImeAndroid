@@ -264,6 +264,57 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    fun importSharedConversation(input: String, onResult: (Boolean, String) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Extract UUID
+                val uuid = parseUuidFromInput(input)
+                if (uuid == null) {
+                    onResult(false, "无效的链接或ID")
+                    return@launch
+                }
+
+                // 2. Fetch data
+                val data = com.glassous.aime.data.repository.SupabaseShareRepository.getSharedConversation(uuid)
+
+                // 3. Create Conversation
+                val now = Date()
+                val newConv = Conversation(
+                    title = data.title,
+                    lastMessage = data.messages.lastOrNull()?.content ?: "",
+                    lastMessageTime = now,
+                    messageCount = data.messages.size
+                )
+                val convId = chatDao.insertConversation(newConv)
+
+                // 4. Create Messages
+                data.messages.forEachIndexed { index, msgDto ->
+                    // Add slight delay to timestamp to preserve order
+                    val msgTime = Date(now.time + index * 100)
+                    val chatMsg = ChatMessage(
+                        conversationId = convId,
+                        content = msgDto.content,
+                        isFromUser = msgDto.role == "user",
+                        timestamp = msgTime,
+                        modelDisplayName = if (msgDto.role != "user") data.model else null
+                    )
+                    chatDao.insertMessage(chatMsg)
+                }
+
+                onResult(true, "导入成功")
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult(false, "导入失败: ${e.message}")
+            }
+        }
+    }
+
+    private fun parseUuidFromInput(input: String): String? {
+        val uuidRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}".toRegex(RegexOption.IGNORE_CASE)
+        val match = uuidRegex.find(input)
+        return match?.value
+    }
 }
 
 class DataSyncViewModelFactory(private val application: Application) : ViewModelProvider.Factory {

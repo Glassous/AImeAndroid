@@ -48,6 +48,7 @@ import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
 import com.glassous.aime.ui.components.TitleGenerationModelSelectionDialog
 import com.glassous.aime.ui.components.TitleGenerationContextStrategyDialog
+import com.glassous.aime.ui.components.ImportSharedConversationDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
@@ -141,6 +142,7 @@ fun SettingsContent(
     var showMinimalModeConfigDialog by remember { mutableStateOf(false) }
     var showContextLimitDialog by remember { mutableStateOf(false) }
     var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
+    var showImportSharedDialog by remember { mutableStateOf(false) }
     
     // Title Generation Model State
     val titleGenerationModelId by application.modelPreferences.titleGenerationModelId.collectAsState(initial = null)
@@ -232,6 +234,38 @@ fun SettingsContent(
                 ),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // --- 获取分享对话 ---
+            if (!hideImportSharedButton) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(
+                            text = "获取分享对话",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "从云端导入他人分享的对话",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 16.dp)
+                        )
+
+                        Button(
+                            onClick = { showImportSharedDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.CloudDownload, contentDescription = "获取")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("获取分享对话")
+                        }
+                    }
+                }
+            }
+
             // --- 主题设置 ---
             Card(
                 modifier = Modifier.fillMaxWidth(),
@@ -863,6 +897,15 @@ fun SettingsContent(
                     application.modelPreferences.setTitleGenerationContextN(newN)
                 }
                 showTitleGenContextStrategyDialog = false
+            }
+        )
+    }
+
+    if (showImportSharedDialog) {
+        ImportSharedConversationDialog(
+            onDismiss = { showImportSharedDialog = false },
+            onImport = { input, callback ->
+                syncViewModel.importSharedConversation(input, callback)
             }
         )
     }

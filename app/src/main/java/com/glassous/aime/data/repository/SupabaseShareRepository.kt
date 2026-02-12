@@ -5,10 +5,12 @@ import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.model.SharedConversationRequest
 import com.glassous.aime.data.model.SharedConversationResponse
 import com.glassous.aime.data.model.SharedMessageDto
+import com.glassous.aime.data.model.SharedConversationRow
 import io.github.jan.supabase.SupabaseClient
 import io.github.jan.supabase.createSupabaseClient
 import io.github.jan.supabase.postgrest.Postgrest
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.postgrest.query.Columns
 import io.github.jan.supabase.serializer.KotlinXSerializer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -23,6 +25,19 @@ object SupabaseShareRepository {
     ) {
         install(Postgrest)
         defaultSerializer = KotlinXSerializer(Json { ignoreUnknownKeys = true })
+    }
+
+    suspend fun getSharedConversation(uuid: String): SharedConversationRow {
+        return withContext(Dispatchers.IO) {
+            supabase.from("aime_shared_conversations")
+                .select(columns = Columns.list("id", "title", "model", "messages")) {
+                    filter {
+                        eq("id", uuid)
+                    }
+                    single()
+                }
+                .decodeAs<SharedConversationRow>()
+        }
     }
 
     suspend fun uploadConversation(title: String, model: String, messages: List<ChatMessage>): String {
