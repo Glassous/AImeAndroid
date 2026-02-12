@@ -24,6 +24,8 @@ fun StreamingMarkdownRenderer(
             textSizeSp = textSizeSp,
             onLongClick = onLongClick,
             enableTables = !isStreaming,
+            enableCodeBlocks = !isStreaming,
+            enableLatex = !isStreaming,
             onHtmlPreview = onHtmlPreview,
             onHtmlPreviewSource = onHtmlPreviewSource,
             useCardStyleForHtmlCode = useCardStyleForHtmlCode

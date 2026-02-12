@@ -37,6 +37,8 @@ fun MarkdownRenderer(
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
     enableTables: Boolean = true,
+    enableCodeBlocks: Boolean = true,
+    enableLatex: Boolean = true,
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false
@@ -51,16 +53,24 @@ fun MarkdownRenderer(
 
     val context = LocalContext.current
     // 使用处理过的 displayMarkdown 进行解析
-    val blocks = remember(displayMarkdown) { parseMarkdownBlocks(displayMarkdown) }
+    val blocks = remember(displayMarkdown, enableCodeBlocks) { 
+        if (enableCodeBlocks) {
+            parseMarkdownBlocks(displayMarkdown) 
+        } else {
+            listOf(MarkdownBlock(BlockType.TEXT, displayMarkdown))
+        }
+    }
 
     // 创建不包含代码块处理的Markwon实例，用于渲染普通文本
-    val markwon = remember(context, enableTables, textSizeSp) {
+    val markwon = remember(context, enableTables, enableLatex, textSizeSp) {
         val scaledDensity = context.resources.displayMetrics.scaledDensity
         val textPx = textSizeSp * scaledDensity
 
         val builder = Markwon.builder(context)
             .usePlugin(MarkwonInlineParserPlugin.create())
-            .usePlugin(
+        
+        if (enableLatex) {
+            builder.usePlugin(
                 JLatexMathPlugin.create(
                     textPx,
                     textPx,
@@ -71,6 +81,8 @@ fun MarkdownRenderer(
                     }
                 )
             )
+        }
+
         if (enableTables) {
             builder.usePlugin(TablePlugin.create(context))
         }
@@ -104,8 +116,12 @@ fun MarkdownRenderer(
                                     onLongClick()
                                     true
                                 }
-                                val normalized = normalizeLaTeX(block.content)
-                                markwon.setMarkdown(tv, normalized)
+                                val textToRender = if (enableLatex) {
+                                    normalizeLaTeX(block.content)
+                                } else {
+                                    block.content
+                                }
+                                markwon.setMarkdown(tv, textToRender)
                             },
                             modifier = Modifier.wrapContentWidth()
                         )

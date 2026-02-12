@@ -281,12 +281,16 @@ fun ExpandableReplyBox(
                             .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
                     ) {
                         // 思考内容使用略淡的颜色渲染，字体稍小
+                        // 如果正在流式输出且还没有正式回复（说明正在输出思考内容），则禁用代码块和LaTeX渲染以防抖动
+                        val isPreTextStreaming = isStreaming && officialText == null
                         MarkdownRenderer(
                             markdown = preText,
                             textColor = textColor.copy(alpha = 0.7f),
                             textSizeSp = textSizeSp * 0.9f,
                             onLongClick = onLongClick,
                             modifier = Modifier.fillMaxWidth(),
+                            enableCodeBlocks = !isPreTextStreaming,
+                            enableLatex = !isPreTextStreaming,
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
                             useCardStyleForHtmlCode = useCardStyleForHtmlCode
