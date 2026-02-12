@@ -178,7 +178,12 @@ fun LongImagePreviewBottomSheet(
             ) {
                 // Cancel Button (Left)
                 Surface(
-                    onClick = onDismiss,
+                    onClick = {
+                        scope.launch {
+                            sheetState.hide()
+                            onDismiss()
+                        }
+                    },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                     modifier = Modifier.size(48.dp)
