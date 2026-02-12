@@ -823,11 +823,10 @@ fun ChatScreen(
             )
         }
 
-    // 获取 ClipboardManager
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-
     // 长图分享预览弹窗
     if (showLongImageDialog) {
+        var sharedUrl by remember { mutableStateOf<String?>(null) }
+        
         com.glassous.aime.ui.components.LongImagePreviewBottomSheet(
             messages = currentMessages,
             onDismiss = { showLongImageDialog = false },
@@ -835,6 +834,7 @@ fun ChatScreen(
             useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
             replyBubbleEnabled = replyBubbleEnabled,
             isSharing = isSharing,
+            sharedUrl = sharedUrl,
             onShareLink = {
                 val title = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
                 chatViewModel.shareConversation(
@@ -842,23 +842,7 @@ fun ChatScreen(
                     model = selectedModelDisplayName,
                     messages = currentMessages,
                     onSuccess = { url ->
-                        // Copy to clipboard using Compose ClipboardManager
-                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(url))
-
-                        scope.launch {
-                             snackbarHostState.showSnackbar("链接已复制并调起分享")
-                        }
-                        
-                        // Share via Intent
-                        val sendIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, url)
-                            type = "text/plain"
-                        }
-                        val shareIntent = Intent.createChooser(sendIntent, "分享链接")
-                        context.startActivity(shareIntent)
-                        
-                        showLongImageDialog = false
+                        sharedUrl = url
                     },
                     onError = { error ->
                         scope.launch {

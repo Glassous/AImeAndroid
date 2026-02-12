@@ -37,10 +37,16 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.FileProvider
 import com.glassous.aime.data.ChatMessage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
+
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,11 +57,32 @@ fun LongImagePreviewBottomSheet(
     useCardStyleForHtmlCode: Boolean = false,
     replyBubbleEnabled: Boolean = true,
     isSharing: Boolean = false,
+    sharedUrl: String? = null,
     onShareLink: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isGenerating by remember { mutableStateOf(false) }
+    
+    // Copy feedback state
+    var showSuccessFeedback by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
+    
+    // Auto-copy when URL is generated
+    LaunchedEffect(sharedUrl) {
+        if (sharedUrl != null) {
+            clipboardManager.setText(AnnotatedString(sharedUrl))
+            showSuccessFeedback = true
+        }
+    }
+    
+    // Timer to reset feedback state
+    LaunchedEffect(showSuccessFeedback) {
+        if (showSuccessFeedback) {
+            delay(3000)
+            showSuccessFeedback = false
+        }
+    }
     
     // We use a reference to the ComposeView that we will capture
     var captureView by remember { mutableStateOf<View?>(null) }
@@ -205,13 +232,30 @@ fun LongImagePreviewBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Copy Link Button
-                    Surface(
-                        onClick = onShareLink,
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.tertiary,
-                        modifier = Modifier.size(48.dp)
+                Surface(
+                    onClick = {
+                        if (sharedUrl != null) {
+                            clipboardManager.setText(AnnotatedString(sharedUrl))
+                            showSuccessFeedback = true
+                        } else {
+                            onShareLink()
+                        }
+                    },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier
+                        .height(48.dp)
+                        .animateContentSize()
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(horizontal = if (sharedUrl != null) 16.dp else 0.dp)
                     ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            contentAlignment = Alignment.Center, 
+                            modifier = Modifier.size(48.dp)
+                        ) {
                             if (isSharing) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(24.dp),
@@ -220,13 +264,23 @@ fun LongImagePreviewBottomSheet(
                                 )
                             } else {
                                 Icon(
-                                    imageVector = Icons.Default.Link,
+                                    imageVector = if (showSuccessFeedback) Icons.Default.Check else Icons.Default.Link,
                                     contentDescription = "复制链接",
                                     tint = MaterialTheme.colorScheme.onTertiary
                                 )
                             }
                         }
+                        
+                        if (sharedUrl != null && !isSharing) {
+                            Text(
+                                text = if (showSuccessFeedback) "链接已复制" else "重新复制",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onTertiary,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                        }
                     }
+                }
 
                     // Save Button
                     Surface(
