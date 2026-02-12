@@ -54,6 +54,68 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.toSize
 
+@Composable
+private fun EditTitleDialog(
+    initialTitle: String,
+    isGenerating: Boolean,
+    onConfirm: (String) -> Unit,
+    onCancel: () -> Unit,
+    onGenerateTitle: () -> Unit
+) {
+    // 使用传入的 initialTitle 更新内部状态
+    // 当外部的 currentEditingTitle 变化时（AI生成后），这里也需要更新
+    var editingTitle by remember(initialTitle) { mutableStateOf(initialTitle) }
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { Text(text = "重命名对话") },
+        text = {
+            OutlinedTextField(
+                value = editingTitle,
+                onValueChange = { editingTitle = it },
+                label = { Text("对话标题") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                readOnly = isGenerating,
+                trailingIcon = {
+                    IconButton(
+                        onClick = onGenerateTitle,
+                        enabled = !isGenerating
+                    ) {
+                        if (isGenerating) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.AutoFixHigh,
+                                contentDescription = "AI生成标题",
+                                tint = MaterialTheme.colorScheme.tertiary
+                            )
+                        }
+                    }
+                }
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(editingTitle) },
+                enabled = !isGenerating
+            ) {
+                Text("确定")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onCancel
+            ) {
+                Text("取消")
+            }
+        }
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NavigationDrawer(
@@ -95,9 +157,56 @@ fun NavigationDrawer(
     // 如果菜单操作触发编辑，我们需要一种方式通知 Item 进入编辑模式
     // 简单起见，我们引入 editingConversationId
     var editingConversationId by remember { mutableStateOf<Long?>(null) }
+    var isGeneratingTitle by remember { mutableStateOf(false) }
     
     // 删除确认弹窗状态
     var showDeleteConfirmId by remember { mutableStateOf<Long?>(null) }
+
+    // 编辑标题弹窗
+    if (editingConversationId != null) {
+        val conversation = conversations.find { it.id == editingConversationId }
+        if (conversation != null) {
+            // 注意：这里需要确保 key 变化时重置 Dialog 状态，或者 Dialog 内部正确处理
+            // EditTitleDialog 的 editingTitle 是 remember { mutableStateOf(initialTitle) }
+            // 所以如果 editingConversationId 改变，initialTitle 改变，
+            // 应该使用 key(editingConversationId) 来包裹 EditTitleDialog 或者在 Dialog 内部使用 LaunchedEffect 更新
+            // 为了简单，我们使用 key
+            key(editingConversationId) {
+                // 需要一个本地状态来持有当前编辑的标题，以便 AI 生成时更新它
+                // 但是 Dialog 内部已经有了 editingTitle 状态。
+                // 关键问题：onGenerateTitle 的回调需要更新 Dialog 内部的 editingTitle。
+                // 现在的 EditTitleDialog 实现中，editingTitle 是内部状态。
+                // 如果我们想从外部更新它（AI 生成），我们需要将状态提升。
+                
+                // 重新设计 EditTitleDialog 调用方式：
+                // 我们在这里管理 title 状态
+                var currentEditingTitle by remember { mutableStateOf(conversation.title) }
+                
+                EditTitleDialog(
+                    initialTitle = currentEditingTitle,
+                    isGenerating = isGeneratingTitle,
+                    onConfirm = { newTitle ->
+                        onEditConversationTitle(conversation.id, newTitle)
+                        editingConversationId = null
+                    },
+                    onCancel = {
+                        editingConversationId = null
+                        isGeneratingTitle = false
+                    },
+                    onGenerateTitle = {
+                        isGeneratingTitle = true
+                        onGenerateTitle(conversation.id, { generatedTitle ->
+                            if (generatedTitle.isNotEmpty()) {
+                                currentEditingTitle = generatedTitle
+                            }
+                        }, {
+                            isGeneratingTitle = false
+                        })
+                    }
+                )
+            }
+        }
+    }
 
     ModalDrawerSheet(
         modifier = modifier.width(360.dp),
@@ -375,7 +484,7 @@ fun androidx.compose.ui.unit.Dp.toPx(density: androidx.compose.ui.unit.Density):
 private fun ConversationItem(
     conversation: Conversation,
     isSelected: Boolean,
-    isEditingExternal: Boolean, // 外部控制的编辑状态
+    isEditingExternal: Boolean, // 外部控制的编辑状态 - 实际上不再使用，但为了兼容保留参数，或者我们可以移除它
     onSelect: () -> Unit,
     onLongClick: (Rect) -> Unit,
     onDelete: () -> Unit = {}, // 兼容旧接口，虽然现在通过菜单删除
@@ -385,16 +494,6 @@ private fun ConversationItem(
     onGenerateTitle: (Long, (String) -> Unit, () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var editingTitle by remember { mutableStateOf(conversation.title) }
-    var isGeneratingTitle by remember { mutableStateOf(false) }
-
-    // 同步外部编辑状态
-    LaunchedEffect(isEditingExternal) {
-        if (isEditingExternal) {
-            editingTitle = conversation.title
-        }
-    }
-
     // --- 顶层：对话内容卡片 ---
     // 修正：将点击和坐标捕获逻辑直接应用在 Card 的 modifier 上
     var itemBounds by remember { mutableStateOf<Rect?>(null) }
@@ -410,12 +509,10 @@ private fun ConversationItem(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = {
-                    if (!isEditingExternal) {
-                        onSelect()
-                    }
+                    onSelect()
                 },
                 onLongClick = {
-                    if (!isEditingExternal && itemBounds != null) {
+                    if (itemBounds != null) {
                         onLongClick(itemBounds!!)
                     }
                 }
@@ -438,101 +535,18 @@ private fun ConversationItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-                if (isEditingExternal) {
-                    OutlinedTextField(
-                        value = editingTitle,
-                        onValueChange = { editingTitle = it },
-                        modifier = Modifier.weight(1f),
-                        textStyle = MaterialTheme.typography.bodyMedium,
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = MaterialTheme.colorScheme.primary,
-                            unfocusedBorderColor = MaterialTheme.colorScheme.outline
-                        ),
-                        readOnly = isGeneratingTitle,
-                        trailingIcon = {
-                            // 魔法棒图标按钮 - 用于AI生成标题
-                            IconButton(
-                                onClick = {
-                                    isGeneratingTitle = true
-                                    onGenerateTitle(conversation.id, { generatedTitle ->
-                                        if (generatedTitle.isNotEmpty()) {
-                                            editingTitle = generatedTitle
-                                        }
-                                    }, {
-                                        isGeneratingTitle = false
-                                    })
-                                },
-                                enabled = !isGeneratingTitle,
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                if (isGeneratingTitle) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        strokeWidth = 2.dp,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                } else {
-                                    Icon(
-                                        imageVector = Icons.Default.Star,
-                                        contentDescription = "AI生成标题",
-                                        tint = MaterialTheme.colorScheme.tertiary,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-                            }
-                        }
-                    )
-
-                    // 编辑状态下的确认/取消按钮
-                    AnimatedVisibility(
-                        visible = !isGeneratingTitle,
-                        enter = fadeIn() + expandHorizontally(),
-                        exit = fadeOut() + shrinkHorizontally()
-                    ) {
-                        Row {
-                            IconButton(
-                                onClick = {
-                                    onEditTitle(conversation.id, editingTitle)
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "确认",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    onCancelEdit()
-                                },
-                                modifier = Modifier.size(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Close,
-                                    contentDescription = "取消",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
+            Text(
+                text = conversation.title,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (isSelected) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
                 } else {
-                    Text(
-                        text = conversation.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurface
-                        },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
+}
