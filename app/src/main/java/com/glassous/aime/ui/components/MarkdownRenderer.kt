@@ -16,6 +16,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 import java.util.regex.Pattern
 
@@ -26,7 +27,7 @@ data class MarkdownBlock(
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK
+    TEXT, CODE_BLOCK, MERMAID
 }
 
 @Composable
@@ -68,6 +69,7 @@ fun MarkdownRenderer(
 
         val builder = Markwon.builder(context)
             .usePlugin(MarkwonInlineParserPlugin.create())
+            .usePlugin(HtmlPlugin.create())
         
         if (enableLatex) {
             builder.usePlugin(
@@ -116,16 +118,18 @@ fun MarkdownRenderer(
                                     onLongClick()
                                     true
                                 }
-                                val textToRender = if (enableLatex) {
-                                    normalizeLaTeX(block.content)
-                                } else {
-                                    block.content
-                                }
+                                val textToRender = preprocessText(block.content, enableLatex)
                                 markwon.setMarkdown(tv, textToRender)
                             },
                             modifier = Modifier.wrapContentWidth()
                         )
                     }
+                }
+                BlockType.MERMAID -> {
+                    MermaidWebView(
+                        mermaidCode = block.content,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
                 }
                 BlockType.CODE_BLOCK -> {
                     CodeBlockWithCopy(
@@ -172,7 +176,12 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
         // 添加代码块
         val language = matcher.group(1)
         val code = matcher.group(2) ?: ""
-        blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
+        
+        if (language.equals("mermaid", ignoreCase = true)) {
+            blocks.add(MarkdownBlock(BlockType.MERMAID, code, language))
+        } else {
+            blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
+        }
 
         lastEnd = matcher.end()
     }
@@ -193,11 +202,14 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     return blocks
 }
 
-private fun normalizeLaTeX(input: String): String {
+private fun preprocessText(input: String, enableLatex: Boolean): String {
     val sb = StringBuilder()
     var i = 0
     var inInlineCode = false
     var inMath = false
+    var inSup = false
+    var inSub = false
+    
     while (i < input.length) {
         val c = input[i]
         val prev = if (i > 0) input[i - 1] else '\u0000'
@@ -211,13 +223,50 @@ private fun normalizeLaTeX(input: String): String {
         }
 
         if (!inInlineCode) {
-            // Handle LaTeX delimiters \[ \] \( \)
-            if (c == '\\' && i + 1 < input.length) {
-                val next = input[i + 1]
-                if (next == '[' || next == ']' || next == '(' || next == ')') {
-                    // Check if we are toggling math mode?
-                    // Usually \[ starts and \] ends.
-                    // But here we just convert all to $$ which acts as a toggle.
+            if (enableLatex) {
+                // Handle LaTeX delimiters \[ \] \( \)
+                if (c == '\\' && i + 1 < input.length) {
+                    val next = input[i + 1]
+                    if (next == '[' || next == ']' || next == '(' || next == ')') {
+                        if (!inMath) {
+                            sb.append("$$")
+                            inMath = true
+                        } else {
+                            sb.append("$$")
+                            inMath = false
+                        }
+                        i += 2
+                        continue
+                    }
+                }
+
+                // Handle single dollar $
+                if (c == '$' && prev != '\\') {
+                    val next = if (i + 1 < input.length) input[i + 1] else '\u0000'
+                    val prevChar = prev
+                    // Avoid matching $$ (already handled by Markwon or previous iteration)
+                    if (next == '$' || prevChar == '$') {
+                        // Let Markwon handle $$ (or it's the second $ of $$ we just processed)
+                        // If we see $$ here, we just append it and update state if needed?
+                        // Actually, Markwon expects $$ for display math.
+                        // We should probably track $$ toggle too.
+                        // The original code was a bit loose.
+                        // Let's assume $$ toggles math.
+                        if (next == '$') {
+                            // Found $$, skip next
+                            sb.append("$$")
+                            inMath = !inMath
+                            i += 2
+                            continue
+                        } else if (prevChar == '$') {
+                            // Should have been handled by previous iteration
+                            sb.append(c)
+                            i++
+                            continue
+                        }
+                    }
+                    
+                    // Convert single $ to $$
                     if (!inMath) {
                         sb.append("$$")
                         inMath = true
@@ -225,35 +274,35 @@ private fun normalizeLaTeX(input: String): String {
                         sb.append("$$")
                         inMath = false
                     }
-                    i += 2
+                    i++
                     continue
                 }
             }
 
-            // Handle single dollar $
-            if (c == '$' && prev != '\\') {
-                val next = if (i + 1 < input.length) input[i + 1] else '\u0000'
-                val prevChar = prev
-                // Avoid matching $$ (already handled by Markwon or previous iteration)
-                // But wait, if input has $$, loop sees first $. next is $.
-                // Logic below: if next is $ or prev is $, append c ($).
-                // So $$ is preserved as $$.
-                if (next == '$' || prevChar == '$') {
-                    sb.append(c)
-                    i++
-                    continue
-                }
-                
-                // Convert single $ to $$
-                if (!inMath) {
-                    sb.append("$$")
-                    inMath = true
-                } else {
-                    sb.append("$$")
-                    inMath = false
-                }
-                i++
-                continue
+            // Sup/Sub handling (only if not in math)
+            if (!inMath) {
+                 if (c == '^' && prev != '\\') {
+                     if (inSup) {
+                         sb.append("</sup>")
+                         inSup = false
+                     } else {
+                         sb.append("<sup>")
+                         inSup = true
+                     }
+                     i++
+                     continue
+                 }
+                 if (c == '~' && prev != '\\') {
+                     if (inSub) {
+                         sb.append("</sub>")
+                         inSub = false
+                     } else {
+                         sb.append("<sub>")
+                         inSub = true
+                     }
+                     i++
+                     continue
+                 }
             }
         }
         
