@@ -34,9 +34,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.Orientation
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalDensity
@@ -45,14 +42,19 @@ import androidx.core.content.FileProvider
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.math.roundToInt
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalViewConfiguration
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import kotlin.math.abs
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.toSize
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun NavigationDrawer(
     conversations: List<Conversation>,
@@ -82,326 +84,361 @@ fun NavigationDrawer(
         previousConversationCount = conversations.size
     }
 
+    // 菜单状态管理
+    var activeMenuConversationId by remember { mutableStateOf<Long?>(null) }
+    var activeMenuBounds by remember { mutableStateOf<Rect?>(null) }
+    var drawerBounds by remember { mutableStateOf<Rect?>(null) }
+    var menuHeightPx by remember { mutableIntStateOf(0) }
+    
+    // 编辑状态管理（提升至 Drawer 层级，或通过 key 强制重组 Item）
+    // 这里我们保持 Item 内部处理编辑状态，但在打开菜单时会重置其他状态
+    // 如果菜单操作触发编辑，我们需要一种方式通知 Item 进入编辑模式
+    // 简单起见，我们引入 editingConversationId
+    var editingConversationId by remember { mutableStateOf<Long?>(null) }
+    
+    // 删除确认弹窗状态
+    var showDeleteConfirmId by remember { mutableStateOf<Long?>(null) }
+
     ModalDrawerSheet(
-        modifier = modifier.width(320.dp),
+        modifier = modifier.width(360.dp),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
         drawerContentColor = MaterialTheme.colorScheme.onSurface,
         // 将 ModalDrawerSheet 的 windowInsets 设为 0，我们自己在内部控制 Padding，
         // 这样可以确保背景色延伸到底部，而内容通过 Padding 避开小白条
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                // 顶部保留 16dp，移除底部 padding
-                // 注意：start/end 需要适配系统手势区域，但这里侧边栏已经有宽度限制，通常保留 16dp 即可
-                .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp)
+                .onGloballyPositioned { drawerBounds = it.boundsInWindow() }
         ) {
-
-            // Header with AIme text and buttons in one row
-            Row(
+            // 1. 主要内容区域（列表）
+            // 当菜单激活时，应用模糊效果
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    // 如果顶部有状态栏遮挡，也可以在这里加 WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
-                    .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    // 顶部保留 16dp，移除底部 padding
+                    // 注意：start/end 需要适配系统手势区域，但这里侧边栏已经有宽度限制，通常保留 16dp 即可
+                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 0.dp)
+                    .then(
+                        if (activeMenuConversationId != null) Modifier.blur(10.dp) else Modifier
+                    )
             ) {
-                Text(
-                    text = "AIme",
-                    style = MaterialTheme.typography.headlineLarge.copy(
-                        fontFamily = FontFamily.Cursive
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
 
-                // Buttons section: 设置 -> 新建
+                // Header with AIme text and buttons in one row
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        // 如果顶部有状态栏遮挡，也可以在这里加 WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+                        .padding(top = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // 1. 设置按钮
-                    IconButton(
-                        onClick = onNavigateToSettings,
-                        modifier = Modifier.size(40.dp), // 1:1 square
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "设置",
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    Text(
+                        text = "AIme",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontFamily = FontFamily.Cursive
+                        ),
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = 16.dp)
+                    )
 
-                    // 2. 新建对话按钮
-                    IconButton(
-                        onClick = onNewConversation,
-                        modifier = Modifier.size(40.dp), // 1:1 square
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    // Buttons section: 设置 -> 新建
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "新建对话",
-                            modifier = Modifier.size(20.dp)
+                        // 1. 设置按钮
+                        IconButton(
+                            onClick = onNavigateToSettings,
+                            modifier = Modifier.size(40.dp), // 1:1 square
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Settings,
+                                contentDescription = "设置",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // 2. 新建对话按钮
+                        IconButton(
+                            onClick = onNewConversation,
+                            modifier = Modifier.size(40.dp), // 1:1 square
+                            colors = IconButtonDefaults.iconButtonColors(
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = "新建对话",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+
+                // moved declarations above
+                val context = LocalContext.current
+
+                // 获取导航栏高度
+                val bottomPadding = windowInsets.asPaddingValues().calculateBottomPadding()
+
+                // Conversations List
+                if (conversations.isNotEmpty()) {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        state = listState, // [优化] 绑定 ListState
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        // 关键修改：底部 Padding = 基础间距(16.dp) + 导航栏高度(bottomPadding)
+                        // 这样列表可以滚上去，避免被小白条遮挡
+                        contentPadding = PaddingValues(bottom = 16.dp + bottomPadding)
+                    ) {
+                        items(conversations, key = { it.id }) { conversation ->
+                            ConversationItem(
+                                conversation = conversation,
+                                isSelected = conversation.id == currentConversationId,
+                                isEditingExternal = editingConversationId == conversation.id,
+                                onSelect = { onConversationSelect(conversation.id) },
+                                onLongClick = { bounds ->
+                                    activeMenuConversationId = conversation.id
+                                    activeMenuBounds = bounds
+                                    // 震动反馈?
+                                },
+                                onEditTitle = { conversationId, newTitle ->
+                                    onEditConversationTitle(conversationId, newTitle)
+                                    editingConversationId = null
+                                },
+                                onCancelEdit = {
+                                    editingConversationId = null
+                                },
+                                onGenerateLongImage = onGenerateLongImage,
+                                onGenerateTitle = onGenerateTitle
+                            )
+                        }
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "暂无对话记录",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
 
-            // moved declarations above
-            val context = LocalContext.current
+            // 2. 菜单遮罩层与浮动内容
+            // 当有激活菜单时显示
+            androidx.compose.animation.AnimatedVisibility(
+                visible = activeMenuConversationId != null && activeMenuBounds != null && drawerBounds != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                // 计算相对位置
+                val activeConv = conversations.find { it.id == activeMenuConversationId }
+                
+                if (activeConv != null && activeMenuBounds != null && drawerBounds != null) {
+                    val bounds = activeMenuBounds!!
+                    val drawer = drawerBounds!!
+                    
+                    val relativeLeft = bounds.left - drawer.left
+                    val relativeTop = bounds.top - drawer.top
+                    
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // 半透明背景遮罩（点击关闭）
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.1f)) // 配合底层模糊，轻微变暗即可
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) {
+                                    activeMenuConversationId = null
+                                }
+                        )
 
-            // 获取导航栏高度
-            val bottomPadding = windowInsets.asPaddingValues().calculateBottomPadding()
+                        // 浮起的卡片（副本）- 显示在原位
+                        // 使用 offset 定位
+                        Box(
+                            modifier = Modifier
+                                .offset { IntOffset(relativeLeft.roundToInt(), relativeTop.roundToInt()) }
+                                .width(with(LocalDensity.current) { bounds.width.toDp() })
+                                .height(with(LocalDensity.current) { bounds.height.toDp() })
+                        ) {
+                            ConversationItem(
+                                conversation = activeConv,
+                                isSelected = activeConv.id == currentConversationId,
+                                isEditingExternal = false, // 预览状态不处于编辑模式
+                                onSelect = {}, // 禁用点击
+                                onLongClick = { _ -> },
+                                onDelete = {},
+                                onEditTitle = { _, _ -> },
+                                onCancelEdit = {},
+                                onGenerateLongImage = {},
+                                onGenerateTitle = { _, _, _ -> }
+                            )
+                        }
 
-            // Conversations List
-            if (conversations.isNotEmpty()) {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    state = listState, // [优化] 绑定 ListState
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    // 关键修改：底部 Padding = 基础间距(16.dp) + 导航栏高度(bottomPadding)
-                    // 这样列表可以滚上去，避免被小白条遮挡
-                    contentPadding = PaddingValues(bottom = 16.dp + bottomPadding)
-                ) {
-                    items(conversations, key = { it.id }) { conversation ->
-                        ConversationItem(
-                            conversation = conversation,
-                            isSelected = conversation.id == currentConversationId,
-                            onSelect = { onConversationSelect(conversation.id) },
-                            onDelete = { onDeleteConversation(conversation.id) },
-                            onEditTitle = { conversationId, newTitle ->
-                                onEditConversationTitle(conversationId, newTitle)
+                        // 菜单卡片
+                        // 动态计算位置：如果卡片下方空间足够，显示在下方；否则显示在上方
+                        // 需要知道菜单高度 -> onSizeChanged
+                        val density = LocalDensity.current
+                        val spaceBelow = drawer.height - (relativeTop + bounds.height)
+                        val spaceAbove = relativeTop
+                        
+                        // 默认显示在下方，除非下方空间不足且上方空间充足
+                        // 假设菜单高度约为 160dp (3 items * 48dp + padding)
+                        // 实际上我们会动态测量，但初始渲染需要一个位置
+                        val showBelow = spaceBelow > menuHeightPx || spaceBelow > spaceAbove
+                        
+                        val menuOffset = if (showBelow) {
+                            IntOffset(
+                                x = relativeLeft.roundToInt(),
+                                y = (relativeTop + bounds.height + 8.dp.toPx(density)).roundToInt()
+                            )
+                        } else {
+                            IntOffset(
+                                x = relativeLeft.roundToInt(),
+                                y = (relativeTop - menuHeightPx - 8.dp.toPx(density)).roundToInt()
+                            )
+                        }
+
+                        SidebarMenu(
+                            modifier = Modifier
+                                .offset { menuOffset }
+                                .width(with(LocalDensity.current) { bounds.width.toDp() })
+                                .onSizeChanged { menuHeightPx = it.height },
+                            onEdit = {
+                                activeMenuConversationId = null
+                                editingConversationId = activeConv.id
                             },
-                            onGenerateLongImage = onGenerateLongImage,
-                            onGenerateTitle = onGenerateTitle
+                            onDelete = {
+                                activeMenuConversationId = null
+                                showDeleteConfirmId = activeConv.id
+                            },
+                            onShare = {
+                                activeMenuConversationId = null
+                                onGenerateLongImage(activeConv.id)
+                            }
                         )
                     }
-                }
-            } else {
-                Box(
-                    modifier = Modifier.weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "暂无对话记录",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
             }
         }
     }
+
+    // 删除确认弹窗
+    if (showDeleteConfirmId != null) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirmId = null },
+            title = { Text("确认删除对话") },
+            text = { Text("删除后不可恢复，确定要删除该对话吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val id = showDeleteConfirmId
+                        showDeleteConfirmId = null
+                        if (id != null) {
+                            onDeleteConversation(id)
+                        }
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteConfirmId = null }
+                ) {
+                    Text("取消")
+                }
+            }
+        )
+    }
 }
 
-// ... existing code ...
-@OptIn(ExperimentalMaterial3Api::class)
+// 辅助扩展函数：将 dp 转 px
+@Composable
+fun androidx.compose.ui.unit.Dp.toPx(density: androidx.compose.ui.unit.Density): Float {
+    return with(density) { this@toPx.toPx() }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun ConversationItem(
     conversation: Conversation,
     isSelected: Boolean,
+    isEditingExternal: Boolean, // 外部控制的编辑状态
     onSelect: () -> Unit,
-    onDelete: () -> Unit,
+    onLongClick: (Rect) -> Unit,
+    onDelete: () -> Unit = {}, // 兼容旧接口，虽然现在通过菜单删除
     onEditTitle: (Long, String) -> Unit,
+    onCancelEdit: () -> Unit,
     onGenerateLongImage: (Long) -> Unit,
     onGenerateTitle: (Long, (String) -> Unit, () -> Unit) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isEditing by remember { mutableStateOf(false) }
     var editingTitle by remember { mutableStateOf(conversation.title) }
     var isGeneratingTitle by remember { mutableStateOf(false) }
 
-    // 弹窗状态
-    var showDeleteConfirm by remember { mutableStateOf(false) }
+    // 同步外部编辑状态
+    LaunchedEffect(isEditingExternal) {
+        if (isEditingExternal) {
+            editingTitle = conversation.title
+        }
+    }
 
-    val context = LocalContext.current
+    // --- 顶层：对话内容卡片 ---
+    // 修正：将点击和坐标捕获逻辑直接应用在 Card 的 modifier 上
+    var itemBounds by remember { mutableStateOf<Rect?>(null) }
+    val interactionSource = remember { MutableInteractionSource() }
 
-    // 滑动相关状态
-    val density = LocalDensity.current
-    val viewConfiguration = LocalViewConfiguration.current
-    val actionWidth = 150.dp // 三个按钮的总宽度
-    val actionWidthPx = with(density) { actionWidth.toPx() }
-    val offsetX = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-
-    Box(
+    Card(
         modifier = modifier
             .fillMaxWidth()
-            .height(IntrinsicSize.Min) // 确保高度一致
-    ) {
-        // --- 底层：操作按钮区域 ---
-        Row(
-            modifier = Modifier
-                .align(Alignment.CenterStart) // 左侧对齐
-                .width(actionWidth)
-                .fillMaxHeight()
-                .background(MaterialTheme.colorScheme.surfaceContainerHighest, RoundedCornerShape(12.dp))
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 编辑按钮
-            IconButton(
-                onClick = {
-                    scope.launch { offsetX.animateTo(0f) }
-                    isEditing = true
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "重命名",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
+            .onGloballyPositioned { coordinates ->
+                itemBounds = coordinates.boundsInWindow()
             }
-
-            // 删除按钮
-            IconButton(
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = null,
                 onClick = {
-                    scope.launch { offsetX.animateTo(0f) }
-                    showDeleteConfirm = true
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "删除",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            
-            // 分享按钮（放到最右边）
-            IconButton(
-                onClick = {
-                    scope.launch { offsetX.animateTo(0f) }
-                    onGenerateLongImage(conversation.id)
-                }
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Share,
-                    contentDescription = "分享",
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-        }
-
-        // --- 顶层：对话内容卡片 ---
-        Card(
-            onClick = {
-                // 如果处于滑动打开状态(向右偏移)，点击则关闭；否则执行选中
-                if (offsetX.value > 10f) {
-                    scope.launch { offsetX.animateTo(0f) }
-                } else if (!isEditing) {
-                    onSelect()
-                }
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .offset { IntOffset(offsetX.value.roundToInt(), 0) }
-                // 使用 pointerInput 替代 draggable 以实现自定义的手势拦截逻辑
-                .pointerInput(isEditing) {
-                    if (isEditing) return@pointerInput // 编辑时禁用滑动
-
-                    awaitEachGesture {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        var drag: androidx.compose.ui.input.pointer.PointerInputChange? = null
-                        var overSlop = 0f
-
-                        // 1. 手动检测 TouchSlop，并在此时判断手势方向
-                        var totalDx = 0f
-                        val touchSlop = viewConfiguration.touchSlop
-
-                        do {
-                            val event = awaitPointerEvent()
-                            // 查找当前触摸点的变化
-                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-
-                            // 修复：替换 change.changedToUp()，兼容不同 Compose 版本
-                            if (!change.pressed) {
-                                // 手指抬起，手势结束
-                                break
-                            }
-
-                            val dx = change.positionChange().x
-                            totalDx += dx
-
-                            // 累积滑动距离超过阈值，判定为拖拽
-                            if (abs(totalDx) > touchSlop) {
-                                // 关键逻辑：如果当前处于关闭状态 (offsetX <= 0) 且向左滑动 (totalDx < 0)
-                                // 则判定为关闭侧边栏手势，不消耗该事件，让父组件（Drawer）处理。
-                                if (offsetX.value <= 0.5f && totalDx < 0) {
-                                    return@awaitEachGesture
-                                }
-
-                                // 否则判定为打开按钮手势，消耗事件并开始拖拽
-                                change.consume()
-                                drag = change
-                                overSlop = totalDx
-                                break
-                            }
-                        } while (true)
-
-                        // 2. 如果判定为有效的列表项拖拽，开始处理后续移动
-                        if (drag != null) {
-                            // 应用初始的过量滑动
-                            scope.launch {
-                                val newOffset = (offsetX.value + overSlop).coerceIn(0f, actionWidthPx)
-                                offsetX.snapTo(newOffset)
-                            }
-
-                            // 继续监听后续的拖拽事件
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-
-                                // 修复：替换 change.changedToUp()
-                                if (!change.pressed) break
-
-                                val delta = change.positionChange().x
-                                if (delta != 0f) {
-                                    change.consume()
-                                    scope.launch {
-                                        val newOffset = (offsetX.value + delta).coerceIn(0f, actionWidthPx)
-                                        offsetX.snapTo(newOffset)
-                                    }
-                                }
-                            }
-
-                            // 3. 手势结束，根据位置吸附
-                            val target = if (offsetX.value > actionWidthPx / 2) actionWidthPx else 0f
-                            scope.launch {
-                                offsetX.animateTo(
-                                    targetValue = target,
-                                    animationSpec = tween(durationMillis = 300)
-                                )
-                            }
-                        }
+                    if (!isEditingExternal) {
+                        onSelect()
                     }
                 },
-            colors = CardDefaults.cardColors(
-                containerColor = if (isSelected) {
-                    MaterialTheme.colorScheme.primaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surface
+                onLongClick = {
+                    if (!isEditingExternal && itemBounds != null) {
+                        onLongClick(itemBounds!!)
+                    }
                 }
             ),
-            shape = RoundedCornerShape(12.dp),
-            elevation = CardDefaults.cardElevation(
-                defaultElevation = if (isSelected) 2.dp else 0.dp
-            )
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) 2.dp else 0.dp
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp), // 增加内边距，移除原来右侧的箭头空间
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (isEditing) {
+                if (isEditingExternal) {
                     OutlinedTextField(
                         value = editingTitle,
                         onValueChange = { editingTitle = it },
@@ -457,7 +494,6 @@ private fun ConversationItem(
                             IconButton(
                                 onClick = {
                                     onEditTitle(conversation.id, editingTitle)
-                                    isEditing = false
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
@@ -470,8 +506,7 @@ private fun ConversationItem(
                             }
                             IconButton(
                                 onClick = {
-                                    editingTitle = conversation.title
-                                    isEditing = false
+                                    onCancelEdit()
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
@@ -501,30 +536,3 @@ private fun ConversationItem(
             }
         }
     }
-
-    // 删除确认弹窗
-    if (showDeleteConfirm) {
-        AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
-            title = { Text("确认删除对话") },
-            text = { Text("删除后不可恢复，确定要删除该对话吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        onDelete()
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDeleteConfirm = false }
-                ) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-}
