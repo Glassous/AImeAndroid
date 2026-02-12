@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
-    kotlin("plugin.serialization") version "1.9.10"
+    alias(libs.plugins.kotlin.serialization)
 }
 
 import java.util.Properties
@@ -35,6 +35,15 @@ android {
         
         val defaultModelsUrl = envProps.getProperty("DEFAULT_MODELS_URL", "")
         buildConfigField("String", "DEFAULT_MODELS_URL", "\"$defaultModelsUrl\"")
+
+        val supabaseUrl = envProps.getProperty("SUPABASE_URL", "")
+        buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+
+        val supabaseKey = envProps.getProperty("SUPABASE_KEY", "")
+        buildConfigField("String", "SUPABASE_KEY", "\"$supabaseKey\"")
+
+        val shareBaseUrl = envProps.getProperty("SHARE_BASE_URL", "")
+        buildConfigField("String", "SHARE_BASE_URL", "\"$shareBaseUrl\"")
     }
 
     buildTypes {
@@ -106,8 +115,12 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     
     // Kotlinx Serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
+    implementation(libs.kotlinx.serialization.json)
     
+    // Supabase
+    implementation(libs.supabase.postgrest)
+    implementation(libs.ktor.client.okhttp)
+
     // SplashScreen
     implementation("androidx.core:core-splashscreen:1.0.1")
 

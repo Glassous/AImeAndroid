@@ -19,6 +19,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -48,7 +49,9 @@ fun LongImagePreviewBottomSheet(
     onDismiss: () -> Unit,
     chatFontSize: Float = 16f,
     useCardStyleForHtmlCode: Boolean = false,
-    replyBubbleEnabled: Boolean = true
+    replyBubbleEnabled: Boolean = true,
+    isSharing: Boolean = false,
+    onShareLink: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -201,6 +204,30 @@ fun LongImagePreviewBottomSheet(
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    // Copy Link Button
+                    Surface(
+                        onClick = onShareLink,
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            if (isSharing) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onTertiary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Link,
+                                    contentDescription = "复制链接",
+                                    tint = MaterialTheme.colorScheme.onTertiary
+                                )
+                            }
+                        }
+                    }
+
                     // Save Button
                     Surface(
                         onClick = {

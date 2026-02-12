@@ -48,6 +48,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             initialValue = emptyList()
         )
 
+    private val _isSharing = MutableStateFlow(false)
+    val isSharing: StateFlow<Boolean> = _isSharing.asStateFlow()
+
+    fun shareConversation(
+        title: String,
+        model: String,
+        messages: List<ChatMessage>,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        if (_isSharing.value) return
+        
+        viewModelScope.launch {
+            _isSharing.value = true
+            try {
+                val url = com.glassous.aime.data.repository.SupabaseShareRepository.uploadConversation(title, model, messages)
+                onSuccess(url)
+            } catch (e: Exception) {
+                onError(e.message ?: "分享失败")
+            } finally {
+                _isSharing.value = false
+            }
+        }
+    }
+
     fun updateInputText(text: String) {
         _inputText.value = text
     }

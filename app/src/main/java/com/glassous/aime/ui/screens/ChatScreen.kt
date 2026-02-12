@@ -125,6 +125,8 @@ fun ChatScreen(
     val chatFullscreen by themeViewModel.chatFullscreen.collectAsState()
     // 读取全局极简模式全屏设置
     val minimalModeFullscreen by themeViewModel.minimalModeFullscreen.collectAsState()
+    
+    val isSharing by chatViewModel.isSharing.collectAsState()
 
     // 获取当前Activity和View用于全屏控制
     val view = LocalView.current
@@ -821,6 +823,9 @@ fun ChatScreen(
             )
         }
 
+    // 获取 ClipboardManager
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+
     // 长图分享预览弹窗
     if (showLongImageDialog) {
         com.glassous.aime.ui.components.LongImagePreviewBottomSheet(
@@ -828,7 +833,40 @@ fun ChatScreen(
             onDismiss = { showLongImageDialog = false },
             chatFontSize = chatFontSize,
             useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
-            replyBubbleEnabled = replyBubbleEnabled
+            replyBubbleEnabled = replyBubbleEnabled,
+            isSharing = isSharing,
+            onShareLink = {
+                val title = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
+                chatViewModel.shareConversation(
+                    title = title,
+                    model = selectedModelDisplayName,
+                    messages = currentMessages,
+                    onSuccess = { url ->
+                        // Copy to clipboard using Compose ClipboardManager
+                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(url))
+
+                        scope.launch {
+                             snackbarHostState.showSnackbar("链接已复制并调起分享")
+                        }
+                        
+                        // Share via Intent
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, url)
+                            type = "text/plain"
+                        }
+                        val shareIntent = Intent.createChooser(sendIntent, "分享链接")
+                        context.startActivity(shareIntent)
+                        
+                        showLongImageDialog = false
+                    },
+                    onError = { error ->
+                        scope.launch {
+                            snackbarHostState.showSnackbar(error)
+                        }
+                    }
+                )
+            }
         )
     }
 
