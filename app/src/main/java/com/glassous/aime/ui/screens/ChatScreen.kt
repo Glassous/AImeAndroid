@@ -482,7 +482,7 @@ fun ChatScreen(
                         hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
                         hideInputPlaceholder = minimalModeConfig.hideInputPlaceholder,
                         // 内嵌按钮配置
-                        showScrollToBottomButton = !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
+                        showScrollToBottomButton = currentMessages.isNotEmpty() && !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
                         onScrollToBottomClick = {
                             scope.launch {
                                 if (currentMessages.isNotEmpty()) {
