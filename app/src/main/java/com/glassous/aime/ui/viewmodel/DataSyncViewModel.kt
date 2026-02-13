@@ -302,7 +302,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     chatDao.insertMessage(chatMsg)
                 }
 
-                onResult(true, "导入成功")
+                onResult(true, "导入成功\n${data.title}")
             } catch (e: Exception) {
                 e.printStackTrace()
                 onResult(false, "导入失败: ${e.message}")
