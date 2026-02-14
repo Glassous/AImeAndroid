@@ -109,3 +109,9 @@
 # Keep Okio
 -keep class okio.** { *; }
 -dontwarn okio.**
+
+# Markwon & CommonMark
+-keep class io.noties.markwon.** { *; }
+-keep class org.commonmark.** { *; }
+-dontwarn io.noties.markwon.**
+-dontwarn org.commonmark.**
