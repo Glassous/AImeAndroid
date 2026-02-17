@@ -209,7 +209,7 @@ fun NavigationDrawer(
     }
 
     ModalDrawerSheet(
-        modifier = modifier.width(360.dp),
+        modifier = modifier.width(360.dp).fillMaxHeight(),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
         drawerContentColor = MaterialTheme.colorScheme.onSurface,
         // 将 ModalDrawerSheet 的 windowInsets 设为 0，我们自己在内部控制 Padding，
@@ -219,7 +219,12 @@ fun NavigationDrawer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onGloballyPositioned { drawerBounds = it.boundsInWindow() }
+                .onGloballyPositioned { coordinates ->
+                    val newBounds = coordinates.boundsInWindow()
+                    if (drawerBounds != newBounds) {
+                        drawerBounds = newBounds
+                    }
+                }
         ) {
             // 1. 主要内容区域（列表）
             // 当菜单激活时，应用模糊效果
