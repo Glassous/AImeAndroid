@@ -1,6 +1,8 @@
 package com.glassous.aime.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -17,6 +19,7 @@ import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
  
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -67,7 +70,7 @@ import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.data.AutoToolSelector
 import com.glassous.aime.data.model.ModelGroup
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(
     onNavigateToMessageDetail: (Long) -> Unit,
@@ -85,6 +88,7 @@ fun ChatScreen(
     val inputText by chatViewModel.inputText.collectAsState()
     val isLoading by chatViewModel.isLoading.collectAsState()
     val currentConversationId by chatViewModel.currentConversationId.collectAsState()
+    val isImporting by chatViewModel.isImporting.collectAsState()
 
     val modelSelectionUiState by modelSelectionViewModel.uiState.collectAsState()
     val selectedModel by modelSelectionViewModel.selectedModel.collectAsState()
@@ -279,7 +283,7 @@ fun ChatScreen(
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
         Box(modifier = Modifier.fillMaxSize()) {
             ModalNavigationDrawer(
-            drawerState = drawerState,
+                drawerState = drawerState,
             drawerContent = {
                 NavigationDrawer(
                     conversations = conversations,
@@ -468,13 +472,24 @@ fun ChatScreen(
                         inputText = inputText,
                         onInputChange = chatViewModel::updateInputText,
                         onSendMessage = {
-                            chatViewModel.sendMessage(
-                                inputText.trim(),
-                                selectedTool,
-                                isAutoMode = isAutoSelected
-                            )
-                            // 清空输入框
-                            chatViewModel.updateInputText("")
+                            val trimmedInput = inputText.trim()
+                            // 检查是否为分享链接
+                            if (chatViewModel.isSharedConversationUrl(trimmedInput)) {
+                                chatViewModel.importSharedConversation(trimmedInput) { success, message ->
+                                    scope.launch {
+                                        snackbarHostState.showSnackbar(message)
+                                    }
+                                }
+                                chatViewModel.updateInputText("")
+                            } else {
+                                chatViewModel.sendMessage(
+                                    trimmedInput,
+                                    selectedTool,
+                                    isAutoMode = isAutoSelected
+                                )
+                                // 清空输入框
+                                chatViewModel.updateInputText("")
+                            }
                         },
                         isLoading = isLoading,
                         minimalMode = minimalMode,
@@ -499,7 +514,9 @@ fun ChatScreen(
                     )
                 }
             ) { paddingValues ->
-                if (currentMessages.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    if (!isImporting) {
+                        if (currentMessages.isEmpty()) {
                     // 空态：问候语
                     val greeting = remember {
                         val hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
@@ -705,7 +722,7 @@ fun ChatScreen(
                             }
                         }
                     }
-                } else {
+                        } else {
                     // 消息列表
                     LazyColumn(
                         state = listState,
@@ -775,9 +792,37 @@ fun ChatScreen(
                             Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
                         }
                     }
+                        }
+                    }
+
+                // 导入时的加载动画
+                if (isImporting) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.5f))
+                            .clickable(enabled = false) {}, // 拦截点击
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                        ) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(48.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "正在导入对话...",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
 
         // 模型选择Bottom Sheet
         if (modelSelectionUiState.showBottomSheet) {

@@ -7,22 +7,29 @@ import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.Conversation
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
+import com.glassous.aime.data.repository.SupabaseShareRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+import com.glassous.aime.BuildConfig
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ChatViewModel(application: Application) : AndroidViewModel(application) {
     
     private val repository = (application as AIMeApplication).repository
+    private val chatDao = (application as AIMeApplication).database.chatDao()
     
     private val _currentConversationId = MutableStateFlow<Long?>(null)
     val currentConversationId: StateFlow<Long?> = _currentConversationId.asStateFlow()
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
     
     private val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
@@ -270,6 +277,75 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 onTitleGenerated("新对话")
             } finally {
                 onComplete?.invoke()
+            }
+        }
+    }
+
+    fun isSharedConversationUrl(input: String): Boolean {
+        // 简单判断是否包含 BuildConfig.SHARE_BASE_URL 且包含 UUID
+        // UUID regex: 8-4-4-4-12 hex digits
+        val uuidRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}".toRegex(RegexOption.IGNORE_CASE)
+        val baseUrl = BuildConfig.SHARE_BASE_URL.trimEnd('/')
+        return input.contains(baseUrl, ignoreCase = true) && uuidRegex.containsMatchIn(input)
+    }
+
+    fun importSharedConversation(input: String, onResult: (Boolean, String) -> Unit) {
+        if (_isLoading.value || _isImporting.value) return
+        _isLoading.value = true
+        _isImporting.value = true
+        
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Extract UUID
+                val uuidRegex = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}".toRegex(RegexOption.IGNORE_CASE)
+                val match = uuidRegex.find(input)
+                val uuid = match?.value
+                
+                if (uuid == null) {
+                    withContext(Dispatchers.Main) {
+                        onResult(false, "无效的链接或ID")
+                    }
+                    return@launch
+                }
+
+                // 2. Fetch data
+                val data = SupabaseShareRepository.getSharedConversation(uuid)
+
+                // 3. Create Conversation
+                val now = java.util.Date()
+                val newConv = Conversation(
+                    title = data.title,
+                    lastMessage = data.messages.lastOrNull()?.content ?: "",
+                    lastMessageTime = now,
+                    messageCount = data.messages.size
+                )
+                val convId = chatDao.insertConversation(newConv)
+
+                // 4. Create Messages
+                data.messages.forEachIndexed { index, msgDto ->
+                    val msgTime = java.util.Date(now.time + index * 100)
+                    val chatMsg = ChatMessage(
+                        conversationId = convId,
+                        content = msgDto.content,
+                        isFromUser = msgDto.role == "user",
+                        timestamp = msgTime,
+                        modelDisplayName = if (msgDto.role != "user") data.model else null
+                    )
+                    chatDao.insertMessage(chatMsg)
+                }
+
+                withContext(Dispatchers.Main) {
+                    _currentConversationId.value = convId
+                    onResult(true, "导入成功：${data.title}")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    onResult(false, "导入失败: ${e.message}")
+                }
+            } finally {
+                _isLoading.value = false
+                _isImporting.value = false
             }
         }
     }
