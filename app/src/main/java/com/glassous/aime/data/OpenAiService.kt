@@ -120,6 +120,7 @@ class OpenAiService(
         toolChoice: String? = null,
         useCloudProxy: Boolean = false,
         proxyUrl: String? = null,
+        supabaseAnonKey: String? = null,
         onDelta: suspend (String) -> Unit,
         onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
@@ -133,24 +134,29 @@ class OpenAiService(
         ))
         val body = json.toRequestBody("application/json".toMediaType())
 
+        val normalized = baseUrl.trimEnd('/')
+        val endpoint = if (normalized.endsWith("/chat/completions")) {
+            normalized
+        } else {
+            val withV1 = if ("/v1" in normalized || "/v1beta" in normalized) normalized else "$normalized/v1"
+            "$withV1/chat/completions"
+        }
+
         val requestBuilder = Request.Builder()
+            .post(body)
+            .addHeader("Accept", "text/event-stream")
 
         if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
             requestBuilder.url(proxyUrl)
-                .addHeader("x-target-base-url", baseUrl)
+                .addHeader("x-target-url", endpoint)
                 .addHeader("x-target-api-key", apiKey)
+            // ⚠️ 绝对不要在这里添加 Authorization 头！
         } else {
-            val normalized = baseUrl.trimEnd('/')
-            val withV1 = if ("/v1" in normalized) normalized else normalized + "/v1"
-            val endpoint = withV1 + "/chat/completions"
             requestBuilder.url(endpoint)
                 .addHeader("Authorization", "Bearer $apiKey")
         }
 
-        val request = requestBuilder
-            .addHeader("Accept", "text/event-stream")
-            .post(body)
-            .build()
+        val request = requestBuilder.build()
 
         val response = client.newCall(request).execute()
         if (!response.isSuccessful) {

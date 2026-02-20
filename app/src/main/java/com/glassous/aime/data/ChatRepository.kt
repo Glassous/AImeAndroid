@@ -3304,7 +3304,8 @@ class ChatRepository(
         }
 
         val useCloudProxy = modelPreferences.useCloudProxy.first()
-        val proxyUrl = com.glassous.aime.BuildConfig.CF_PROXY_URL
+        val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
+        val supabaseAnonKey = com.glassous.aime.BuildConfig.SUPABASE_KEY
 
         // 直接调用OpenAI服务，失败时抛出异常
         return openAiService.streamChatCompletions(
@@ -3316,6 +3317,7 @@ class ChatRepository(
             toolChoice = toolChoice,
             useCloudProxy = useCloudProxy,
             proxyUrl = proxyUrl,
+            supabaseAnonKey = supabaseAnonKey,
             onDelta = onDelta,
             onToolCall = onToolCall
         )

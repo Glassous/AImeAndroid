@@ -84,28 +84,58 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 
    *该脚本将创建 `aime_shared_conversations` 表，并配置 RLS (Row Level Security) 策略，允许匿名用户上传对话，允许所有人读取分享的对话。*
 
-#### 3. 配置 Cloudflare Worker 代理加速 (可选)
+#### 3. 云端代理配置 (可选)
 
-部分 AI 模型服务商可能存在跨域限制或网络连接问题。AIme 支持通过 Cloudflare Workers 进行低延迟代理转发。
+部分 AI 模型服务商可能存在跨域限制或网络连接问题。AIme 提供了“云端代理”模式，利用 Supabase Edge Functions 作为中转服务，解决直连不畅的问题。
+
+**原理**：
+`App` -> `Supabase Edge Function (Cloud Proxy)` -> `AI Model Provider`
 
 **部署步骤**：
 
-1.  **创建 Worker**：
-    登录 Cloudflare Dashboard -> Workers & Pages -> Create Application -> Create Worker。
+1.  **准备 Supabase 项目**：
+    确保你已经有一个 Supabase 项目（可复用分享功能的项目）。
 
-2.  **部署代码**：
-    将项目根目录下的 `cloudflare-worker/worker.js` 文件内容完整复制，覆盖 Cloudflare 在线编辑器中的默认代码，点击 "Deploy"。
-
-3.  **绑定域名** (关键)：
-    在 Worker 的 Settings -> Triggers -> Custom Domains 中绑定一个自定义域名（例如 `ai-proxy.yourdomain.com`）。这是为了避免默认的 `*.workers.dev` 域名在部分地区无法访问。
-
-4.  **App 端配置**：
-    *   在项目根目录的 `.env.local` 文件中配置 `CF_PROXY_URL`：
-        ```properties
-        CF_PROXY_URL=https://ai-proxy.yourdomain.com
+2.  **部署 Edge Function**：
+    本项目包含一个名为 `chat-proxy` 的 Edge Function。
+    
+    *   安装 Supabase CLI：
+        ```bash
+        npm install -g supabase
         ```
-    *   进入 App **设置** -> **云端代理模式**，开启代理开关。
-    *   App 将会自动通过配置的 Cloudflare Worker 转发请求，`x-target-api-key` 会在 Worker 端被转换为 `Authorization: Bearer` 头。
+    *   登录 Supabase：
+        ```bash
+        supabase login
+        ```
+    *   链接项目（在项目根目录下执行）：
+        ```bash
+        supabase link --project-ref your-project-id
+        ```
+    *   部署函数：
+        ```bash
+        supabase functions deploy chat-proxy
+        ```
+
+3.  **App 端开启代理**：
+    *   进入 **设置** 页面。
+    *   找到 **云端代理模式** 选项。
+    *   点击切换为 **云端代理**。
+    *   此时 App 发出的聊天请求将自动通过你部署的 Supabase Edge Function 转发。
+
+*(注意：开启云端代理后，请确保项目中的 `Supabase` 配置正确，App 会自动调用项目下的 `chat-proxy` 函数)*
+
+#### 4. 配置阿里云 FC 代理加速 (推荐：日本东京节点)
+
+1. 登录阿里云函数计算 (FC) 3.0 控制台。
+2. **在左上角将地域切换为「日本（东京）」**（这决定了网络延迟极低）。
+3. 创建一个“**Web 函数**” (Web Function)，运行环境选择 `Node.js 18` 或以上。
+4. **关键配置**：
+   *   **监听端口**：确保设置为 `9000` (默认)。
+   *   **执行超时时间**：在高级配置中修改为 **120 秒**。
+5. 将本项目中 `aliyun-fc-proxy/index.js` 的代码全选复制到控制台自带的 `index.js` 中并点击“部署代码”。
+   *(注意：如果您之前使用的是“事件函数”，请务必删除重建，或者将函数类型改为 Web 函数并配置监听端口为 9000)*
+6. 在“触发器管理”中创建一个“HTTP 触发器”（认证方式选：不需要认证），获取公网访问地址。
+7. 将获取到的地址填入 Android 项目的 `.env.local` 文件中的 `ALIYUN_FC_PROXY_URL` 字段，并在 App 设置中开启代理模式。
 
 ## 🤝 贡献
 
