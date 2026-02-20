@@ -13,11 +13,27 @@ class HtmlPreviewViewModel : ViewModel() {
     private val _isSourceMode = MutableLiveData(false)
     val isSourceMode: LiveData<Boolean> = _isSourceMode
     
+    // 用于存储是否为受限模式（如网页分析预览），仅保留核心功能
+    private val _isRestrictedMode = MutableLiveData(false)
+    val isRestrictedMode: LiveData<Boolean> = _isRestrictedMode
+
+    // 用于存储网页分析的URL，若存在则直接预览该URL
+    private val _previewUrl = MutableLiveData<String?>(null)
+    val previewUrl: LiveData<String?> = _previewUrl
+    
     fun setHtmlCode(code: String) {
         _htmlCode.value = code
     }
     
     fun setIsSourceMode(isSource: Boolean) {
         _isSourceMode.value = isSource
+    }
+
+    fun setIsRestrictedMode(restricted: Boolean) {
+        _isRestrictedMode.value = restricted
+    }
+
+    fun setPreviewUrl(url: String?) {
+        _previewUrl.value = url
     }
 }

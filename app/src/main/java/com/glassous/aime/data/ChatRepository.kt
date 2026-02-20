@@ -49,17 +49,88 @@ class ChatRepository(
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
         return try {
+            var processedMessage = message
+            var webAnalysisToolUsed = false
+
+            // Client-side handling for Web Analysis
+            if (selectedTool?.type == ToolType.WEB_ANALYSIS) {
+                // 1. Extract URL
+                val url = safeExtractUrl(null, message)
+                // Remove url != message check to allow single URL messages
+                if (url.isNotEmpty() && url.startsWith("http")) {
+                    try {
+                        onToolCallStart?.invoke(ToolType.WEB_ANALYSIS)
+                        // 2. Fetch content
+                        val result = withContext(Dispatchers.IO) {
+                            webSearchService.fetchWebPage(url)
+                        }
+                        
+                        // 3. Format User Message with card
+                        val cardMarkdown = """
+                        ### ${result.title}
+                        
+                        ```html
+                        <!-- type: web_analysis url:${result.url} web_title:${result.title.replace("-->", "")} -->
+                        ${result.fullContent}
+                        ```
+                        """.trimIndent()
+                        
+                        // Insert prompt to guide the AI
+                        // If extracted URL is the entire message, replace it. Otherwise append.
+                        processedMessage = if (message.trim() == url.trim()) {
+                            "帮我分析以下网页的内容：\n\n" + cardMarkdown
+                        } else {
+                            // 保留用户输入的其他文本
+                            val msgWithoutUrl = message.replace(url, "").trim()
+                            if (msgWithoutUrl.isEmpty()) {
+                                "帮我分析以下网页的内容：\n\n" + cardMarkdown
+                            } else {
+                                // 用户的提示词 + 网页内容卡片
+                                // Swap order: User Text first, then Header, then Card
+                                // User request: "插入的“请帮我分析以下网页”与用户自己的提示词之间顺序搞反了，请调换"
+                                // Current: User Text + "\n\n" + Header + Card
+                                // New: Header + "\n\n" + User Text + "\n\n" + Card?
+                                // Wait, the user said "插入的“请帮我分析以下网页”与用户自己的提示词之间顺序搞反了"
+                                // Previous code: "帮我分析以下网页的内容：" was inside cardMarkdown at the top.
+                                // And we did: msgWithoutUrl + "\n\n" + cardMarkdown
+                                // Result: User Text -> "帮我分析..." -> Title -> Content
+                                // User wants: "帮我分析..." -> User Text -> Title -> Content?
+                                // Or maybe: User Text should be AFTER "帮我分析..."?
+                                // Let's re-read carefully: "1.插入的“请帮我分析以下网页”与用户自己的提示词之间顺序搞反了，请调换"
+                                // Likely means: "帮我分析..." should come BEFORE User Text? Or User Text should come BEFORE "帮我分析..."?
+                                // If I wrote "Summary this", output was "Summary this" -> "Help me analyze..." -> Card.
+                                // If user thinks this is swapped, maybe they want "Help me analyze..." -> "Summary this" -> Card?
+                                // Or maybe they want the Card to be clearly separated?
+                                // Let's try: "帮我分析以下网页的内容：" -> User Text -> Card (without the header inside it).
+                                
+                                // Let's remove "帮我分析以下网页的内容：" from cardMarkdown first (done above).
+                                
+                                "帮我分析以下网页的内容：\n" + msgWithoutUrl + "\n\n" + cardMarkdown
+                            }
+                        }
+                        
+                        webAnalysisToolUsed = true
+                    } catch (e: Exception) {
+                        // Ignore error, proceed with original message
+                        // Maybe append error hint?
+                        processedMessage = message + "\n\n(网页内容获取失败: ${e.message})"
+                    } finally {
+                        onToolCallEnd?.invoke()
+                    }
+                }
+            }
+
             // Save user message
             val userMessage = ChatMessage(
                 conversationId = conversationId,
-                content = message,
+                content = processedMessage,
                 isFromUser = true,
                 timestamp = Date()
             )
             chatDao.insertMessage(userMessage)
 
             // Update conversation (user side)
-            updateConversationAfterMessage(conversationId, message)
+            updateConversationAfterMessage(conversationId, message) // Use original message for preview
 
             // Resolve selected model config
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -111,7 +182,21 @@ class ChatRepository(
                 }
                 .toMutableList()
             
-            baseMessages.add(OpenAiChatMessage(role = "user", content = message))
+            baseMessages.add(OpenAiChatMessage(role = "user", content = processedMessage))
+            
+            // 针对网页分析，注入一次性系统提示（仅在本次请求有效）
+            if (webAnalysisToolUsed) {
+                baseMessages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "以上是用户提供的网页正文内容。请根据这些内容回答用户的请求。请注意：\n" +
+                                "1. 不需要分析网页的HTML结构或技术实现，除非用户明确询问。\n" +
+                                "2. 重点关注网页所传达的文章、新闻、数据或信息本身。\n" +
+                                "3. 如果内容较长，请先进行摘要，再回答具体问题。"
+                    )
+                )
+            }
+            
             val messages = limitContext(baseMessages).toMutableList()
 
             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
@@ -284,8 +369,26 @@ class ChatRepository(
                     )
                 )
             )
+            val webAnalysisTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "web_analysis",
+                    description = "分析指定网页的内容。当用户提供URL并要求分析时使用此工具。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "url" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "需要分析的网页URL"
+                            )
+                        ),
+                        required = listOf("url")
+                    )
+                )
+            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
+                // selectedTool?.type == ToolType.WEB_ANALYSIS -> listOf(webAnalysisTool) // Client-side handled, no tool for LLM
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
                 selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
@@ -396,6 +499,7 @@ class ChatRepository(
                             // 通知UI具体的工具类型以正确显示图标
                 when (toolCall.function?.name) {
                     "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                    "web_analysis" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_ANALYSIS)
                     "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
                     "stock_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.STOCK_QUERY)
                     "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
@@ -2775,6 +2879,50 @@ class ChatRepository(
     }
 
     
+
+    private fun safeExtractUrl(arguments: String?, default: String): String {
+        // If arguments is null (client-side extraction from message), use default (message) as source
+        val raw = if (arguments.isNullOrBlank()) default.trim() else arguments.trim()
+        val gson = Gson()
+
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                val value = map["url"] as? String
+                if (value.isNullOrBlank()) null else value
+            } catch (_: Exception) {
+                null
+            }
+        }
+
+        tryParse(raw)?.let { return it }
+
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+
+        val regexQuoted = Regex("""(?i)\"?url\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""")
+        val regexUnquoted = Regex("""(?i)\"?url\"?\s*[:=]\s*([^,}\n\r]+)""")
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+
+        // Fallback: Check if the argument itself is a URL
+        if (raw.startsWith("http")) return raw
+        
+        // Check if message contains url
+        // Updated Regex to handle URL inside text more robustly
+        val urlInMessage = Regex("""https?://[-a-zA-Z0-9+&@#/%?=~_|!:,.;]*[-a-zA-Z0-9+&@#/%=~_|]""").find(raw)?.value
+        if (!urlInMessage.isNullOrBlank()) return urlInMessage
+
+        // If extraction failed, return empty string to indicate failure (instead of default which might be the whole message text)
+        // BUT for existing logic compatibility (arguments != null case), we might need to be careful.
+        // For client-side logic (arguments=null), we want URL or empty.
+        if (arguments.isNullOrBlank()) return ""
+
+        return default
+    }
 
     private fun safeExtractQuery(arguments: String?, default: String): String {
         if (arguments.isNullOrBlank()) return default

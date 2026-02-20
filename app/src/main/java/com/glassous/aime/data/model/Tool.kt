@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -18,6 +19,11 @@ enum class ToolType(
         displayName = "联网搜索",
         icon = Icons.Default.Search,
         description = "通过互联网搜索获取实时信息"
+    ),
+    WEB_ANALYSIS(
+        displayName = "网页分析",
+        icon = Icons.Default.Language,
+        description = "深入分析指定网页的内容、结构与元数据"
     ),
     WEATHER_QUERY(
         displayName = "城市天气查询",

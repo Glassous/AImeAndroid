@@ -173,6 +173,17 @@ fun ChatScreen(
     // 监听用户拖拽状态
     val isDragged by listState.interactionSource.collectIsDraggedAsState()
     
+    // 自动解除网页分析工具选择
+    val prevIsLoading = remember { mutableStateOf(false) }
+    LaunchedEffect(isLoading) {
+        if (prevIsLoading.value && !isLoading) {
+            if (selectedTool?.type == com.glassous.aime.data.model.ToolType.WEB_ANALYSIS) {
+                toolSelectionViewModel.clearToolSelection()
+            }
+        }
+        prevIsLoading.value = isLoading
+    }
+
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -468,8 +479,27 @@ fun ChatScreen(
                     )
                 },
                 bottomBar = {
-                    ChatInput(
-                        inputText = inputText,
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        // 网页分析工具提示
+                        if (selectedTool?.type == com.glassous.aime.data.model.ToolType.WEB_ANALYSIS) {
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = MaterialTheme.shapes.small,
+                                modifier = Modifier
+                                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                                    .align(Alignment.Start)
+                            ) {
+                                Text(
+                                    text = "帮我分析以下网页",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                        ChatInput(
+                            inputText = inputText,
+                            placeholderText = if (selectedTool?.type == com.glassous.aime.data.model.ToolType.WEB_ANALYSIS) "输入网址链接" else null,
                         onInputChange = chatViewModel::updateInputText,
                         onSendMessage = {
                             val trimmedInput = inputText.trim()
@@ -512,6 +542,7 @@ fun ChatScreen(
                         overlayAlpha = chatUiOverlayAlpha,
                         innerAlpha = chatInputInnerAlpha
                     )
+                    }
                 }
             ) { paddingValues ->
                 Box(modifier = Modifier.fillMaxSize()) {

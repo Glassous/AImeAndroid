@@ -54,7 +54,9 @@ enum class LogType {
 fun HtmlPreviewScreen(
     htmlCode: String,
     onNavigateBack: () -> Unit,
-    isSourceMode: Boolean
+    isSourceMode: Boolean,
+    isRestricted: Boolean = false, // 新增参数：受限模式（如网页分析）
+    previewUrl: String? = null // 新增参数：如果存在则直接加载该URL
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
@@ -256,6 +258,11 @@ fun HtmlPreviewScreen(
 
     // 加载HTML内容
     fun loadHtmlContent() {
+        if (previewUrl != null && !localIsSourceMode) {
+            webViewRef?.loadUrl(previewUrl)
+            return
+        }
+
         val hasHtml = Regex("<\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(htmlCode)
 
         // JSX 检测逻辑
@@ -382,7 +389,7 @@ ${htmlCode.replace("</script>", "<\\/script>")}
                 <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
                 <style>
                     html,body{height:100%}
-                    body{margin:0;padding:0}
+                    body{margin:0;padding:8px;white-space:pre-wrap;font-family:sans-serif}
                 </style>
             </head>
             <body>
@@ -468,26 +475,31 @@ ${htmlCode.replace("</script>", "<\\/script>")}
                     }
 
                     // 控制台按钮
-                    if (!localIsSourceMode) {
+                    if (!localIsSourceMode && !isRestricted) {
                         IconButton(onClick = { showConsoleBottomSheet = true }) {
                             Icon(Icons.Filled.BugReport, contentDescription = "控制台")
                         }
                     }
 
                     // 刷新按钮
-                    IconButton(onClick = { refreshWebView() }) {
-                        Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                    if (!isRestricted) {
+                        IconButton(onClick = { refreshWebView() }) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "刷新")
+                        }
                     }
-                    IconButton(onClick = { rotation = (rotation + 90f) % 360f }) {
-                        Icon(Icons.Filled.RotateRight, contentDescription = "旋转")
+                    if (!isRestricted) {
+                        IconButton(onClick = { rotation = (rotation + 90f) % 360f }) {
+                            Icon(Icons.Filled.RotateRight, contentDescription = "旋转")
+                        }
                     }
 
                     // 更多选项
-                    Box {
-                        IconButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Filled.MoreVert, contentDescription = "更多选项")
-                        }
-                        DropdownMenu(
+                    if (!isRestricted) {
+                        Box {
+                            IconButton(onClick = { showMenu = true }) {
+                                Icon(Icons.Filled.MoreVert, contentDescription = "更多选项")
+                            }
+                            DropdownMenu(
                             expanded = showMenu,
                             onDismissRequest = { showMenu = false }
                         ) {
@@ -528,6 +540,7 @@ ${htmlCode.replace("</script>", "<\\/script>")}
                                 leadingIcon = { Icon(Icons.Filled.Download, null) }
                             )
                         }
+                    }
                     }
                 }
             )

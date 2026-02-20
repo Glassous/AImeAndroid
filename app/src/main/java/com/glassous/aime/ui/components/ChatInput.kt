@@ -40,6 +40,7 @@ fun ChatInput(
     hideInputBorder: Boolean = false,
     hideSendButtonBackground: Boolean = false,
     hideInputPlaceholder: Boolean = false, // 新增参数：隐藏输入框占位符
+    placeholderText: String? = null, // 新增参数：自定义占位符文本
     showScrollToBottomButton: Boolean = false,
     onScrollToBottomClick: () -> Unit = {},
     modifier: Modifier = Modifier,
@@ -82,7 +83,7 @@ fun ChatInput(
                     // 仅在开启极简模式且配置为隐藏时才隐藏占位符
                     if (!(minimalMode && hideInputPlaceholder)) {
                         Text(
-                            text = "输入消息...",
+                            text = placeholderText ?: "输入消息...",
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

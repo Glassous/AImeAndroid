@@ -56,14 +56,40 @@ fun AppNavigation() {
                 },
                 onNavigateToHtmlPreview = { htmlCode ->
                     // 将HTML代码存储到共享ViewModel中，设置为预览模式，然后导航
+                    val isWebAnalysis = htmlCode.contains("<!-- type: web_analysis")
                     htmlPreviewViewModel.setHtmlCode(htmlCode)
-                    htmlPreviewViewModel.setIsSourceMode(false)
+                    
+                    if (isWebAnalysis) {
+                        // 尝试提取URL
+                        val urlRegex = Regex("url:(http[^\\s]+)")
+                        val match = urlRegex.find(htmlCode)
+                        val url = match?.groupValues?.get(1)
+                        htmlPreviewViewModel.setPreviewUrl(url)
+                        htmlPreviewViewModel.setIsSourceMode(false) // 预览模式加载URL
+                    } else {
+                        htmlPreviewViewModel.setPreviewUrl(null)
+                        htmlPreviewViewModel.setIsSourceMode(false)
+                    }
+                    
+                    htmlPreviewViewModel.setIsRestrictedMode(isWebAnalysis)
                     navController.navigate(Screen.HtmlPreview.route)
                 },
                 onNavigateToHtmlPreviewSource = { htmlCode ->
                     // 将HTML代码存储到共享ViewModel中，设置为源码模式，然后导航
+                    val isWebAnalysis = htmlCode.contains("<!-- type: web_analysis")
                     htmlPreviewViewModel.setHtmlCode(htmlCode)
-                    htmlPreviewViewModel.setIsSourceMode(true)
+                    
+                    if (isWebAnalysis) {
+                        // 网页分析模式下，源码按钮显示提取的内容（即之前的预览内容）
+                        // 且不加载URL
+                        htmlPreviewViewModel.setPreviewUrl(null)
+                        htmlPreviewViewModel.setIsSourceMode(false) // 显示渲染后的内容而非源码
+                    } else {
+                        htmlPreviewViewModel.setPreviewUrl(null)
+                        htmlPreviewViewModel.setIsSourceMode(true)
+                    }
+                    
+                    htmlPreviewViewModel.setIsRestrictedMode(isWebAnalysis)
                     navController.navigate(Screen.HtmlPreview.route)
                 },
                 modelSelectionViewModel = modelSelectionViewModel,
@@ -98,7 +124,9 @@ fun AppNavigation() {
             HtmlPreviewScreen(
                 htmlCode = htmlPreviewViewModel.htmlCode.value.orEmpty(),
                 onNavigateBack = { navController.popBackStack() },
-                isSourceMode = htmlPreviewViewModel.isSourceMode.value ?: false
+                isSourceMode = htmlPreviewViewModel.isSourceMode.value ?: false,
+                isRestricted = htmlPreviewViewModel.isRestrictedMode.value ?: false,
+                previewUrl = htmlPreviewViewModel.previewUrl.value
             )
         }
     }

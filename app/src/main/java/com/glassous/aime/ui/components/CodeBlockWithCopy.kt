@@ -10,6 +10,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Preview
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -68,6 +69,25 @@ fun CodeBlockWithCopy(
         hasVueLanguage || hasVueContent
     }
 
+    // 检测是否为网页分析卡片 (通过 HTML 注释标记)
+    val isWebAnalysisCard = remember(code) {
+        code.contains("<!-- type: web_analysis")
+    }
+
+    // 提取网页标题
+    val webAnalysisTitle = remember(code) {
+        if (isWebAnalysisCard) {
+            val titleMarker = "web_title:"
+            val start = code.indexOf(titleMarker)
+            if (start != -1) {
+                val end = code.indexOf("-->", start)
+                if (end != -1) {
+                    code.substring(start + titleMarker.length, end).trim()
+                } else null
+            } else null
+        } else null
+    }
+
     val isPreviewable = isHtmlCode || isJsxCode || isVueCode
 
     // 根据useCardStyle和isHtmlCode决定显示样式
@@ -93,26 +113,31 @@ fun CodeBlockWithCopy(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f, fill = false) // 允许左侧压缩，但不强制占位
                 ) {
-                    Icon(
-                        imageVector = Icons.Filled.Code,
-                        contentDescription = when {
-                            isVueCode -> "Vue代码"
-                            isJsxCode -> "JSX代码"
-                            else -> "HTML代码"
-                        },
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    if (!isWebAnalysisCard) {
+                        Icon(
+                            imageVector = Icons.Filled.Code,
+                            contentDescription = when {
+                                isVueCode -> "Vue代码"
+                                isJsxCode -> "JSX代码"
+                                else -> "HTML代码"
+                            },
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+                    
                     Text(
                         text = when {
+                            isWebAnalysisCard -> if (!webAnalysisTitle.isNullOrBlank()) webAnalysisTitle else "网页标题"
                             isVueCode -> "Vue 代码"
                             isJsxCode -> "JSX 代码"
                             else -> "HTML 代码"
                         },
                         style = MaterialTheme.typography.titleMedium,
                         color = MaterialTheme.colorScheme.primary,
-                        maxLines = 1
+                        maxLines = if (isWebAnalysisCard) 2 else 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
 
@@ -151,12 +176,12 @@ fun CodeBlockWithCopy(
                             modifier = Modifier.height(36.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Code,
-                                contentDescription = "查看源码",
+                                imageVector = if (isWebAnalysisCard) Icons.Filled.Description else Icons.Filled.Code,
+                                contentDescription = if (isWebAnalysisCard) "查看内容" else "查看源码",
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "源码", fontSize = 13.sp)
+                            Text(text = if (isWebAnalysisCard) "内容" else "源码", fontSize = 13.sp)
                         }
                     }
                 }

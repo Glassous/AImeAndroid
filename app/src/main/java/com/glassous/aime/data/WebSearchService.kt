@@ -115,11 +115,75 @@ class WebSearchService(
     }
     
     /**
+     * 抓取网页完整信息（标题+内容）
+     */
+    suspend fun fetchWebPage(url: String): SearchResult = withContext(Dispatchers.IO) {
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return@withContext SearchResult("访问失败", url, "HTTP ${response.code}", "")
+            }
+
+            val html = response.body?.string() ?: ""
+            val document = Jsoup.parse(html)
+            val title = document.title()
+            
+            // 移除脚本和样式标签
+            document.select("script, style, nav, footer, header, aside").remove()
+            
+            // 提取主要内容
+            // 优化：避免重复提取。先尝试提取正文容器，若为空则提取body文本。
+            // 之前的逻辑：select(...) 获取一部分，然后 document.body().text() 获取全部（包含那一部分），导致如果 select 命中，content 只有一部分；如果 select 没命中，finalContent 又是全部。
+            // 但问题描述是“重复两遍”。看之前的代码：
+            // val content = document.select(...).text()
+            // val finalContent = if (content.isNotBlank()) content else document.body()?.text()?.trim() ?: ""
+            // 这逻辑看起来是互斥的，不会重复。
+            // 可能是 select 选择器选到了嵌套的元素，导致 text() 方法递归拼接时重复？
+            // Jsoup 的 text() 会递归获取所有子元素的文本。如果 select("article, p")，而 p 在 article 内，Jsoup 会去重吗？
+            // Jsoup.select 返回 Elements，调用 text() 会将所有匹配元素的文本拼接。
+            // 如果 p 在 article 内，article 匹配了，p 也匹配了。
+            // document.select("article, p") 会包含 article 元素和 p 元素。
+            // article.text() 包含 p 的文本。 p.text() 也是 p 的文本。
+            // 于是 text() 拼接时，p 的内容会出现两次！
+            
+            // 修复：只选择最外层的容器，或者由粗到细选择。
+            // 更好的策略：先尝试找 article/main，找到了就用；找不到再找 p/h1-h6 等。
+            
+            var finalContent = ""
+            val article = document.select("article, main, .content, .post, .entry").first()
+            if (article != null) {
+                finalContent = article.text().trim()
+            } else {
+                // Fallback: collect paragraphs
+                finalContent = document.select("p, h1, h2, h3, h4, h5, h6").text().trim()
+            }
+            
+            if (finalContent.isBlank()) {
+                finalContent = document.body()?.text()?.trim() ?: ""
+            }
+            
+            SearchResult(
+                title = title.ifBlank { "无标题" },
+                url = url,
+                snippet = finalContent.take(200),
+                fullContent = finalContent.take(5000) // Limit content
+            )
+        } catch (e: Exception) {
+            SearchResult("抓取失败", url, e.message ?: "未知错误", "")
+        }
+    }
+
+    /**
      * 抓取网页内容
      * @param url 网页URL
      * @return 网页文本内容
      */
-    private suspend fun fetchWebContent(url: String): String = withContext(Dispatchers.IO) {
+    suspend fun fetchWebContent(url: String): String = withContext(Dispatchers.IO) {
         return@withContext try {
             val request = Request.Builder()
                 .url(url)
