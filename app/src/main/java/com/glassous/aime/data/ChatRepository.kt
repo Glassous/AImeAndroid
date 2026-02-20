@@ -520,7 +520,7 @@ class ChatRepository(
             // Insert assistant placeholder for streaming
             var assistantMessage = ChatMessage(
                 conversationId = conversationId,
-                content = "正在思考...",
+                content = "正在加载 ${model.name}...",
                 isFromUser = false,
                 timestamp = Date(),
                 modelDisplayName = model.name
@@ -973,18 +973,6 @@ class ChatRepository(
                 }
             }
 
-            // 删除目标消息及其后的所有消息
-            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
-
-            // 插入新的助手消息占位，用于流式输出
-            val newAssistantMessage = ChatMessage(
-                conversationId = conversationId,
-                content = "正在思考...",
-                isFromUser = false,
-                timestamp = Date()
-            )
-            val newAssistantId = chatDao.insertMessage(newAssistantMessage)
-
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
             if (selectedModelId.isNullOrBlank()) {
@@ -1003,6 +991,19 @@ class ChatRepository(
                     chatDao.updateMessage(target.copy(content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。", isError = true))
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
+
+            // 删除目标消息及其后的所有消息
+            chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+
+            // 插入新的助手消息占位，用于流式输出
+            val newAssistantMessage = ChatMessage(
+                conversationId = conversationId,
+                content = "正在加载 ${model.name}...",
+                isFromUser = false,
+                timestamp = Date(),
+                modelDisplayName = model.name
+            )
+            val newAssistantId = chatDao.insertMessage(newAssistantMessage)
 
             // 构造到选定用户消息为止的上下文，并应用限制
             val contextMessagesBase = history.take(prevUserIndex + 1)
@@ -2288,7 +2289,7 @@ class ChatRepository(
             // 插入新的助手消息占位以进行流式写入
             var assistantMessage = ChatMessage(
                 conversationId = conversationId,
-                content = "正在思考...",
+                content = "正在加载 ${model.name}...",
                 isFromUser = false,
                 timestamp = Date(),
                 modelDisplayName = model.name
