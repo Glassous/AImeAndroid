@@ -37,6 +37,7 @@ class AIMeApplication : Application() {
     // Repository instance
     val repository by lazy { 
         ChatRepository(
+            context = this,
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,

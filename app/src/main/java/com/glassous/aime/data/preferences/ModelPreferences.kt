@@ -22,6 +22,11 @@ class ModelPreferences(private val context: Context) {
         private val TITLE_GENERATION_CONTEXT_N = intPreferencesKey("title_generation_context_n")
         private val TITLE_GENERATION_AUTO_GENERATE = booleanPreferencesKey("title_generation_auto_generate")
         private val SYSTEM_PROMPT = stringPreferencesKey("system_prompt")
+        private val ENABLE_DYNAMIC_DATE = booleanPreferencesKey("enable_dynamic_date")
+        private val ENABLE_DYNAMIC_TIMESTAMP = booleanPreferencesKey("enable_dynamic_timestamp")
+        private val ENABLE_DYNAMIC_LOCATION = booleanPreferencesKey("enable_dynamic_location")
+        private val ENABLE_DYNAMIC_DEVICE_MODEL = booleanPreferencesKey("enable_dynamic_device_model")
+        private val ENABLE_DYNAMIC_LANGUAGE = booleanPreferencesKey("enable_dynamic_language")
     }
 
     val selectedModelId: Flow<String?> = context.dataStore.data
@@ -32,6 +37,31 @@ class ModelPreferences(private val context: Context) {
     val systemPrompt: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[SYSTEM_PROMPT] ?: ""
+        }
+
+    val enableDynamicDate: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ENABLE_DYNAMIC_DATE] ?: false
+        }
+
+    val enableDynamicTimestamp: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ENABLE_DYNAMIC_TIMESTAMP] ?: false
+        }
+
+    val enableDynamicLocation: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ENABLE_DYNAMIC_LOCATION] ?: false
+        }
+
+    val enableDynamicDeviceModel: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ENABLE_DYNAMIC_DEVICE_MODEL] ?: false
+        }
+
+    val enableDynamicLanguage: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[ENABLE_DYNAMIC_LANGUAGE] ?: false
         }
 
     val titleGenerationModelId: Flow<String?> = context.dataStore.data
@@ -96,6 +126,36 @@ class ModelPreferences(private val context: Context) {
     suspend fun setSystemPrompt(prompt: String) {
         context.dataStore.edit { preferences ->
             preferences[SYSTEM_PROMPT] = prompt
+        }
+    }
+
+    suspend fun setEnableDynamicDate(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ENABLE_DYNAMIC_DATE] = enabled
+        }
+    }
+
+    suspend fun setEnableDynamicTimestamp(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ENABLE_DYNAMIC_TIMESTAMP] = enabled
+        }
+    }
+
+    suspend fun setEnableDynamicLocation(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ENABLE_DYNAMIC_LOCATION] = enabled
+        }
+    }
+
+    suspend fun setEnableDynamicDeviceModel(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ENABLE_DYNAMIC_DEVICE_MODEL] = enabled
+        }
+    }
+
+    suspend fun setEnableDynamicLanguage(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[ENABLE_DYNAMIC_LANGUAGE] = enabled
         }
     }
 }

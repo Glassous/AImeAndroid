@@ -1,5 +1,9 @@
 package com.glassous.aime.data
 
+import android.annotation.SuppressLint
+import android.content.Context
+import android.location.Location
+import android.location.LocationManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import com.glassous.aime.data.repository.ModelConfigRepository
@@ -13,6 +17,8 @@ import com.glassous.aime.data.model.ToolType
  
 import com.google.gson.Gson
 import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
 import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
 import java.io.StringReader
@@ -21,6 +27,7 @@ import kotlinx.coroutines.withContext
 
 
 class ChatRepository(
+    private val context: Context,
     private val chatDao: ChatDao,
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
@@ -200,7 +207,50 @@ class ChatRepository(
             val messages = limitContext(baseMessages).toMutableList()
 
             // 注入用户配置的系统提示词
-            val systemPrompt = modelPreferences.systemPrompt.first()
+            var systemPrompt = modelPreferences.systemPrompt.first()
+            val enableDate = modelPreferences.enableDynamicDate.first()
+            val enableTimestamp = modelPreferences.enableDynamicTimestamp.first()
+            val enableLocation = modelPreferences.enableDynamicLocation.first()
+            val enableDeviceModel = modelPreferences.enableDynamicDeviceModel.first()
+            val enableLanguage = modelPreferences.enableDynamicLanguage.first()
+            
+            val dynamicInfos = mutableListOf<String>()
+            
+            if (enableDate) {
+                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                dynamicInfos.add("当前日期: ${dateFormat.format(Date())}")
+            }
+            
+            if (enableTimestamp) {
+                dynamicInfos.add("当前时间戳: ${System.currentTimeMillis()}")
+            }
+
+            if (enableDeviceModel) {
+                dynamicInfos.add("设备型号: ${android.os.Build.MODEL}")
+            }
+
+            if (enableLanguage) {
+                dynamicInfos.add("系统语言: ${Locale.getDefault()}")
+            }
+            
+            if (enableLocation) {
+                try {
+                    val location = getLastKnownLocation()
+                    if (location != null) {
+                        dynamicInfos.add("当前位置: ${location.latitude}, ${location.longitude}")
+                    } else {
+                        dynamicInfos.add("当前位置: 未知 (无法获取)")
+                    }
+                } catch (e: Exception) {
+                    dynamicInfos.add("当前位置: 未知 (权限或服务异常)")
+                }
+            }
+            
+            if (dynamicInfos.isNotEmpty()) {
+                val dynamicInfoStr = "\n\n[系统环境信息]\n" + dynamicInfos.joinToString("\n")
+                systemPrompt = if (systemPrompt.isEmpty()) dynamicInfoStr.trim() else systemPrompt + dynamicInfoStr
+            }
+
             if (systemPrompt.isNotBlank()) {
                 messages.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
             }
@@ -3268,5 +3318,25 @@ class ChatRepository(
         // 使用正则表达式移除 <think>...</think> 标签及其内容
         return text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
             .replace(Regex("<think>.*", RegexOption.DOT_MATCHES_ALL), "") // 处理未闭合的标签
+    }
+
+    @SuppressLint("MissingPermission")
+    private suspend fun getLastKnownLocation(): Location? {
+        return withContext(Dispatchers.Main) {
+            try {
+                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+                val providers = locationManager.getProviders(true)
+                var bestLocation: Location? = null
+                for (provider in providers) {
+                    val l = locationManager.getLastKnownLocation(provider) ?: continue
+                    if (bestLocation == null || l.accuracy < bestLocation.accuracy) {
+                        bestLocation = l
+                    }
+                }
+                bestLocation
+            } catch (e: Exception) {
+                null
+            }
+        }
     }
 }
