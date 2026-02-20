@@ -163,6 +163,7 @@ fun SettingsContent(
     val titleGenerationContextStrategy by application.modelPreferences.titleGenerationContextStrategy.collectAsState(initial = 0)
     val titleGenerationContextN by application.modelPreferences.titleGenerationContextN.collectAsState(initial = 20)
     val titleGenerationAutoGenerate by application.modelPreferences.titleGenerationAutoGenerate.collectAsState(initial = false)
+    val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
     var showTitleGenModelSelectionDialog by remember { mutableStateOf(false) }
     var showTitleGenContextStrategyDialog by remember { mutableStateOf(false) }
     var titleGenModelName by remember { mutableStateOf("跟随当前模型") }
@@ -467,6 +468,68 @@ fun SettingsContent(
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("模型设置")
                     }
+                }
+            }
+
+            // --- Cloud Proxy Mode ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "请求模式",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().selectableGroup(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val proxyOptions = listOf(
+                            false to "本地直连",
+                            true to "云端代理"
+                        )
+
+                        proxyOptions.forEach { (value, label) ->
+                            val isSelected = useCloudProxy == value
+                            FilterChip(
+                                onClick = { 
+                                    scope.launch {
+                                        application.modelPreferences.setUseCloudProxy(value)
+                                    }
+                                },
+                                label = { Text(text = label, style = MaterialTheme.typography.labelMedium) },
+                                selected = isSelected,
+                                modifier = Modifier.weight(1f).selectable(
+                                    selected = isSelected,
+                                    onClick = { 
+                                        scope.launch {
+                                            application.modelPreferences.setUseCloudProxy(value)
+                                        }
+                                    },
+                                    role = Role.RadioButton
+                                ),
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                )
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Text(
+                        text = if (useCloudProxy) "通过自建边缘节点转发请求，可解决部分模型无法直连的问题" else "直接从设备发起网络请求，速度更快但可能受网络限制",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

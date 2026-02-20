@@ -27,6 +27,7 @@ class ModelPreferences(private val context: Context) {
         private val ENABLE_DYNAMIC_LOCATION = booleanPreferencesKey("enable_dynamic_location")
         private val ENABLE_DYNAMIC_DEVICE_MODEL = booleanPreferencesKey("enable_dynamic_device_model")
         private val ENABLE_DYNAMIC_LANGUAGE = booleanPreferencesKey("enable_dynamic_language")
+        private val USE_CLOUD_PROXY = booleanPreferencesKey("use_cloud_proxy")
     }
 
     val selectedModelId: Flow<String?> = context.dataStore.data
@@ -62,6 +63,11 @@ class ModelPreferences(private val context: Context) {
     val enableDynamicLanguage: Flow<Boolean> = context.dataStore.data
         .map { preferences ->
             preferences[ENABLE_DYNAMIC_LANGUAGE] ?: false
+        }
+
+    val useCloudProxy: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[USE_CLOUD_PROXY] ?: false
         }
 
     val titleGenerationModelId: Flow<String?> = context.dataStore.data
@@ -156,6 +162,12 @@ class ModelPreferences(private val context: Context) {
     suspend fun setEnableDynamicLanguage(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[ENABLE_DYNAMIC_LANGUAGE] = enabled
+        }
+    }
+
+    suspend fun setUseCloudProxy(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[USE_CLOUD_PROXY] = enabled
         }
     }
 }

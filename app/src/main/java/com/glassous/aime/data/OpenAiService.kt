@@ -118,13 +118,13 @@ class OpenAiService(
         messages: List<OpenAiChatMessage>,
         tools: List<Tool>? = null,
         toolChoice: String? = null,
+        useCloudProxy: Boolean = false,
+        proxyUrl: String? = null,
+        supabaseAnonKey: String? = null,
         onDelta: suspend (String) -> Unit,
         onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
         val gson = Gson()
-        val normalized = baseUrl.trimEnd('/')
-        val withV1 = if ("/v1" in normalized) normalized else normalized + "/v1"
-        val endpoint = withV1 + "/chat/completions"
         val json = gson.toJson(ChatCompletionsRequest(
             model = model, 
             messages = messages, 
@@ -134,9 +134,22 @@ class OpenAiService(
         ))
         val body = json.toRequestBody("application/json".toMediaType())
 
-        val request = Request.Builder()
-            .url(endpoint)
-            .addHeader("Authorization", "Bearer $apiKey")
+        val requestBuilder = Request.Builder()
+
+        if (useCloudProxy && !proxyUrl.isNullOrBlank() && !supabaseAnonKey.isNullOrBlank()) {
+            requestBuilder.url(proxyUrl)
+                .addHeader("Authorization", "Bearer $supabaseAnonKey")
+                .addHeader("x-target-base-url", baseUrl)
+                .addHeader("x-target-api-key", apiKey)
+        } else {
+            val normalized = baseUrl.trimEnd('/')
+            val withV1 = if ("/v1" in normalized) normalized else normalized + "/v1"
+            val endpoint = withV1 + "/chat/completions"
+            requestBuilder.url(endpoint)
+                .addHeader("Authorization", "Bearer $apiKey")
+        }
+
+        val request = requestBuilder
             .addHeader("Accept", "text/event-stream")
             .post(body)
             .build()
