@@ -20,9 +20,9 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 ### 💬 极致聊天体验
 - **Markdown 渲染**：支持流式 Markdown 解析，完美显示代码块、表格、公式。
 - **代码高亮**：支持多种编程语言的高亮显示与代码复制。
-- **云端同步**：支持通过 Supabase 账号同步多端对话记录与设置。
+- **数据备份**：支持本地导入/导出完整对话记录与设置，方便数据迁移与备份。
 - **极简模式**：提供沉浸式的极简聊天界面。
-- **分享功能**：支持将对话内容生成长图或链接分享。
+- **分享功能**：支持生成对话长图，或生成公开链接分享对话内容（需配置 Supabase）。
 
 ## 🛠️ 技术栈
 
@@ -32,9 +32,9 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 - **网络**: Retrofit + OkHttp
 - **数据库**: Room Database
 - **异步处理**: Kotlin Coroutines + Flow
-- **后端服务**: Supabase (Auth & Database)
+- **后端服务**: Supabase (仅用于对话分享功能)
 
-## � 快速开始
+## 🚀 快速开始
 
 ### 环境要求
 - Android Studio Ladybug 或更高版本
@@ -51,13 +51,38 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 4. 连接 Android 设备或启动模拟器。
 5. 点击 **Run** 按钮运行应用。
 
-### 配置说明
-应用首次启动后，需要进行以下配置才能正常使用 AI 功能：
+### ⚙️ 配置说明
+
+#### 1. 模型配置
+应用首次启动后，需要配置 AI 模型才能正常使用：
 1. 进入 **设置 -> 模型配置**。
 2. 点击右上角 **+** 添加模型分组。
 3. 输入服务商名称、Base URL 和 API Key。
 4. 在该分组下添加具体的模型名称（如 `gpt-4o`, `doubao-pro-32k` 等）。
 5. 在聊天界面选择刚才配置的模型即可开始对话。
+
+#### 2. 分享功能配置 (可选)
+如果需要使用“对话链接分享”功能，需要配置 Supabase 后端：
+
+1. **配置环境变量**：
+   在项目根目录创建 `.env.local` 文件（可复制 `.env.example`），并填入以下信息：
+   ```properties
+   # Supabase 项目 URL
+   SUPABASE_URL=https://your-project.supabase.co
+   
+   # Supabase Anon Key (公开密钥)
+   SUPABASE_KEY=your-anon-key
+   
+   # 分享链接的基础 URL (你的前端展示页面地址)
+   SHARE_BASE_URL=https://your-viewer-url.com/share
+   ```
+
+2. **初始化数据库**：
+   需要在 Supabase 的 SQL 编辑器中执行初始化脚本，以创建存储分享数据的表和安全策略。
+   
+   📄 **点击查看 SQL 脚本**: [aime_shared_conversations.sql](aime_shared_conversations.sql)
+
+   *该脚本将创建 `aime_shared_conversations` 表，并配置 RLS (Row Level Security) 策略，允许匿名用户上传对话，允许所有人读取分享的对话。*
 
 ## 🤝 贡献
 
