@@ -134,7 +134,7 @@ class ChatRepository(
                 isFromUser = true,
                 timestamp = Date()
             )
-            chatDao.insertMessage(userMessage)
+            val insertedId = chatDao.insertMessage(userMessage)
 
             // Update conversation (user side)
             updateConversationAfterMessage(conversationId, message) // Use original message for preview
@@ -189,7 +189,11 @@ class ChatRepository(
                 }
                 .toMutableList()
             
-            baseMessages.add(OpenAiChatMessage(role = "user", content = processedMessage))
+            // 检查 history 中是否已包含刚刚插入的消息（防止重复添加）
+            val isMessageIncluded = history.any { it.id == insertedId }
+            if (!isMessageIncluded) {
+                baseMessages.add(OpenAiChatMessage(role = "user", content = processedMessage))
+            }
             
             // 针对网页分析，注入一次性系统提示（仅在本次请求有效）
             if (webAnalysisToolUsed) {
