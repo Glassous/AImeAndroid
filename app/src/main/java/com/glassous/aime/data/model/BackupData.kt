@@ -18,7 +18,17 @@ data class BackupData(
 data class AppSettings(
     @SerializedName("theme") val theme: ThemeSettings? = null,
     @SerializedName("context") val context: ContextSettings? = null,
-    @SerializedName("update") val update: UpdateSettings? = null
+    @SerializedName("update") val update: UpdateSettings? = null,
+    @SerializedName("systemPrompt") val systemPrompt: SystemPromptSettings? = null
+)
+
+data class SystemPromptSettings(
+    @SerializedName("systemPrompt") val systemPrompt: String? = null,
+    @SerializedName("enableDynamicDate") val enableDynamicDate: Boolean? = null,
+    @SerializedName("enableDynamicTimestamp") val enableDynamicTimestamp: Boolean? = null,
+    @SerializedName("enableDynamicLocation") val enableDynamicLocation: Boolean? = null,
+    @SerializedName("enableDynamicDeviceModel") val enableDynamicDeviceModel: Boolean? = null,
+    @SerializedName("enableDynamicLanguage") val enableDynamicLanguage: Boolean? = null
 )
 
 data class ThemeSettings(

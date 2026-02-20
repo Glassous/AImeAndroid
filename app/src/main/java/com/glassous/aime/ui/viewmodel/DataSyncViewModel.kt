@@ -29,6 +29,7 @@ import com.glassous.aime.data.model.AppSettings
 import com.glassous.aime.data.model.ThemeSettings
 import com.glassous.aime.data.model.ContextSettings
 import com.glassous.aime.data.model.UpdateSettings
+import com.glassous.aime.data.model.SystemPromptSettings
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -93,10 +94,20 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     autoCheckUpdateEnabled = updatePreferences.autoCheckUpdateEnabled.first()
                 )
 
+                val systemPromptSettings = SystemPromptSettings(
+                    systemPrompt = modelPreferences.systemPrompt.first(),
+                    enableDynamicDate = modelPreferences.enableDynamicDate.first(),
+                    enableDynamicTimestamp = modelPreferences.enableDynamicTimestamp.first(),
+                    enableDynamicLocation = modelPreferences.enableDynamicLocation.first(),
+                    enableDynamicDeviceModel = modelPreferences.enableDynamicDeviceModel.first(),
+                    enableDynamicLanguage = modelPreferences.enableDynamicLanguage.first()
+                )
+
                 val appSettings = AppSettings(
                     theme = themeSettings,
                     context = contextSettings,
-                    update = updateSettings
+                    update = updateSettings,
+                    systemPrompt = systemPromptSettings
                 )
 
                 val conversations = chatDao.getAllConversations().first()
@@ -223,6 +234,14 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     }
                     settings.update?.let { upd ->
                         upd.autoCheckUpdateEnabled?.let { updatePreferences.setAutoCheckUpdateEnabled(it) }
+                    }
+                    settings.systemPrompt?.let { sp ->
+                        sp.systemPrompt?.let { modelPreferences.setSystemPrompt(it) }
+                        sp.enableDynamicDate?.let { modelPreferences.setEnableDynamicDate(it) }
+                        sp.enableDynamicTimestamp?.let { modelPreferences.setEnableDynamicTimestamp(it) }
+                        sp.enableDynamicLocation?.let { modelPreferences.setEnableDynamicLocation(it) }
+                        sp.enableDynamicDeviceModel?.let { modelPreferences.setEnableDynamicDeviceModel(it) }
+                        sp.enableDynamicLanguage?.let { modelPreferences.setEnableDynamicLanguage(it) }
                     }
                 }
 
