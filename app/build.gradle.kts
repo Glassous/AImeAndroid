@@ -44,6 +44,9 @@ android {
 
         val shareBaseUrl = envProps.getProperty("SHARE_BASE_URL", "")
         buildConfigField("String", "SHARE_BASE_URL", "\"$shareBaseUrl\"")
+
+        val cfProxyUrl = envProps.getProperty("CF_PROXY_URL", "")
+        buildConfigField("String", "CF_PROXY_URL", "\"$cfProxyUrl\"")
     }
 
     buildTypes {

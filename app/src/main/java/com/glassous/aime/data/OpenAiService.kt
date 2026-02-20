@@ -120,7 +120,6 @@ class OpenAiService(
         toolChoice: String? = null,
         useCloudProxy: Boolean = false,
         proxyUrl: String? = null,
-        supabaseAnonKey: String? = null,
         onDelta: suspend (String) -> Unit,
         onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
@@ -136,9 +135,8 @@ class OpenAiService(
 
         val requestBuilder = Request.Builder()
 
-        if (useCloudProxy && !proxyUrl.isNullOrBlank() && !supabaseAnonKey.isNullOrBlank()) {
+        if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
             requestBuilder.url(proxyUrl)
-                .addHeader("Authorization", "Bearer $supabaseAnonKey")
                 .addHeader("x-target-base-url", baseUrl)
                 .addHeader("x-target-api-key", apiKey)
         } else {
