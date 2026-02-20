@@ -126,7 +126,8 @@ fun MessageBubble(
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
                             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                            forceExpanded = forceExpandReply
+                            forceExpanded = forceExpandReply,
+                            enableTypewriterEffect = enableTypewriterEffect
                         )
                         } else {
                             StreamingMarkdownRenderer(
@@ -137,7 +138,8 @@ fun MessageBubble(
                                 isStreaming = isStreaming,
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                enableTypewriterEffect = enableTypewriterEffect
                             )
                         }
 
@@ -194,7 +196,8 @@ fun MessageBubble(
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                forceExpanded = forceExpandReply
+                                forceExpanded = forceExpandReply,
+                                enableTypewriterEffect = enableTypewriterEffect
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件
@@ -206,7 +209,8 @@ fun MessageBubble(
                                 isStreaming = isStreaming,
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                enableTypewriterEffect = enableTypewriterEffect
                             )
                         }
                     }

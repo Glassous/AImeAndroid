@@ -33,7 +33,8 @@ fun ExpandableReplyBox(
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false,
-    forceExpanded: Boolean = false // 新增：强制展开参数
+    forceExpanded: Boolean = false, // 新增：强制展开参数
+    enableTypewriterEffect: Boolean = true
 ) {
     // 定义解析结果变量
     var preText by remember { mutableStateOf("") }
@@ -196,7 +197,8 @@ fun ExpandableReplyBox(
             modifier = modifier,
             onHtmlPreview = onHtmlPreview,
             onHtmlPreviewSource = onHtmlPreviewSource,
-            useCardStyleForHtmlCode = useCardStyleForHtmlCode
+            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+            isStreaming = isStreaming && enableTypewriterEffect
         )
         return
     }
@@ -293,7 +295,8 @@ fun ExpandableReplyBox(
                             enableLatex = !isPreTextStreaming,
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
-                            useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                            isStreaming = isPreTextStreaming && enableTypewriterEffect
                         )
 
                         // 如果思考还在继续（流式且无正式回复），显示个简单的提示
@@ -320,7 +323,8 @@ fun ExpandableReplyBox(
                     modifier = Modifier.fillMaxWidth(),
                     onHtmlPreview = onHtmlPreview,
                     onHtmlPreviewSource = onHtmlPreviewSource,
-                    useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                    isStreaming = isStreaming && officialText == null && enableTypewriterEffect
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -335,7 +339,8 @@ fun ExpandableReplyBox(
                     isStreaming = isStreaming,
                     onHtmlPreview = onHtmlPreview,
                     onHtmlPreviewSource = onHtmlPreviewSource,
-                    useCardStyleForHtmlCode = useCardStyleForHtmlCode
+                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                    enableTypewriterEffect = enableTypewriterEffect
                 )
             } else if (!isStreaming && preText.isEmpty()) {
                 // 既没有思考也没有正式回复的异常情况

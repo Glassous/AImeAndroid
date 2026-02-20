@@ -1,7 +1,12 @@
 package com.glassous.aime.ui.components
 
 import android.content.Context
+import android.text.TextPaint
+import android.text.style.CharacterStyle
+import android.text.style.UpdateAppearance
 import android.text.Spanned
+import android.text.SpannableStringBuilder
+import android.view.View
 import android.widget.TextView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,7 +47,8 @@ fun MarkdownRenderer(
     enableLatex: Boolean = true,
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
-    useCardStyleForHtmlCode: Boolean = false
+    useCardStyleForHtmlCode: Boolean = false,
+    isStreaming: Boolean = false
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
     val displayMarkdown = remember(markdown) {
@@ -119,7 +125,83 @@ fun MarkdownRenderer(
                                     true
                                 }
                                 val textToRender = preprocessText(block.content, enableLatex)
-                                markwon.setMarkdown(tv, textToRender)
+                                val spanned = markwon.toMarkdown(textToRender)
+                                
+                                // 处理流式输出的淡入动画
+                                if (isStreaming) {
+                                    val state = (tv.tag as? TextFadeState) ?: TextFadeState().also { tv.tag = it }
+                                    val currentLength = spanned.length
+                                    
+                                    // 如果文本变短（可能是重新生成或编辑），重置状态
+                                    if (currentLength < state.lastLength) {
+                                        state.lastLength = 0
+                                        state.fadingChunks.clear()
+                                    }
+                                    
+                                    // 检测新增文本块
+                                    if (currentLength > state.lastLength) {
+                                        state.fadingChunks.add(state.lastLength to System.currentTimeMillis())
+                                        state.lastLength = currentLength
+                                    }
+                                    
+                                    if (state.fadingChunks.isNotEmpty()) {
+                                        val builder = SpannableStringBuilder(spanned)
+                                        val now = System.currentTimeMillis()
+                                        val duration = 500L // 动画持续时间 500ms
+                                        
+                                        // 清理已完成的动画
+                                        state.fadingChunks.removeAll { (_, time) -> (now - time) >= duration }
+                                        
+                                        // 应用淡入 Span
+                                        val sortedChunks = state.fadingChunks.sortedBy { it.first }
+                                        for (i in sortedChunks.indices) {
+                                            val (start, time) = sortedChunks[i]
+                                            val end = if (i + 1 < sortedChunks.size) sortedChunks[i+1].first else builder.length
+                                            
+                                            if (start < end) {
+                                                builder.setSpan(
+                                                    TimeBasedFadeSpan(time, duration),
+                                                    start,
+                                                    end,
+                                                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                                                )
+                                            }
+                                        }
+                                        
+                                        tv.text = builder
+                                        
+                                        // 触发持续重绘
+                                        if (state.fadingChunks.isNotEmpty()) {
+                                            state.animator?.let { tv.removeCallbacks(it) }
+                                            state.animator = object : Runnable {
+                                                override fun run() {
+                                                    val currentTime = System.currentTimeMillis()
+                                                    if (state.fadingChunks.isNotEmpty()) {
+                                                        tv.invalidate()
+                                                        // 只有当还有未完成的动画时才继续 post
+                                                        if (state.fadingChunks.any { (_, time) -> (currentTime - time) < duration }) {
+                                                            tv.postOnAnimation(this)
+                                                        } else {
+                                                            // 所有动画已完成，清理状态
+                                                            state.fadingChunks.clear()
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            tv.postOnAnimation(state.animator)
+                                        }
+                                    } else {
+                                        tv.text = spanned
+                                        state.lastLength = currentLength
+                                    }
+                                } else {
+                                    // 非流式状态，直接显示
+                                    markwon.setMarkdown(tv, textToRender)
+                                    // 重置状态以防下次变为流式
+                                    val state = (tv.tag as? TextFadeState) ?: TextFadeState().also { tv.tag = it }
+                                    state.lastLength = spanned.length
+                                    state.fadingChunks.clear()
+                                }
                             },
                             modifier = Modifier.wrapContentWidth()
                         )
