@@ -50,6 +50,7 @@ import com.glassous.aime.ui.components.TitleGenerationModelSelectionDialog
 import com.glassous.aime.ui.components.TitleGenerationContextStrategyDialog
 import com.glassous.aime.ui.components.ImportSharedConversationDialog
 import com.glassous.aime.ui.screens.ModelConfigActivity
+import com.glassous.aime.ui.screens.SystemPromptConfigActivity
 import com.glassous.aime.ui.theme.AImeTheme
 import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.ui.viewmodel.DataSyncViewModel
@@ -62,6 +63,14 @@ import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import kotlinx.coroutines.launch
 
 class SettingsActivity : ComponentActivity() {
+    fun onNavigateToModelConfig() {
+        startActivity(Intent(this, ModelConfigActivity::class.java))
+    }
+
+    fun onNavigateToSystemPromptConfig() {
+        startActivity(Intent(this, SystemPromptConfigActivity::class.java))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -93,6 +102,10 @@ class SettingsActivity : ComponentActivity() {
                     onNavigateToModelConfig = { 
                         val intent = Intent(this@SettingsActivity, ModelConfigActivity::class.java)
                         startActivity(intent)
+                    },
+                    onNavigateToSystemPromptConfig = {
+                        val intent = Intent(this@SettingsActivity, SystemPromptConfigActivity::class.java)
+                        startActivity(intent)
                     }
                 )
             }
@@ -103,7 +116,8 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SettingsContent(
     themeViewModel: ThemeViewModel,
-    onNavigateToModelConfig: () -> Unit
+    onNavigateToModelConfig: () -> Unit,
+    onNavigateToSystemPromptConfig: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
@@ -452,6 +466,35 @@ fun SettingsContent(
                         Icon(Icons.Filled.Settings, contentDescription = "模型设置")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("模型设置")
+                    }
+                }
+            }
+
+            // --- 系统提示词配置 ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        text = "系统提示词",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "设定 AI 的行为模式、角色或规则",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Button(
+                        onClick = onNavigateToSystemPromptConfig,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Edit, contentDescription = "配置系统提示词")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("配置系统提示词")
                     }
                 }
             }

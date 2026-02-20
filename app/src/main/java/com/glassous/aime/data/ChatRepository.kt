@@ -199,6 +199,12 @@ class ChatRepository(
             
             val messages = limitContext(baseMessages).toMutableList()
 
+            // 注入用户配置的系统提示词
+            val systemPrompt = modelPreferences.systemPrompt.first()
+            if (systemPrompt.isNotBlank()) {
+                messages.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
+            }
+
             // 注入“非必要的用户背景”系统消息（仅当存在已填写字段时）
             
 

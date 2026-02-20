@@ -21,11 +21,17 @@ class ModelPreferences(private val context: Context) {
         private val TITLE_GENERATION_CONTEXT_STRATEGY = intPreferencesKey("title_generation_context_strategy")
         private val TITLE_GENERATION_CONTEXT_N = intPreferencesKey("title_generation_context_n")
         private val TITLE_GENERATION_AUTO_GENERATE = booleanPreferencesKey("title_generation_auto_generate")
+        private val SYSTEM_PROMPT = stringPreferencesKey("system_prompt")
     }
 
     val selectedModelId: Flow<String?> = context.dataStore.data
         .map { preferences ->
             preferences[SELECTED_MODEL_ID]
+        }
+
+    val systemPrompt: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[SYSTEM_PROMPT] ?: ""
         }
 
     val titleGenerationModelId: Flow<String?> = context.dataStore.data
@@ -84,6 +90,12 @@ class ModelPreferences(private val context: Context) {
     suspend fun setTitleGenerationAutoGenerate(enabled: Boolean) {
         context.dataStore.edit { preferences ->
             preferences[TITLE_GENERATION_AUTO_GENERATE] = enabled
+        }
+    }
+
+    suspend fun setSystemPrompt(prompt: String) {
+        context.dataStore.edit { preferences ->
+            preferences[SYSTEM_PROMPT] = prompt
         }
     }
 }

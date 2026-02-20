@@ -47,6 +47,11 @@
             android:exported="false"
             android:label="模型配置"
             android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.screens.SystemPromptConfigActivity"
+            android:exported="false"
+            android:label="系统提示词配置"
+            android:theme="@style/Theme.AIme" />
     </application>
 
 </manifest>
