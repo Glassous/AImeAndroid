@@ -1,0 +1,440 @@
+package com.glassous.aime.ui.components
+
+import android.widget.TextView
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import io.noties.markwon.Markwon
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileWriter
+
+import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.glassous.aime.data.ChatMessage
+import kotlin.math.max
+
+data class TableData(
+    val headers: List<String>,
+    val rows: List<List<String>>
+)
+
+@Composable
+fun MarkdownTable(
+    markdown: String,
+    markwon: Markwon,
+    textColor: Color,
+    textSizeSp: Float,
+    modifier: Modifier = Modifier
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+    var showShareSheet by remember { mutableStateOf(false) }
+    val interactionSource = remember { MutableInteractionSource() }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    
+    val tableData = remember(markdown) { parseMarkdownTable(markdown) }
+    val horizontalScrollState = rememberScrollState()
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color.Transparent)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = RoundedCornerShape(8.dp)
+            )
+    ) {
+        // Table Content
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .clickable(
+                    interactionSource = interactionSource,
+                    indication = null // No ripple effect
+                ) {
+                    isExpanded = !isExpanded
+                }
+        ) {
+            val screenWidth = maxWidth
+            val minColWidth = 150.dp
+            val colCount = if (tableData.headers.isNotEmpty()) tableData.headers.size else 1
+            val totalMinWidth = minColWidth * colCount
+            
+            // If content fits in screen, distribute width equally. Otherwise use min width.
+            val columnWidth = if (totalMinWidth < screenWidth) {
+                screenWidth / colCount
+            } else {
+                minColWidth
+            }
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(horizontalScrollState)
+            ) {
+                // Headers
+                if (tableData.headers.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                            .height(IntrinsicSize.Min) // 使分割线高度一致
+                    ) {
+                        tableData.headers.forEachIndexed { index, header ->
+                            Cell(
+                                text = header,
+                                isHeader = true,
+                                textColor = textColor,
+                                textSizeSp = textSizeSp,
+                                markwon = markwon,
+                                modifier = Modifier.width(columnWidth) // Use calculated width
+                            )
+                            if (index < tableData.headers.size - 1) {
+                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                            }
+                        }
+                    }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                }
+
+                // Rows
+                tableData.rows.forEachIndexed { rowIndex, row ->
+                    Row(
+                        modifier = Modifier
+                            .background(
+                                if (rowIndex % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
+                                else Color.Transparent
+                            )
+                            .height(IntrinsicSize.Min)
+                    ) {
+                        // 补齐列数不足的情况
+                        val cells = if (row.size < tableData.headers.size) {
+                            row + List(tableData.headers.size - row.size) { "" }
+                        } else {
+                            row
+                        }
+                        
+                        cells.forEachIndexed { colIndex, cell ->
+                            if (colIndex < tableData.headers.size) { // 只显示表头对应的列
+                                Cell(
+                                    text = cell,
+                                    isHeader = false,
+                                    textColor = textColor,
+                                    textSizeSp = textSizeSp,
+                                    markwon = markwon,
+                                    modifier = Modifier.width(columnWidth) // Use calculated width
+                                )
+                                if (colIndex < tableData.headers.size - 1) {
+                                    VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                            }
+                        }
+                    }
+                    if (rowIndex < tableData.rows.size - 1) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+                }
+            }
+        }
+
+        // Expanded Toolbar
+        AnimatedVisibility(
+            visible = isExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Share Button
+                IconButton(
+                    onClick = { showShareSheet = true },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = "Share Table",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Copy Button
+                IconButton(
+                    onClick = {
+                        val csv = parseMarkdownTableToCsv(markdown)
+                        clipboardManager.setText(AnnotatedString(csv))
+                        Toast.makeText(context, "表格已复制为 CSV", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ContentCopy,
+                        contentDescription = "Copy CSV",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Download Button
+                IconButton(
+                    onClick = {
+                        scope.launch {
+                            val csv = parseMarkdownTableToCsv(markdown)
+                            saveCsvToFile(context, csv)
+                        }
+                    },
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Download CSV",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+
+    if (showShareSheet) {
+        val dummyMessage = remember(markdown) {
+            ChatMessage(
+                conversationId = 0,
+                content = markdown,
+                isFromUser = false,
+                modelDisplayName = "Table Share"
+            )
+        }
+        LongImagePreviewBottomSheet(
+            messages = listOf(dummyMessage),
+            onDismiss = { showShareSheet = false },
+            showLinkButton = false
+        )
+    }
+}
+
+@Composable
+private fun Cell(
+    text: String,
+    isHeader: Boolean,
+    textColor: Color,
+    textSizeSp: Float,
+    markwon: Markwon,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(8.dp),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        AndroidView(
+            factory = { ctx ->
+                TextView(ctx).apply {
+                    setTextColor(textColor.toArgb())
+                    textSize = textSizeSp
+                }
+            },
+            update = { tv ->
+                tv.setTextColor(textColor.toArgb())
+                tv.textSize = textSizeSp
+                
+                // Use markwon to render markdown/latex
+                markwon.setMarkdown(tv, text)
+                
+                // Enforce header bold styling
+                if (isHeader) {
+                    tv.setTypeface(null, android.graphics.Typeface.BOLD)
+                } else {
+                    tv.setTypeface(null, android.graphics.Typeface.NORMAL)
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun VerticalDivider(color: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxHeight()
+            .width(1.dp)
+            .background(color)
+    )
+}
+
+@Composable
+private fun HorizontalDivider(color: Color) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(color)
+    )
+}
+
+private fun parseMarkdownTable(markdown: String): TableData {
+    val lines = markdown.trim().split("\n")
+    if (lines.isEmpty()) return TableData(emptyList(), emptyList())
+
+    // 1. Headers
+    val headerLine = lines[0]
+    val headers = parseRow(headerLine)
+
+    // 2. Rows
+    // Skip separator line (usually index 1)
+    val rows = lines.drop(1)
+        .filter { !isSeparatorLine(it) }
+        .map { parseRow(it) }
+
+    return TableData(headers, rows)
+}
+
+private fun parseRow(line: String): List<String> {
+    // Split by pipe, but handle escaped pipes if needed (simplification: assume no escaped pipes for now)
+    // Remove leading/trailing pipes if present
+    val trimmed = line.trim()
+    val content = if (trimmed.startsWith("|") && trimmed.endsWith("|")) {
+        trimmed.substring(1, trimmed.length - 1)
+    } else {
+        trimmed
+    }
+    return content.split("|").map { it.trim() }
+}
+
+private fun isSeparatorLine(line: String): Boolean {
+    val trimmed = line.trim()
+    // 简单的分隔行检测：只包含 | - : 空格
+    return trimmed.all { it == '|' || it == '-' || it == ':' || it == ' ' } && trimmed.contains("-")
+}
+
+private fun cleanMarkdown(text: String): String {
+    var result = text
+    // Remove bold/italic: **text** -> text, *text* -> text, __text__ -> text, _text_ -> text
+    // Using Regex to replace common markdown syntax
+    val patterns = listOf(
+        Regex("\\*\\*(.*?)\\*\\*"), // Bold **
+        Regex("\\*(.*?)\\*"),       // Italic *
+        Regex("__(.*?)__"),         // Bold __
+        Regex("_(.*?)_"),           // Italic _
+        Regex("`(.*?)`"),           // Code `
+        Regex("~~(.*?)~~")          // Strikethrough ~~
+    )
+    
+    patterns.forEach { pattern ->
+        result = result.replace(pattern, "$1")
+    }
+    
+    // Links [text](url) -> text
+    result = result.replace(Regex("\\[(.*?)\\]\\(.*?\\)"), "$1")
+    
+    return result
+}
+
+private fun parseMarkdownTableToCsv(markdown: String): String {
+    val lines = markdown.trim().split("\n")
+    if (lines.size < 2) return markdown
+
+    val csvBuilder = StringBuilder()
+    
+    // Filter out separator line (usually 2nd line, contains ---)
+    val contentLines = lines.filter { !it.trim().matches(Regex("^\\|[ :\\-]+\\|$")) }
+
+    for (line in contentLines) {
+        val row = line.trim().trim('|').split("|")
+        val csvRow = row.joinToString(",") { cell ->
+            // Clean markdown first
+            val cleanedCell = cleanMarkdown(cell.trim())
+            
+            // Escape quotes and wrap in quotes if necessary
+            if (cleanedCell.contains(",") || cleanedCell.contains("\"")) {
+                "\"${cleanedCell.replace("\"", "\"\"")}\""
+            } else {
+                cleanedCell
+            }
+        }
+        csvBuilder.append(csvRow).append("\n")
+    }
+    return csvBuilder.toString().trim()
+}
+
+private suspend fun saveCsvToFile(context: android.content.Context, content: String) {
+    withContext(Dispatchers.IO) {
+        try {
+            val fileName = "table_${System.currentTimeMillis()}.csv"
+            val downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS)
+            val file = File(downloadsDir, fileName)
+            
+            FileWriter(file).use { it.write(content) }
+            
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "已保存到下载目录: $fileName", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "保存失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}

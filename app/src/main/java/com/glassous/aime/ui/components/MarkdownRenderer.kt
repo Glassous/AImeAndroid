@@ -22,11 +22,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
+import io.noties.markwon.ext.tables.TableTheme
 import io.noties.markwon.html.HtmlPlugin
 import io.noties.markwon.inlineparser.MarkwonInlineParserPlugin
 import java.util.regex.Pattern
@@ -38,7 +40,7 @@ data class MarkdownBlock(
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK, MERMAID
+    TEXT, CODE_BLOCK, MERMAID, TABLE
 }
 
 @Composable
@@ -78,8 +80,11 @@ fun MarkdownRenderer(
         }
     }
 
+    val colorScheme = MaterialTheme.colorScheme
+    val density = LocalDensity.current
+
     // 创建不包含代码块处理的Markwon实例，用于渲染普通文本
-    val markwon = remember(context, enableTables, enableLatex, textSizeSp) {
+    val markwon = remember(context, enableTables, enableLatex, textSizeSp, colorScheme, density) {
         val scaledDensity = context.resources.displayMetrics.scaledDensity
         val textPx = textSizeSp * scaledDensity
 
@@ -102,7 +107,15 @@ fun MarkdownRenderer(
         }
 
         if (enableTables) {
-            builder.usePlugin(TablePlugin.create(context))
+            val tableTheme = TableTheme.Builder()
+                .tableBorderColor(colorScheme.outlineVariant.toArgb())
+                .tableBorderWidth(with(density) { 1.dp.toPx() }.toInt())
+                .tableCellPadding(with(density) { 8.dp.toPx() }.toInt())
+                .tableHeaderRowBackgroundColor(colorScheme.surfaceVariant.copy(alpha = 0.5f).toArgb())
+                .tableEvenRowBackgroundColor(colorScheme.surfaceVariant.copy(alpha = 0.1f).toArgb())
+                .tableOddRowBackgroundColor(android.graphics.Color.TRANSPARENT)
+                .build()
+            builder.usePlugin(TablePlugin.create(tableTheme))
         }
         builder.build()
     }
@@ -298,6 +311,15 @@ fun MarkdownRenderer(
                         useCardStyle = useCardStyleForHtmlCode
                     )
                 }
+                BlockType.TABLE -> {
+                    MarkdownTable(
+                        markdown = block.content,
+                        markwon = markwon,
+                        textColor = textColor,
+                        textSizeSp = textSizeSp,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
             }
         }
     }
@@ -315,7 +337,8 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
         if (matcher.start() > lastEnd) {
             val textContent = markdown.substring(lastEnd, matcher.start()).trim()
             if (textContent.isNotEmpty()) {
-                blocks.add(MarkdownBlock(BlockType.TEXT, textContent))
+                // 进一步解析文本中的表格
+                blocks.addAll(parseTables(textContent))
             }
         }
 
@@ -336,16 +359,111 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     if (lastEnd < markdown.length) {
         val textContent = markdown.substring(lastEnd).trim()
         if (textContent.isNotEmpty()) {
-            blocks.add(MarkdownBlock(BlockType.TEXT, textContent))
+            blocks.addAll(parseTables(textContent))
         }
     }
 
-    // 如果没有找到代码块，整个内容作为文本块
+    // 如果没有找到代码块，整个内容作为文本块（可能包含表格）
     if (blocks.isEmpty()) {
-        blocks.add(MarkdownBlock(BlockType.TEXT, markdown))
+        blocks.addAll(parseTables(markdown))
     }
 
     return blocks
+}
+
+private fun parseTables(markdown: String): List<MarkdownBlock> {
+    val blocks = mutableListOf<MarkdownBlock>()
+    val lines = markdown.split("\n")
+    val currentText = StringBuilder()
+    var i = 0
+
+    while (i < lines.size) {
+        val line = lines[i]
+
+        // Check if this line is a separator line (e.g., "|---|---|")
+        if (isTableSeparator(line)) {
+            // Check if previous line exists and is a header (contains '|')
+            val headerCandidateIndex = i - 1
+            if (headerCandidateIndex >= 0) {
+                val headerCandidate = lines[headerCandidateIndex]
+                if (headerCandidate.contains("|")) {
+                    // Found a table start!
+                    
+                    // 1. Flush accumulated text (excluding the header line which is part of the table)
+                    // The header line was appended to currentText in the previous iteration
+                    // We need to remove it from currentText
+                    val textContent = currentText.toString()
+                    val headerWithNewline = headerCandidate + "\n"
+                    
+                    // Remove the last occurrence of header line
+                    val textBeforeHeader = if (textContent.endsWith(headerWithNewline)) {
+                        textContent.substring(0, textContent.length - headerWithNewline.length)
+                    } else if (textContent.endsWith(headerCandidate)) { // case where no newline at end
+                         textContent.substring(0, textContent.length - headerCandidate.length)
+                    } else {
+                        // Fallback, shouldn't happen with correct logic
+                        textContent
+                    }
+
+                    if (textBeforeHeader.isNotBlank()) {
+                        blocks.add(MarkdownBlock(BlockType.TEXT, textBeforeHeader))
+                    }
+                    currentText.clear() 
+
+                    // 2. Start collecting table content
+                    val tableBuilder = StringBuilder()
+                    tableBuilder.append(headerCandidate).append("\n")
+                    tableBuilder.append(line).append("\n")
+
+                    // 3. Consume subsequent lines that look like table rows
+                    var j = i + 1
+                    while (j < lines.size) {
+                        val nextLine = lines[j]
+                        // A table row must contain a pipe '|'
+                        if (nextLine.trim().isNotEmpty() && nextLine.contains("|")) {
+                            tableBuilder.append(nextLine).append("\n")
+                            j++
+                        } else {
+                            break
+                        }
+                    }
+                    
+                    blocks.add(MarkdownBlock(BlockType.TABLE, tableBuilder.toString()))
+                    i = j // Advance main index to the line after the table
+                    continue
+                }
+            }
+        }
+
+        currentText.append(line).append("\n")
+        i++
+    }
+
+    if (currentText.isNotEmpty()) {
+        blocks.add(MarkdownBlock(BlockType.TEXT, currentText.toString()))
+    }
+
+    return blocks
+}
+
+private fun isTableSeparator(line: String): Boolean {
+    val trimmed = line.trim()
+    if (trimmed.isEmpty()) return false
+    // Must contain |, -, and optionally : and spaces. No other chars.
+    // Also must contain at least 3 dashes usually, but let's be lenient: contain '-'
+    // Standard markdown table separator line: |---|---| or --- | ---
+    // It must contain at least one hyphen and one pipe (usually)
+    // Markwon expects GFM tables.
+    
+    // Check for valid characters
+    val validChars = setOf('|', '-', ':', ' ')
+    if (trimmed.any { it !in validChars }) return false
+    
+    // Must have at least one pipe and one dash
+    if (!trimmed.contains("|")) return false
+    if (!trimmed.contains("-")) return false
+    
+    return true
 }
 
 private fun preprocessText(input: String, enableLatex: Boolean): String {

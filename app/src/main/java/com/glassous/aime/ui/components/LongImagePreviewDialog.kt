@@ -48,6 +48,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 
+import androidx.compose.ui.platform.LocalConfiguration
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LongImagePreviewBottomSheet(
@@ -58,11 +60,14 @@ fun LongImagePreviewBottomSheet(
     replyBubbleEnabled: Boolean = true,
     isSharing: Boolean = false,
     sharedUrl: String? = null,
-    onShareLink: () -> Unit = {}
+    onShareLink: () -> Unit = {},
+    showLinkButton: Boolean = true
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isGenerating by remember { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
     
     // Copy feedback state
     var showSuccessFeedback by remember { mutableStateOf(false) }
@@ -99,17 +104,17 @@ fun LongImagePreviewBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.9f) // Occupy 90% of screen height
+                .heightIn(max = screenHeight * 0.9f) // Occupy max 90% of screen height
         ) {
             // Image Preview Area
             Box(
                 modifier = Modifier
-                    .weight(1f)
+                    .weight(1f, fill = false) // Use weight with fill=false to allow shrinking but expanding up to available space
                     .fillMaxWidth()
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
                 ) {
@@ -232,55 +237,57 @@ fun LongImagePreviewBottomSheet(
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     // Copy Link Button
-                Surface(
-                    onClick = {
-                        if (sharedUrl != null) {
-                            clipboardManager.setText(AnnotatedString(sharedUrl))
-                            showSuccessFeedback = true
-                        } else {
-                            onShareLink()
-                        }
-                    },
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier
-                        .height(48.dp)
-                        .animateContentSize()
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.padding(horizontal = if (sharedUrl != null) 16.dp else 0.dp)
-                    ) {
-                        Box(
-                            contentAlignment = Alignment.Center, 
-                            modifier = Modifier.size(48.dp)
+                    if (showLinkButton) {
+                        Surface(
+                            onClick = {
+                                if (sharedUrl != null) {
+                                    clipboardManager.setText(AnnotatedString(sharedUrl))
+                                    showSuccessFeedback = true
+                                } else {
+                                    onShareLink()
+                                }
+                            },
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier
+                                .height(48.dp)
+                                .animateContentSize()
                         ) {
-                            if (isSharing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
-                                    color = MaterialTheme.colorScheme.onTertiary
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (showSuccessFeedback) Icons.Default.Check else Icons.Default.Link,
-                                    contentDescription = "复制链接",
-                                    tint = MaterialTheme.colorScheme.onTertiary
-                                )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier.padding(horizontal = if (sharedUrl != null) 16.dp else 0.dp)
+                            ) {
+                                Box(
+                                    contentAlignment = Alignment.Center, 
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    if (isSharing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.onTertiary
+                                        )
+                                    } else {
+                                        Icon(
+                                            imageVector = if (showSuccessFeedback) Icons.Default.Check else Icons.Default.Link,
+                                            contentDescription = "复制链接",
+                                            tint = MaterialTheme.colorScheme.onTertiary
+                                        )
+                                    }
+                                }
+                                
+                                if (sharedUrl != null && !isSharing) {
+                                    Text(
+                                        text = if (showSuccessFeedback) "链接已复制" else "重新复制",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.onTertiary,
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                }
                             }
                         }
-                        
-                        if (sharedUrl != null && !isSharing) {
-                            Text(
-                                text = if (showSuccessFeedback) "链接已复制" else "重新复制",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onTertiary,
-                                modifier = Modifier.padding(end = 4.dp)
-                            )
-                        }
                     }
-                }
 
                     // Save Button
                     Surface(
