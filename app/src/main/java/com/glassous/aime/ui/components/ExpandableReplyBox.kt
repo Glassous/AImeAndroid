@@ -35,7 +35,8 @@ fun ExpandableReplyBox(
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false,
     forceExpanded: Boolean = false, // 新增：强制展开参数
-    enableTypewriterEffect: Boolean = true
+    enableTypewriterEffect: Boolean = true,
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     // 定义解析结果变量
     var preText by remember { mutableStateOf("") }
@@ -346,7 +347,8 @@ fun ExpandableReplyBox(
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
                             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                            isStreaming = isPreTextStreaming && enableTypewriterEffect
+                            isStreaming = isPreTextStreaming && enableTypewriterEffect,
+                            onLinkClick = onLinkClick
                         )
 
                         // 如果思考还在继续（流式且无正式回复），显示个简单的提示
@@ -374,7 +376,8 @@ fun ExpandableReplyBox(
                     onHtmlPreview = onHtmlPreview,
                     onHtmlPreviewSource = onHtmlPreviewSource,
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                    isStreaming = isStreaming && officialText == null && enableTypewriterEffect
+                    isStreaming = isStreaming && officialText == null && enableTypewriterEffect,
+                    onLinkClick = onLinkClick
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -391,12 +394,17 @@ fun ExpandableReplyBox(
                     onHtmlPreviewSource = onHtmlPreviewSource,
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
+                    onLinkClick = onLinkClick,
                     onCitationClick = { id ->
                         if (isSearchMode) {
                             val url = citationUrls[id]
                             if (url != null) {
                                 try {
-                                    uriHandler.openUri(url)
+                                    if (onLinkClick != null) {
+                                        onLinkClick.invoke(url)
+                                    } else {
+                                        uriHandler.openUri(url)
+                                    }
                                 } catch (e: Exception) {
                                     // 无法打开链接，可能URL无效， fallback到展开详情
                                     expanded = true

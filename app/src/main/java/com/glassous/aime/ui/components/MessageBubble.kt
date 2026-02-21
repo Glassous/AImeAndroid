@@ -49,7 +49,9 @@ fun MessageBubble(
     // 新增：是否使用卡片样式显示 HTML 代码块
     useCardStyleForHtmlCode: Boolean = false,
     // 新增：强制展开深度思考区域
-    forceExpandReply: Boolean = false
+    forceExpandReply: Boolean = false,
+    // 新增：链接点击回调
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -128,7 +130,8 @@ fun MessageBubble(
                             onHtmlPreviewSource = onHtmlPreviewSource,
                             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                             forceExpanded = forceExpandReply,
-                            enableTypewriterEffect = enableTypewriterEffect
+                            enableTypewriterEffect = enableTypewriterEffect,
+                            onLinkClick = onLinkClick
                         )
                         } else {
                             StreamingMarkdownRenderer(
@@ -140,7 +143,8 @@ fun MessageBubble(
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                enableTypewriterEffect = enableTypewriterEffect
+                                enableTypewriterEffect = enableTypewriterEffect,
+                                onLinkClick = onLinkClick
                             )
                         }
 
@@ -199,7 +203,8 @@ fun MessageBubble(
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 forceExpanded = forceExpandReply,
-                                enableTypewriterEffect = enableTypewriterEffect
+                                enableTypewriterEffect = enableTypewriterEffect,
+                                onLinkClick = onLinkClick
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件
@@ -212,7 +217,8 @@ fun MessageBubble(
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                enableTypewriterEffect = enableTypewriterEffect
+                                enableTypewriterEffect = enableTypewriterEffect,
+                                onLinkClick = onLinkClick
                             )
                         }
                     }

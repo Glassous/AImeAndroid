@@ -55,7 +55,8 @@ fun MarkdownRenderer(
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false,
     isStreaming: Boolean = false,
-    onCitationClick: ((String) -> Unit)? = null
+    onCitationClick: ((String) -> Unit)? = null,
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
     val displayMarkdown = remember(markdown) {
@@ -138,18 +139,20 @@ fun MarkdownRenderer(
                                 val textToRender = preprocessText(block.content, enableLatex)
                                 var spanned: CharSequence = markwon.toMarkdown(textToRender)
                                 
-                                // 处理引用标签 ^n
+                                    // 处理引用标签 ^n
                                 if (spanned is Spanned) {
                                     val builder = SpannableStringBuilder(spanned)
                                     val urlSpans = builder.getSpans(0, builder.length, URLSpan::class.java)
-                                    var hasCitation = false
+                                    var hasModifications = false
+                                    
                                     for (span in urlSpans) {
                                         val url = span.url
+                                        val start = builder.getSpanStart(span)
+                                        val end = builder.getSpanEnd(span)
+                                        val flags = builder.getSpanFlags(span)
+                                        
                                         if (url.startsWith("citation:")) {
                                             val id = url.removePrefix("citation:")
-                                            val start = builder.getSpanStart(span)
-                                            val end = builder.getSpanEnd(span)
-                                            val flags = builder.getSpanFlags(span)
                                             builder.removeSpan(span)
                                             
                                             // 添加点击事件
@@ -165,10 +168,25 @@ fun MarkdownRenderer(
                                             
                                             // 添加外观样式（小卡片）
                                             builder.setSpan(CitationAppearanceSpan(id, textColor.toArgb(), textSizeSp), start, end, flags)
-                                            hasCitation = true
+                                            hasModifications = true
+                                        } else if (onLinkClick != null) {
+                                            // 处理普通链接点击
+                                            builder.removeSpan(span)
+                                            
+                                            builder.setSpan(object : ClickableSpan() {
+                                                override fun onClick(widget: View) {
+                                                    onLinkClick.invoke(url)
+                                                }
+                                                override fun updateDrawState(ds: TextPaint) {
+                                                    ds.isUnderlineText = true
+                                                    ds.color = textColor.toArgb()
+                                                }
+                                            }, start, end, flags)
+                                            hasModifications = true
                                         }
                                     }
-                                    if (hasCitation) {
+                                    
+                                    if (hasModifications) {
                                         spanned = builder
                                     }
                                 }

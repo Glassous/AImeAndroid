@@ -41,6 +41,7 @@ import com.glassous.aime.ui.components.ModelSelectionBottomSheet
 import com.glassous.aime.ui.components.ToolSelectionBottomSheet
 import com.glassous.aime.ui.components.NavigationDrawer
 import com.glassous.aime.ui.components.LocalDialogBlurState
+import com.glassous.aime.ui.components.WebViewPopup
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
 import com.glassous.aime.ui.viewmodel.ToolSelectionViewModel
  
@@ -240,6 +241,9 @@ fun ChatScreen(
 
     // 内容淡入动画状态
     val contentAlpha = remember { Animatable(0f) }
+
+    // 新增：当前打开的网页链接，用于WebView弹窗
+    var currentUrl by remember { mutableStateOf<String?>(null) }
 
     // 切换对话时触发淡入动画
     LaunchedEffect(currentConversationId) {
@@ -835,7 +839,10 @@ fun ChatScreen(
                                 onHtmlPreview = onNavigateToHtmlPreview,
                                 onHtmlPreviewSource = onNavigateToHtmlPreviewSource,
                                 useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
-                                enableTypewriterEffect = true
+                                enableTypewriterEffect = true,
+                                onLinkClick = { url ->
+                                    currentUrl = url
+                                }
                             )
                         }
                         // 底部安全距离Spacer：初始状态保持现有底部位置，滚动到底后内容可进入输入栏区域
@@ -959,6 +966,14 @@ fun ChatScreen(
                     }
                 )
             }
+        )
+    }
+
+    // 网页预览弹窗
+    if (currentUrl != null) {
+        WebViewPopup(
+            url = currentUrl!!,
+            onDismissRequest = { currentUrl = null }
         )
     }
 
