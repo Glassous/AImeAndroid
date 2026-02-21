@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.model.BuiltInModels
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
  
@@ -44,7 +45,9 @@ class ModelSelectionViewModel(
     init {
         viewModelScope.launch {
             modelPreferences.selectedModelId.collect { id ->
-                if (id != null) {
+                if (id == BuiltInModels.AIME_MODEL_ID) {
+                    _selectedModel.value = BuiltInModels.aimeModel
+                } else if (id != null) {
                     val model = repository.getModelById(id)
                     _selectedModel.value = model
                     if (model == null) {

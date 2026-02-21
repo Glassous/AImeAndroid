@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
+import com.glassous.aime.data.model.BuiltInModels
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
 import com.glassous.aime.ui.viewmodel.ModelSelectionViewModel
@@ -285,6 +286,9 @@ fun ModelSelectionBottomSheet(
                             onToolSelectionClick = {
                                 // 打开工具选择弹窗
                                 onToolSelectionClick()
+                            },
+                            onBuiltInModelClick = { model ->
+                                viewModel.selectModel(model, onSyncResult)
                             }
                         )
                     } else {
@@ -363,7 +367,8 @@ private fun ToolSelectionItem(
 private fun GroupList(
     groups: List<ModelGroup>,
     onGroupClick: (ModelGroup) -> Unit,
-    onToolSelectionClick: () -> Unit
+    onToolSelectionClick: () -> Unit,
+    onBuiltInModelClick: (Model) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -374,6 +379,14 @@ private fun GroupList(
         item {
             ToolSelectionItem(
                 onClick = onToolSelectionClick
+            )
+        }
+
+        // 内置AIme模型
+        item {
+            ModelItem(
+                model = BuiltInModels.aimeModel,
+                onClick = { onBuiltInModelClick(BuiltInModels.aimeModel) }
             )
         }
         

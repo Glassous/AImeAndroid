@@ -5,6 +5,7 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 ## ✨ 主要功能
 
 ### 🤖 多模型支持
+- **内置 AIme 模型**：开箱即用的免费 AI 模型，无需配置即可体验。
 - **自定义模型配置**：支持配置任意 OpenAI 兼容接口的模型（如 GPT, DeepSeek, 豆包等）。
 - **多服务商管理**：可以添加多个模型分组，分别设置 Base URL 和 API Key。
 - **快速切换**：在聊天界面随时切换当前使用的模型。
@@ -132,6 +133,10 @@ AIme 是一个基于 Android (Kotlin + Jetpack Compose) 开发的现代化 AI �
 4. **关键配置**：
    *   **监听端口**：确保设置为 `9000` (默认)。
    *   **执行超时时间**：在高级配置中修改为 **120 秒**。
+   *   **环境变量** (用于内置模型 AIme)：
+       *   `TARGET_URL`: 目标服务的完整 URL (例如 `https://api.openai.com/v1/chat/completions`)
+       *   `TARGET_API_KEY`: 目标服务的 API Key
+       *   `TARGET_MODEL`: (可选) 强制使用的模型名称 (例如 `gpt-4o`)
 5. 将本项目中 `aliyun-fc-proxy/index.js` 的代码全选复制到控制台自带的 `index.js` 中并点击“部署代码”。
    *(注意：如果您之前使用的是“事件函数”，请务必删除重建，或者将函数类型改为 Web 函数并配置监听端口为 9000)*
 6. 在“触发器管理”中创建一个“HTTP 触发器”（认证方式选：不需要认证），获取公网访问地址。

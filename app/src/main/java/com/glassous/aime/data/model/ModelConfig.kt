@@ -43,3 +43,25 @@ data class ModelConfigInfo(
     val group: ModelGroup,
     val models: List<Model>
 )
+
+object BuiltInModels {
+    const val AIME_MODEL_ID = "builtin_aime"
+    const val AIME_GROUP_ID = "builtin_aime_group"
+    const val BUILTIN_API_KEY_PLACEHOLDER = "sk-builtin-aime"
+
+    val aimeModel = Model(
+        id = AIME_MODEL_ID,
+        groupId = AIME_GROUP_ID,
+        name = "AIme",
+        modelName = "内置免费模型", // Will be replaced by env var in proxy
+        remark = "内置AI模型",
+        createdAt = 0L
+    )
+
+    val aimeGroup = ModelGroup(
+        id = AIME_GROUP_ID,
+        name = "AIme",
+        baseUrl = "https://api.openai.com/v1", // Dummy URL, proxy will replace
+        apiKey = BUILTIN_API_KEY_PLACEHOLDER
+    )
+}

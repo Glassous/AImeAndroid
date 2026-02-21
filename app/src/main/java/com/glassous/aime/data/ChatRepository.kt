@@ -12,6 +12,7 @@ import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.ContextPreferences
  
+import com.glassous.aime.data.model.BuiltInModels
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
  
@@ -152,7 +153,12 @@ class ChatRepository(
                 chatDao.insertMessage(errorMessage)
                 return Result.failure(IllegalStateException("No selected model"))
             }
-            val model = modelConfigRepository.getModelById(selectedModelId)
+            val model = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeModel
+            } else {
+                modelConfigRepository.getModelById(selectedModelId)
+            }
+
             if (model == null) {
                 val errorMessage = ChatMessage(
                     conversationId = conversationId,
@@ -164,7 +170,13 @@ class ChatRepository(
                 chatDao.insertMessage(errorMessage)
                 return Result.failure(IllegalStateException("Selected model not found"))
             }
-            val group = modelConfigRepository.getGroupById(model.groupId)
+
+            val group = if (model.groupId == BuiltInModels.AIME_GROUP_ID) {
+                BuiltInModels.aimeGroup
+            } else {
+                modelConfigRepository.getGroupById(model.groupId)
+            }
+
             if (group == null) {
                 val errorMessage = ChatMessage(
                     conversationId = conversationId,
@@ -212,6 +224,13 @@ class ChatRepository(
 
             // 注入用户配置的系统提示词
             var systemPrompt = modelPreferences.systemPrompt.first()
+            
+            // 针对内置模型 AIme 注入专属系统提示词
+            if (model.id == BuiltInModels.AIME_MODEL_ID) {
+                val aimePrompt = "你的名称是“AIme”，由 FiaCloud 开发。"
+                systemPrompt = if (systemPrompt.isEmpty()) aimePrompt else "$aimePrompt\n$systemPrompt"
+            }
+
             val enableDate = modelPreferences.enableDynamicDate.first()
             val enableTimestamp = modelPreferences.enableDynamicTimestamp.first()
             val enableLocation = modelPreferences.enableDynamicLocation.first()
@@ -3304,7 +3323,11 @@ class ChatRepository(
             )
         }
 
-        val useCloudProxy = modelPreferences.useCloudProxy.first()
+        val useCloudProxy = if (primaryModel.id == BuiltInModels.AIME_MODEL_ID) {
+            true
+        } else {
+            modelPreferences.useCloudProxy.first()
+        }
         val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
         val supabaseAnonKey = com.glassous.aime.BuildConfig.SUPABASE_KEY
 
