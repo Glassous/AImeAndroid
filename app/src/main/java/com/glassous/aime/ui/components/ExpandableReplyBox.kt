@@ -49,7 +49,7 @@ fun ExpandableReplyBox(
     // 获取UriHandler用于打开链接
     val uriHandler = LocalUriHandler.current
 
-    // 解析搜索结果中的引用链接
+    // 解析搜索结果中的引用链接和列表
     val citationUrls = remember(preText, isSearchMode) {
         val map = mutableMapOf<String, String>()
         if (isSearchMode && preText.isNotEmpty()) {
@@ -70,6 +70,47 @@ fun ExpandableReplyBox(
         }
         map
     }
+    
+    // 解析搜索结果列表用于BottomSheet展示
+    val searchResultsList = remember(preText, isSearchMode) {
+        val list = mutableListOf<SearchResult>()
+        if (isSearchMode && preText.isNotEmpty()) {
+            val regex = Regex("""^(\d+)\.\s+\[(.*?)\]\((.*?)\)""", RegexOption.MULTILINE)
+            regex.findAll(preText).forEach { matchResult ->
+                if (matchResult.groupValues.size >= 4) {
+                    val id = matchResult.groupValues[1]
+                    val title = matchResult.groupValues[2]
+                    val url = matchResult.groupValues[3]
+                    list.add(SearchResult(id, title, url))
+                }
+            }
+        }
+        list
+    }
+
+    // 搜索结果BottomSheet显示状态
+    var showSearchBottomSheet by remember { mutableStateOf(false) }
+
+    // 显示搜索结果BottomSheet
+    if (showSearchBottomSheet && searchResultsList.isNotEmpty()) {
+        SearchResultsBottomSheet(
+            results = searchResultsList,
+            onDismissRequest = { showSearchBottomSheet = false },
+            onLinkClick = { url ->
+                // 点击搜索结果链接
+                try {
+                    if (onLinkClick != null) {
+                        onLinkClick.invoke(url)
+                    } else {
+                        uriHandler.openUri(url)
+                    }
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }
+        )
+    }
+
 
     // 解析逻辑
     LaunchedEffect(content) {
@@ -282,83 +323,92 @@ fun ExpandableReplyBox(
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
             // 顶部：折叠/展开控制栏（仅当前置文本不为空时显示）
             if (preText.isNotEmpty()) {
-                Surface(
-                    onClick = { expanded = !expanded },
-                    shape = MaterialTheme.shapes.small,
-                    color = Color.Transparent,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                if (isSearchMode) {
+                    // 搜索模式：显示搜索结果卡片
+                    SearchResultsCard(
+                        resultCount = searchResultsList.size,
+                        onClick = { showSearchBottomSheet = true },
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                } else {
+                    // 思考/前置模式：原有的折叠/展开控制栏
+                    Surface(
+                        onClick = { expanded = !expanded },
+                        shape = MaterialTheme.shapes.small,
+                        color = Color.Transparent,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
                     ) {
-                        Text(
-                            text = when {
-                                isSearchMode -> "搜索结果"
-                                isThinkTagMode -> "深度思考过程"
-                                else -> "前置回复"
-                            },
-                            color = MaterialTheme.colorScheme.secondary,
-                            style = MaterialTheme.typography.labelMedium,
-                            modifier = Modifier.wrapContentWidth()
-                        )
-                        if (thinkingTime != null) {
-                            Spacer(modifier = Modifier.width(4.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
                             Text(
-                                text = thinkingTime!!,
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                                text = when {
+                                    isThinkTagMode -> "深度思考过程"
+                                    else -> "前置回复"
+                                },
+                                color = MaterialTheme.colorScheme.secondary,
                                 style = MaterialTheme.typography.labelMedium,
                                 modifier = Modifier.wrapContentWidth()
                             )
-                        }
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(
-                            imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.weight(1f))
-                    }
-                }
-
-                // 思考内容区域
-                AnimatedVisibility(visible = expanded) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable(
-                                interactionSource = remember { MutableInteractionSource() },
-                                indication = null
-                            ) { expanded = false }
-                            .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
-                    ) {
-                        // 思考内容使用略淡的颜色渲染，字体稍小
-                        // 如果正在流式输出且还没有正式回复（说明正在输出思考内容），则禁用代码块和LaTeX渲染以防抖动
-                        val isPreTextStreaming = isStreaming && officialText == null
-                        MarkdownRenderer(
-                            markdown = preText,
-                            textColor = textColor.copy(alpha = 0.7f),
-                            textSizeSp = textSizeSp * 0.9f,
-                            onLongClick = onLongClick,
-                            modifier = Modifier.fillMaxWidth(),
-                            enableCodeBlocks = !isPreTextStreaming,
-                            enableLatex = !isPreTextStreaming,
-                            onHtmlPreview = onHtmlPreview,
-                            onHtmlPreviewSource = onHtmlPreviewSource,
-                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                            isStreaming = isPreTextStreaming && enableTypewriterEffect,
-                            onLinkClick = onLinkClick
-                        )
-
-                        // 如果思考还在继续（流式且无正式回复），显示个简单的提示
-                        if (isStreaming && officialText == null) {
-                            Text(
-                                text = "Thinking...",
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 8.dp)
+                            if (thinkingTime != null) {
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = thinkingTime!!,
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    modifier = Modifier.wrapContentWidth()
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
                             )
+                            Spacer(modifier = Modifier.weight(1f))
+                        }
+                    }
+    
+                    // 思考内容区域
+                    AnimatedVisibility(visible = expanded) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null
+                                ) { expanded = false }
+                                .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
+                        ) {
+                            // 思考内容使用略淡的颜色渲染，字体稍小
+                            // 如果正在流式输出且还没有正式回复（说明正在输出思考内容），则禁用代码块和LaTeX渲染以防抖动
+                            val isPreTextStreaming = isStreaming && officialText == null
+                            MarkdownRenderer(
+                                markdown = preText,
+                                textColor = textColor.copy(alpha = 0.7f),
+                                textSizeSp = textSizeSp * 0.9f,
+                                onLongClick = onLongClick,
+                                modifier = Modifier.fillMaxWidth(),
+                                enableCodeBlocks = !isPreTextStreaming,
+                                enableLatex = !isPreTextStreaming,
+                                onHtmlPreview = onHtmlPreview,
+                                onHtmlPreviewSource = onHtmlPreviewSource,
+                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                isStreaming = isPreTextStreaming && enableTypewriterEffect,
+                                onLinkClick = onLinkClick
+                            )
+    
+                            // 如果思考还在继续（流式且无正式回复），显示个简单的提示
+                            if (isStreaming && officialText == null) {
+                                Text(
+                                    text = "Thinking...",
+                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
                         }
                     }
                 }
