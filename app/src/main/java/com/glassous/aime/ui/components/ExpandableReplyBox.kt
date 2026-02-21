@@ -15,6 +15,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 
 /**
@@ -43,6 +44,31 @@ fun ExpandableReplyBox(
     var isThinkTagMode by remember { mutableStateOf(false) }
     var isSearchMode by remember { mutableStateOf(false) }
     var thinkingTime by remember { mutableStateOf<String?>(null) }
+    
+    // 获取UriHandler用于打开链接
+    val uriHandler = LocalUriHandler.current
+
+    // 解析搜索结果中的引用链接
+    val citationUrls = remember(preText, isSearchMode) {
+        val map = mutableMapOf<String, String>()
+        if (isSearchMode && preText.isNotEmpty()) {
+            // 匹配格式: 1. [Title](URL)
+            // Regex explain:
+            // ^(\d+)\. : 行首数字加点，捕获数字作为ID
+            // \s+ : 空格
+            // \[.*?\] : 标题部分
+            // \((.*?)\) : URL部分，捕获URL
+            val regex = Regex("""^(\d+)\.\s+\[.*?\]\((.*?)\)""", RegexOption.MULTILINE)
+            regex.findAll(preText).forEach { matchResult ->
+                if (matchResult.groupValues.size >= 3) {
+                    val id = matchResult.groupValues[1]
+                    val url = matchResult.groupValues[2]
+                    map[id] = url
+                }
+            }
+        }
+        map
+    }
 
     // 解析逻辑
     LaunchedEffect(content) {
@@ -365,9 +391,19 @@ fun ExpandableReplyBox(
                     onHtmlPreviewSource = onHtmlPreviewSource,
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
-                    onCitationClick = { 
+                    onCitationClick = { id ->
                         if (isSearchMode) {
-                            expanded = true
+                            val url = citationUrls[id]
+                            if (url != null) {
+                                try {
+                                    uriHandler.openUri(url)
+                                } catch (e: Exception) {
+                                    // 无法打开链接，可能URL无效， fallback到展开详情
+                                    expanded = true
+                                }
+                            } else {
+                                expanded = true
+                            }
                         }
                     }
                 )
