@@ -608,7 +608,11 @@ class ChatRepository(
                                         
                                         // 执行网络搜索
                                         val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                        val searchResponse = webSearchService.search(query, searchResultCount)
+                                        val searchResponse = webSearchService.search(query, searchResultCount) { progress ->
+                                            val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
+                                            val progressMessage = assistantMessage.copy(content = progressContent)
+                                            chatDao.updateMessage(progressMessage)
+                                        }
 
                                         // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                         if (searchResponse.results.isNotEmpty()) {
@@ -2605,7 +2609,11 @@ class ChatRepository(
                                     
                                     // 执行网络搜索
                                     val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                    val searchResponse = webSearchService.search(query, searchResultCount)
+                                    val searchResponse = webSearchService.search(query, searchResultCount) { progress ->
+                                        val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
+                                        val progressMessage = assistantMessage.copy(content = progressContent)
+                                        chatDao.updateMessage(progressMessage)
+                                    }
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                     if (searchResponse.results.isNotEmpty()) {

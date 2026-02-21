@@ -325,9 +325,11 @@ fun ExpandableReplyBox(
             if (preText.isNotEmpty()) {
                 if (isSearchMode) {
                     // 搜索模式：显示搜索结果卡片
+                    val statusText = if (searchResultsList.isEmpty()) preText else null
                     SearchResultsCard(
                         resultCount = searchResultsList.size,
-                        onClick = { showSearchBottomSheet = true },
+                        status = statusText,
+                        onClick = { if (searchResultsList.isNotEmpty()) showSearchBottomSheet = true },
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                 } else {

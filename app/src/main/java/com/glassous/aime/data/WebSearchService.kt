@@ -3,6 +3,9 @@ package com.glassous.aime.data
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -57,13 +60,17 @@ class WebSearchService(
      * 执行网络搜索 - 使用PearAPI搜索引擎
      * @param query 搜索查询
      * @param maxResults 最大结果数量
+     * @param onProgress 进度回调，用于更新UI状态
      * @return 搜索结果
      */
     suspend fun search(
         query: String,
-        maxResults: Int = 6
+        maxResults: Int = 6,
+        onProgress: (suspend (String) -> Unit)? = null
     ): WebSearchResponse = withContext(Dispatchers.IO) {
         try {
+            onProgress?.invoke("正在全网搜索「$query」...")
+            
             // URL编码搜索查询
             val encodedQuery = URLEncoder.encode(query, "UTF-8")
             
@@ -89,7 +96,7 @@ class WebSearchService(
             val jsonResponse = response.body?.string() ?: throw IOException("响应体为空")
             
             // 解析JSON获取搜索结果
-            val searchResults = parseJsonResponse(jsonResponse, maxResults)
+            val searchResults = parseJsonResponse(jsonResponse, maxResults, onProgress)
             
             WebSearchResponse(
                 results = searchResults,
@@ -98,6 +105,7 @@ class WebSearchService(
             )
             
         } catch (e: Exception) {
+            onProgress?.invoke("搜索遇到错误：${e.message}")
             // 如果网络搜索失败，返回错误信息
             WebSearchResponse(
                 results = listOf(
@@ -138,21 +146,6 @@ class WebSearchService(
             
             // 提取主要内容
             // 优化：避免重复提取。先尝试提取正文容器，若为空则提取body文本。
-            // 之前的逻辑：select(...) 获取一部分，然后 document.body().text() 获取全部（包含那一部分），导致如果 select 命中，content 只有一部分；如果 select 没命中，finalContent 又是全部。
-            // 但问题描述是“重复两遍”。看之前的代码：
-            // val content = document.select(...).text()
-            // val finalContent = if (content.isNotBlank()) content else document.body()?.text()?.trim() ?: ""
-            // 这逻辑看起来是互斥的，不会重复。
-            // 可能是 select 选择器选到了嵌套的元素，导致 text() 方法递归拼接时重复？
-            // Jsoup 的 text() 会递归获取所有子元素的文本。如果 select("article, p")，而 p 在 article 内，Jsoup 会去重吗？
-            // Jsoup.select 返回 Elements，调用 text() 会将所有匹配元素的文本拼接。
-            // 如果 p 在 article 内，article 匹配了，p 也匹配了。
-            // document.select("article, p") 会包含 article 元素和 p 元素。
-            // article.text() 包含 p 的文本。 p.text() 也是 p 的文本。
-            // 于是 text() 拼接时，p 的内容会出现两次！
-            
-            // 修复：只选择最外层的容器，或者由粗到细选择。
-            // 更好的策略：先尝试找 article/main，找到了就用；找不到再找 p/h1-h6 等。
             
             var finalContent = ""
             val article = document.select("article, main, .content, .post, .entry").first()
@@ -171,7 +164,11 @@ class WebSearchService(
                 title = title.ifBlank { "无标题" },
                 url = url,
                 snippet = finalContent.take(200),
-                fullContent = finalContent.take(5000) // Limit content
+                fullContent = if (finalContent.length > 6000) {
+                    finalContent.take(6000) + "\n\n[...由于长度限制，剩余内容已截断...]"
+                } else {
+                    finalContent
+                }
             )
         } catch (e: Exception) {
             SearchResult("抓取失败", url, e.message ?: "未知错误", "")
@@ -216,8 +213,8 @@ class WebSearchService(
             val finalContent = if (content.isNotBlank()) content else document.body()?.text()?.trim() ?: ""
             
             // 限制内容长度，避免过长
-            if (finalContent.length > 2000) {
-                finalContent.substring(0, 2000) + "..."
+            if (finalContent.length > 6000) {
+                finalContent.substring(0, 6000) + "\n\n[...由于长度限制，剩余内容已截断...]"
             } else {
                 finalContent
             }
@@ -231,16 +228,21 @@ class WebSearchService(
      * 解析JSON响应并抓取网页内容
      * @param jsonResponse JSON响应字符串
      * @param maxResults 最大结果数量
+     * @param onProgress 进度回调
      * @return 搜索结果列表
      */
-    private suspend fun parseJsonResponse(jsonResponse: String, maxResults: Int): List<SearchResult> {
-        return try {
+    private suspend fun parseJsonResponse(
+        jsonResponse: String,
+        maxResults: Int,
+        onProgress: (suspend (String) -> Unit)? = null
+    ): List<SearchResult> = coroutineScope {
+        try {
             val gson = Gson()
             val pearApiResponse = gson.fromJson(jsonResponse, PearApiResponse::class.java)
             
             // 检查API响应状态
             if (pearApiResponse.code != 200) {
-                return listOf(
+                return@coroutineScope listOf(
                     SearchResult(
                         title = "搜索失败",
                         url = "",
@@ -250,49 +252,66 @@ class WebSearchService(
                 )
             }
             
-            // 转换PearAPI结果为SearchResult并抓取网页内容
-            val results = mutableListOf<SearchResult>()
-            for (item in pearApiResponse.data.take(maxResults)) {
-                try {
-                    // 清理URL（移除可能的空格、引号、反引号）
-                    fun cleanse(raw: String): String {
-                        return raw
-                            .trim()
-                            .removeSurrounding("\"")
-                            .removeSurrounding("'")
-                            .removeSurrounding("`")
-                            .replace("`", "")
-                            .trim()
-                    }
+            val itemsToProcess = pearApiResponse.data.take(maxResults)
+            if (itemsToProcess.isEmpty()) {
+                return@coroutineScope emptyList()
+            }
+            
+            onProgress?.invoke("已找到 ${itemsToProcess.size} 条结果，正在阅读网页正文...")
 
-                    val hrefRaw = item.href
-                    val cacheRaw = item.cacheLink
-                    val cleanHref = cleanse(hrefRaw)
-                    val cleanCache = cleanse(cacheRaw)
+            // 并发抓取所有结果
+            val deferredResults = itemsToProcess.map { item ->
+                async {
+                    try {
+                        // 清理URL（移除可能的空格、引号、反引号）
+                        fun cleanse(raw: String): String {
+                            return raw
+                                .trim()
+                                .removeSurrounding("\"")
+                                .removeSurrounding("'")
+                                .removeSurrounding("`")
+                                .replace("`", "")
+                                .trim()
+                        }
 
-                    fun isValid(url: String): Boolean =
-                        url.isNotBlank() && (url.startsWith("http://") || url.startsWith("https://"))
+                        val hrefRaw = item.href
+                        val cacheRaw = item.cacheLink
+                        val cleanHref = cleanse(hrefRaw)
+                        val cleanCache = cleanse(cacheRaw)
 
-                    val chosenUrl = if (isValid(cleanHref)) cleanHref else cleanCache
+                        fun isValid(url: String): Boolean =
+                            url.isNotBlank() && (url.startsWith("http://") || url.startsWith("https://"))
 
-                    // 验证URL有效性（优先使用 href，其次使用 cache_link）
-                    if (isValid(chosenUrl)) {
-                        // 抓取网页内容
-                        val fullContent = fetchWebContent(chosenUrl)
+                        val chosenUrl = if (isValid(cleanHref)) cleanHref else cleanCache
 
-                        results.add(
+                        // 验证URL有效性（优先使用 href，其次使用 cache_link）
+                        if (isValid(chosenUrl)) {
+                            // 抓取网页内容
+                            val fullContent = fetchWebContent(chosenUrl)
+                            
                             SearchResult(
                                 title = item.title.trim(),
                                 url = chosenUrl,
                                 snippet = item.abstract.trim(),
                                 fullContent = fullContent
                             )
-                        )
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        // 跳过解析失败的单个结果
+                        null
                     }
-                } catch (e: Exception) {
-                    // 跳过解析失败的单个结果
-                    continue
                 }
+            }
+            
+            // 等待所有结果并过滤掉失败的(null)
+            val results = deferredResults.awaitAll().filterNotNull()
+            
+            if (results.isEmpty()) {
+                 onProgress?.invoke("所有网页抓取失败或无有效内容")
+            } else {
+                 onProgress?.invoke("成功抓取 ${results.size} 个网页内容")
             }
             
             results

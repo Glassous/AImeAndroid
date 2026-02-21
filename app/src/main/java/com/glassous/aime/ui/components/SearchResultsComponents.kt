@@ -26,6 +26,7 @@ data class SearchResult(
 @Composable
 fun SearchResultsCard(
     resultCount: Int,
+    status: String? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -47,16 +48,18 @@ fun SearchResultsCard(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "共有${resultCount}条搜索结果",
+                text = status ?: "共有${resultCount}条搜索结果",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Spacer(modifier = Modifier.weight(1f))
-            Icon(
-                imageVector = Icons.Default.ChevronRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            if (status == null) {
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
