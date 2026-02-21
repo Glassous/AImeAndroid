@@ -1000,13 +1000,19 @@ class ChatRepository(
                 )
                 return Result.failure(IllegalStateException("No selected model"))
             }
-            val model = modelConfigRepository.getModelById(selectedModelId)
-                ?: run {
+            val model = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeModel
+            } else {
+                modelConfigRepository.getModelById(selectedModelId)
+            } ?: run {
                     chatDao.updateMessage(target.copy(content = "所选模型不存在或已删除，请重新选择。", isError = true))
                     return Result.failure(IllegalStateException("Selected model not found"))
                 }
-            val group = modelConfigRepository.getGroupById(model.groupId)
-                ?: run {
+            val group = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeGroup
+            } else {
+                modelConfigRepository.getGroupById(model.groupId)
+            } ?: run {
                     chatDao.updateMessage(target.copy(content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。", isError = true))
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
@@ -1536,7 +1542,11 @@ class ChatRepository(
 
                 // If specific model set, check if exists
                 if (!targetModelId.isNullOrBlank()) {
-                     val model = modelConfigRepository.getModelById(targetModelId)
+                     val model = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                         BuiltInModels.aimeModel
+                     } else {
+                         modelConfigRepository.getModelById(targetModelId)
+                     }
                      if (model == null) {
                          targetModelId = null // Fallback to default
                      }
@@ -1552,13 +1562,21 @@ class ChatRepository(
                     return@withContext
                 }
                 
-                val model = modelConfigRepository.getModelById(targetModelId)
+                val model = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                    BuiltInModels.aimeModel
+                } else {
+                    modelConfigRepository.getModelById(targetModelId)
+                }
                 if (model == null) {
                     onTitleGenerated("新对话")
                     return@withContext
                 }
                 
-                val group = modelConfigRepository.getGroupById(model.groupId)
+                val group = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                    BuiltInModels.aimeGroup
+                } else {
+                    modelConfigRepository.getGroupById(model.groupId)
+                }
                 if (group == null) {
                     onTitleGenerated("新对话")
                     return@withContext
@@ -1835,8 +1853,11 @@ class ChatRepository(
                 chatDao.insertMessage(errorMessage)
                 return Result.failure(IllegalStateException("No selected model"))
             }
-            val model = modelConfigRepository.getModelById(selectedModelId)
-                ?: run {
+            val model = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeModel
+            } else {
+                modelConfigRepository.getModelById(selectedModelId)
+            } ?: run {
                     val errorMessage = ChatMessage(
                         conversationId = conversationId,
                         content = "所选模型不存在或已删除，请重新选择。",
@@ -1847,8 +1868,11 @@ class ChatRepository(
                     chatDao.insertMessage(errorMessage)
                     return Result.failure(IllegalStateException("Selected model not found"))
                 }
-            val group = modelConfigRepository.getGroupById(model.groupId)
-                ?: run {
+            val group = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeGroup
+            } else {
+                modelConfigRepository.getGroupById(model.groupId)
+            } ?: run {
                     val errorMessage = ChatMessage(
                         conversationId = conversationId,
                         content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。",
@@ -2228,8 +2252,11 @@ class ChatRepository(
                 chatDao.insertMessage(errorMessage)
                 return Result.failure(IllegalStateException("No selected model"))
             }
-            val model = modelConfigRepository.getModelById(selectedModelId)
-                ?: run {
+            val model = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeModel
+            } else {
+                modelConfigRepository.getModelById(selectedModelId)
+            } ?: run {
                     val errorMessage = ChatMessage(
                         conversationId = conversationId,
                         content = "所选模型不存在或已删除，请重新选择。",
@@ -2240,8 +2267,11 @@ class ChatRepository(
                     chatDao.insertMessage(errorMessage)
                     return Result.failure(IllegalStateException("Selected model not found"))
                 }
-            val group = modelConfigRepository.getGroupById(model.groupId)
-                ?: run {
+            val group = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeGroup
+            } else {
+                modelConfigRepository.getGroupById(model.groupId)
+            } ?: run {
                     val errorMessage = ChatMessage(
                         conversationId = conversationId,
                         content = "模型分组配置缺失，无法请求，请检查 base url 与 api key。",
