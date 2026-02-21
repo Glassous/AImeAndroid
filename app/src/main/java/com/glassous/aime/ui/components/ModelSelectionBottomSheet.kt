@@ -68,7 +68,8 @@ fun ModelSelectionBottomSheet(
     autoProcessing: Boolean = false,
     autoSelected: Boolean = false,
     toolCallInProgress: Boolean = false,
-    currentToolType: ToolType? = null
+    currentToolType: ToolType? = null,
+    showToolSelection: Boolean = true
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val groups by viewModel.groups.collectAsStateWithLifecycle()
@@ -289,7 +290,8 @@ fun ModelSelectionBottomSheet(
                             },
                             onBuiltInModelClick = { model ->
                                 viewModel.selectModel(model, onSyncResult)
-                            }
+                            },
+                            showToolSelection = showToolSelection
                         )
                     } else {
                         // 第二级：显示选中分组下的模型列表
@@ -368,7 +370,8 @@ private fun GroupList(
     groups: List<ModelGroup>,
     onGroupClick: (ModelGroup) -> Unit,
     onToolSelectionClick: () -> Unit,
-    onBuiltInModelClick: (Model) -> Unit
+    onBuiltInModelClick: (Model) -> Unit,
+    showToolSelection: Boolean
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -376,10 +379,12 @@ private fun GroupList(
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
         // 工具调用模块
-        item {
-            ToolSelectionItem(
-                onClick = onToolSelectionClick
-            )
+        if (showToolSelection) {
+            item {
+                ToolSelectionItem(
+                    onClick = onToolSelectionClick
+                )
+            }
         }
 
         // 内置AIme模型

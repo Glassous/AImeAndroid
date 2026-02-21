@@ -54,6 +54,11 @@
             android:exported="false"
             android:label="系统提示词配置"
             android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.screens.ToolConfigActivity"
+            android:exported="false"
+            android:label="工具配置"
+            android:theme="@style/Theme.AIme" />
     </application>
 
 </manifest>

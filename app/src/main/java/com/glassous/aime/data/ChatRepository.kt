@@ -33,6 +33,7 @@ class ChatRepository(
     private val modelConfigRepository: ModelConfigRepository,
     private val modelPreferences: ModelPreferences,
     private val contextPreferences: ContextPreferences,
+    private val toolPreferences: com.glassous.aime.data.preferences.ToolPreferences,
     private val openAiService: OpenAiService = OpenAiService(),
     private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
@@ -606,7 +607,8 @@ class ChatRepository(
                                         val query = safeExtractQuery(arguments, message)
                                         
                                         // 执行网络搜索
-                                        val searchResponse = webSearchService.search(query)
+                                        val searchResultCount = toolPreferences.webSearchResultCount.first()
+                                        val searchResponse = webSearchService.search(query, searchResultCount)
 
                                         // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                         if (searchResponse.results.isNotEmpty()) {
@@ -1307,7 +1309,8 @@ class ChatRepository(
                                 val query = safeExtractQuery(arguments, userTextForIntent)
                                 
                                 if (query.isNotEmpty()) {
-                                    val searchResponse = webSearchService.search(query)
+                                    val searchResultCount = toolPreferences.webSearchResultCount.first()
+                                    val searchResponse = webSearchService.search(query, searchResultCount)
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                     if (searchResponse.results.isNotEmpty()) {
@@ -2601,7 +2604,8 @@ class ChatRepository(
                                     val query = safeExtractQuery(arguments, "")
                                     
                                     // 执行网络搜索
-                                    val searchResponse = webSearchService.search(query)
+                                    val searchResultCount = toolPreferences.webSearchResultCount.first()
+                                    val searchResponse = webSearchService.search(query, searchResultCount)
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                     if (searchResponse.results.isNotEmpty()) {

@@ -9,18 +9,30 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.glassous.aime.data.preferences.ToolPreferences
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import com.glassous.aime.data.AutoToolSelector
 
 /**
  * 工具选择ViewModel
  */
-class ToolSelectionViewModel : ViewModel() {
+class ToolSelectionViewModel(
+    private val toolPreferences: ToolPreferences
+) : ViewModel() {
     
     // 所有可用工具
-    private val _availableTools = MutableStateFlow(
-        ToolType.getAllTools().map { Tool(it) }
+    val availableTools: StateFlow<List<Tool>> = combine(
+        toolPreferences.visibleTools,
+        MutableStateFlow(ToolType.getAllTools())
+    ) { visibleToolNames, allTools ->
+        allTools.filter { it.name in visibleToolNames }.map { Tool(it) }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
     )
-    val availableTools: StateFlow<List<Tool>> = _availableTools.asStateFlow()
     
     // 当前选中的工具
     private val _selectedTool = MutableStateFlow<Tool?>(null)
@@ -84,7 +96,7 @@ class ToolSelectionViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(isProcessing = true)
         viewModelScope.launch {
             try {
-                val tools = _availableTools.value
+                val tools = availableTools.value
                 val result = selector.selectTool(tools)
                 val selected = tools.find { it.displayName == result.toolName }
                 _selectedTool.value = selected
@@ -127,11 +139,13 @@ data class ToolSelectionUiState(
 /**
  * ToolSelectionViewModel工厂类
  */
-class ToolSelectionViewModelFactory : ViewModelProvider.Factory {
+class ToolSelectionViewModelFactory(
+    private val toolPreferences: ToolPreferences
+) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ToolSelectionViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ToolSelectionViewModel() as T
+            return ToolSelectionViewModel(toolPreferences) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

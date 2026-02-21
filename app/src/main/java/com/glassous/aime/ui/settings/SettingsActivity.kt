@@ -71,6 +71,10 @@ class SettingsActivity : ComponentActivity() {
         startActivity(Intent(this, SystemPromptConfigActivity::class.java))
     }
 
+    fun onNavigateToToolConfig() {
+        startActivity(Intent(this, com.glassous.aime.ui.screens.ToolConfigActivity::class.java))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -106,6 +110,10 @@ class SettingsActivity : ComponentActivity() {
                     onNavigateToSystemPromptConfig = {
                         val intent = Intent(this@SettingsActivity, SystemPromptConfigActivity::class.java)
                         startActivity(intent)
+                    },
+                    onNavigateToToolConfig = {
+                        val intent = Intent(this@SettingsActivity, com.glassous.aime.ui.screens.ToolConfigActivity::class.java)
+                        startActivity(intent)
                     }
                 )
             }
@@ -117,7 +125,8 @@ class SettingsActivity : ComponentActivity() {
 fun SettingsContent(
     themeViewModel: ThemeViewModel,
     onNavigateToModelConfig: () -> Unit,
-    onNavigateToSystemPromptConfig: () -> Unit
+    onNavigateToSystemPromptConfig: () -> Unit,
+    onNavigateToToolConfig: () -> Unit
 ) {
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
@@ -558,6 +567,35 @@ fun SettingsContent(
                         Icon(Icons.Filled.Edit, contentDescription = "配置系统提示词")
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("配置系统提示词")
+                    }
+                }
+            }
+
+            // --- Tools Configuration ---
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+            ) {
+                Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(
+                        text = "工具配置",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+                    Text(
+                        text = "配置联网搜索、天气等内置工具",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    Button(
+                        onClick = onNavigateToToolConfig,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Filled.Settings, contentDescription = "工具设置")
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("工具设置")
                     }
                 }
             }

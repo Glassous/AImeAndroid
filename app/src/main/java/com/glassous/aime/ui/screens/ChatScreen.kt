@@ -73,6 +73,8 @@ import com.glassous.aime.ui.theme.ThemeViewModel
 import com.glassous.aime.data.AutoToolSelector
 import com.glassous.aime.data.model.ModelGroup
 
+import com.glassous.aime.ui.viewmodel.ToolSelectionViewModelFactory
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(
@@ -82,9 +84,13 @@ fun ChatScreen(
     modelSelectionViewModel: ModelSelectionViewModel,
     themeViewModel: ThemeViewModel = viewModel()
 ) {
-    val chatViewModel: ChatViewModel = viewModel()
-    val toolSelectionViewModel: ToolSelectionViewModel = viewModel()
     val context = LocalContext.current
+    val application = context.applicationContext as AIMeApplication
+    
+    val chatViewModel: ChatViewModel = viewModel()
+    val toolSelectionViewModel: ToolSelectionViewModel = viewModel(
+        factory = ToolSelectionViewModelFactory(application.toolPreferences)
+    )
     val focusManager = LocalFocusManager.current
 
     val conversations by chatViewModel.conversations.collectAsState()
@@ -98,6 +104,8 @@ fun ChatScreen(
     val selectedModel by modelSelectionViewModel.selectedModel.collectAsState()
     val selectedModelDisplayName = selectedModel?.name ?: "请先选择模型"
     val groups by modelSelectionViewModel.groups.collectAsState(initial = emptyList())
+    
+    val availableTools by toolSelectionViewModel.availableTools.collectAsState()
     val selectedGroup: ModelGroup? = remember(selectedModel, groups) {
         groups.firstOrNull { it.id == selectedModel?.groupId }
     }
@@ -880,7 +888,8 @@ fun ChatScreen(
                 autoProcessing = toolSelectionUiState.isProcessing,
                 autoSelected = isAutoSelected,
                 toolCallInProgress = toolCallInProgress,
-                currentToolType = currentToolType
+                currentToolType = currentToolType,
+                showToolSelection = availableTools.isNotEmpty()
             )
         }
 

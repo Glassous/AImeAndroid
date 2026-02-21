@@ -28,6 +28,9 @@ class AIMeApplication : Application() {
     // Model preferences instance
     val modelPreferences by lazy { ModelPreferences(this) }
 
+    // Tool preferences instance
+    val toolPreferences by lazy { com.glassous.aime.data.preferences.ToolPreferences(this) }
+
     
 
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
@@ -41,7 +44,8 @@ class AIMeApplication : Application() {
             chatDao = database.chatDao(),
             modelConfigRepository = modelConfigRepository,
             modelPreferences = modelPreferences,
-            contextPreferences = contextPreferences
+            contextPreferences = contextPreferences,
+            toolPreferences = toolPreferences
         )
     }
 
