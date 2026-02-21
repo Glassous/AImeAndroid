@@ -6,6 +6,12 @@ import android.text.style.CharacterStyle
 import android.text.style.UpdateAppearance
 import android.text.Spanned
 import android.text.SpannableStringBuilder
+import android.text.style.ReplacementSpan
+import android.text.style.ClickableSpan
+import android.text.style.URLSpan
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.RectF
 import android.view.View
 import android.widget.TextView
 import androidx.compose.foundation.layout.*
@@ -48,13 +54,16 @@ fun MarkdownRenderer(
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false,
-    isStreaming: Boolean = false
+    isStreaming: Boolean = false,
+    onCitationClick: ((String) -> Unit)? = null
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
     val displayMarkdown = remember(markdown) {
         markdown
             .replace("<think>", "&lt;think&gt;")
             .replace("</think>", "&lt;/think&gt;")
+            .replace("<search>", "&lt;search&gt;")
+            .replace("</search>", "&lt;search&gt;")
     }
     // 【修改结束】
 
@@ -110,6 +119,8 @@ fun MarkdownRenderer(
                                     setLinkTextColor(textColor.toArgb())
                                     setTextIsSelectable(false)
                                     isLongClickable = true
+                                    // 确保链接可点击
+                                    movementMethod = android.text.method.LinkMovementMethod.getInstance()
                                     setOnLongClickListener {
                                         onLongClick()
                                         true
@@ -125,7 +136,42 @@ fun MarkdownRenderer(
                                     true
                                 }
                                 val textToRender = preprocessText(block.content, enableLatex)
-                                val spanned = markwon.toMarkdown(textToRender)
+                                var spanned: CharSequence = markwon.toMarkdown(textToRender)
+                                
+                                // 处理引用标签 ^n
+                                if (spanned is Spanned) {
+                                    val builder = SpannableStringBuilder(spanned)
+                                    val urlSpans = builder.getSpans(0, builder.length, URLSpan::class.java)
+                                    var hasCitation = false
+                                    for (span in urlSpans) {
+                                        val url = span.url
+                                        if (url.startsWith("citation:")) {
+                                            val id = url.removePrefix("citation:")
+                                            val start = builder.getSpanStart(span)
+                                            val end = builder.getSpanEnd(span)
+                                            val flags = builder.getSpanFlags(span)
+                                            builder.removeSpan(span)
+                                            
+                                            // 添加点击事件
+                                            builder.setSpan(object : ClickableSpan() {
+                                                override fun onClick(widget: View) {
+                                                    onCitationClick?.invoke(id)
+                                                }
+                                                override fun updateDrawState(ds: TextPaint) {
+                                                    ds.isUnderlineText = false
+                                                    ds.color = textColor.toArgb()
+                                                }
+                                            }, start, end, flags)
+                                            
+                                            // 添加外观样式（小卡片）
+                                            builder.setSpan(CitationAppearanceSpan(id, textColor.toArgb(), textSizeSp), start, end, flags)
+                                            hasCitation = true
+                                        }
+                                    }
+                                    if (hasCitation) {
+                                        spanned = builder
+                                    }
+                                }
                                 
                                 // 处理流式输出的淡入动画
                                 if (isStreaming) {
@@ -196,7 +242,7 @@ fun MarkdownRenderer(
                                     }
                                 } else {
                                     // 非流式状态，直接显示
-                                    markwon.setMarkdown(tv, textToRender)
+                                    tv.text = spanned
                                     // 重置状态以防下次变为流式
                                     val state = (tv.tag as? TextFadeState) ?: TextFadeState().also { tv.tag = it }
                                     state.lastLength = spanned.length
@@ -305,6 +351,20 @@ private fun preprocessText(input: String, enableLatex: Boolean): String {
         }
 
         if (!inInlineCode) {
+            // Handle citation ^n
+            if (c == '^' && prev != '\\') {
+                if (i + 1 < input.length && input[i+1].isDigit()) {
+                    var j = i + 1
+                    while (j < input.length && input[j].isDigit()) {
+                        j++
+                    }
+                    val num = input.substring(i + 1, j)
+                    sb.append("[$num](citation:$num)")
+                    i = j 
+                    continue
+                }
+            }
+
             if (enableLatex) {
                 // Handle LaTeX delimiters \[ \] \( \)
                 if (c == '\\' && i + 1 < input.length) {
@@ -392,4 +452,82 @@ private fun preprocessText(input: String, enableLatex: Boolean): String {
         i++
     }
     return sb.toString()
+}
+
+class CitationAppearanceSpan(
+    private val id: String,
+    private val textColor: Int,
+    private val textSizeSp: Float
+) : ReplacementSpan() {
+    override fun getSize(paint: Paint, text: CharSequence?, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
+        val originalTextSize = paint.textSize
+        val smallTextSize = originalTextSize * 0.65f
+        paint.textSize = smallTextSize
+        val width = paint.measureText(id)
+        paint.textSize = originalTextSize
+        
+        val paddingX = smallTextSize * 0.6f
+        val cardWidth = width + paddingX * 2
+        return (cardWidth + 8).toInt() // Add margin
+    }
+
+    override fun draw(canvas: Canvas, text: CharSequence?, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
+        val originalTextSize = paint.textSize
+        val originalColor = paint.color
+        val originalStyle = paint.style
+
+        // Set smaller font for citation
+        val smallTextSize = originalTextSize * 0.65f
+        paint.textSize = smallTextSize
+        
+        val textWidth = paint.measureText(id)
+        val fontMetrics = paint.fontMetrics
+        val textHeight = -fontMetrics.ascent + fontMetrics.descent
+        
+        val paddingX = smallTextSize * 0.6f
+        val paddingY = smallTextSize * 0.1f
+        
+        val cardWidth = textWidth + paddingX * 2
+        val cardHeight = textHeight + paddingY * 2
+        
+        // Calculate position (Superscript style)
+        // Restore original size to get main text ascent
+        paint.textSize = originalTextSize
+        val originalAscent = paint.ascent()
+        paint.textSize = smallTextSize
+        
+        // Align top of card roughly with top of main text
+        // y is baseline. originalAscent is negative.
+        // Top of main text is y + originalAscent.
+        val rectTop = y + originalAscent * 0.85f // Move slightly down from very top
+        
+        val rect = RectF(
+            x + 4f,
+            rectTop,
+            x + 4f + cardWidth,
+            rectTop + cardHeight
+        )
+        
+        // Draw background
+        paint.color = textColor 
+        paint.alpha = 20 // Light background
+        paint.style = Paint.Style.FILL
+        // Corner radius relative to size
+        val cornerRadius = smallTextSize * 0.3f
+        canvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
+        
+        // Draw text
+        paint.color = textColor
+        paint.alpha = 255
+        paint.style = Paint.Style.FILL
+        val textX = rect.centerX() - textWidth / 2
+        val textBaselineY = rect.centerY() - (fontMetrics.ascent + fontMetrics.descent) / 2
+        
+        canvas.drawText(id, textX, textBaselineY, paint)
+        
+        // Restore paint
+        paint.textSize = originalTextSize
+        paint.color = originalColor
+        paint.style = originalStyle
+    }
 }

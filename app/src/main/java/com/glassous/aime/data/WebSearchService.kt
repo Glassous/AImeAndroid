@@ -61,7 +61,7 @@ class WebSearchService(
      */
     suspend fun search(
         query: String,
-        maxResults: Int = 5
+        maxResults: Int = 6
     ): WebSearchResponse = withContext(Dispatchers.IO) {
         try {
             // URL编码搜索查询

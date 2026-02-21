@@ -113,6 +113,7 @@ fun MessageBubble(
                                 message.content.contains("【前置回复】") ||
                                         message.content.contains("【第一次回复】") ||
                                         message.content.contains("<think>") ||
+                                        message.content.contains("<search>") ||
                                         (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
                                 )
 
@@ -182,6 +183,7 @@ fun MessageBubble(
                                 message.content.contains("【前置回复】") ||
                                         message.content.contains("【第一次回复】") ||
                                         message.content.contains("<think>") ||
+                                        message.content.contains("<search>") ||
                                         (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
                                 )
 

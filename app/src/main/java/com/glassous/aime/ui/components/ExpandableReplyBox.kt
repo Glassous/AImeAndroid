@@ -41,12 +41,31 @@ fun ExpandableReplyBox(
     var toolText by remember { mutableStateOf<String?>(null) }
     var officialText by remember { mutableStateOf<String?>(null) }
     var isThinkTagMode by remember { mutableStateOf(false) }
+    var isSearchMode by remember { mutableStateOf(false) }
     var thinkingTime by remember { mutableStateOf<String?>(null) }
 
     // 解析逻辑
     LaunchedEffect(content) {
-        // 1. 优先检查 <think> 标签模式 (DeepSeek 等推理模型)
-        val thinkStart = content.indexOf("<think>")
+        // 0. 优先检查 <search> 标签模式 (搜索结果)
+        val searchStart = content.indexOf("<search>")
+        if (searchStart != -1) {
+            isSearchMode = true
+            isThinkTagMode = false
+            val searchEnd = content.indexOf("</search>")
+            
+            if (searchEnd != -1) {
+                preText = content.substring(searchStart + 8, searchEnd).trim()
+                officialText = content.substring(searchEnd + 9).trim()
+            } else {
+                preText = content.substring(searchStart + 8).trim()
+                officialText = null
+            }
+            toolText = null
+            thinkingTime = null
+        } else {
+            isSearchMode = false
+            // 1. 优先检查 <think> 标签模式 (DeepSeek 等推理模型)
+            val thinkStart = content.indexOf("<think>")
         if (thinkStart != -1) {
             isThinkTagMode = true
             val thinkEnd = content.indexOf("</think>")
@@ -186,6 +205,7 @@ fun ExpandableReplyBox(
             }
         }
     }
+    }
 
     // 若解析后没有前置文本，直接渲染全文
     if (preText.isEmpty() && officialText == content) {
@@ -246,7 +266,11 @@ fun ExpandableReplyBox(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
                     ) {
                         Text(
-                            text = if (isThinkTagMode) "深度思考过程" else "前置回复",
+                            text = when {
+                                isSearchMode -> "搜索结果"
+                                isThinkTagMode -> "深度思考过程"
+                                else -> "前置回复"
+                            },
                             color = MaterialTheme.colorScheme.secondary,
                             style = MaterialTheme.typography.labelMedium,
                             modifier = Modifier.wrapContentWidth()
@@ -340,7 +364,12 @@ fun ExpandableReplyBox(
                     onHtmlPreview = onHtmlPreview,
                     onHtmlPreviewSource = onHtmlPreviewSource,
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                    enableTypewriterEffect = enableTypewriterEffect
+                    enableTypewriterEffect = enableTypewriterEffect,
+                    onCitationClick = { 
+                        if (isSearchMode) {
+                            expanded = true
+                        }
+                    }
                 )
             } else if (!isStreaming && preText.isEmpty()) {
                 // 既没有思考也没有正式回复的异常情况

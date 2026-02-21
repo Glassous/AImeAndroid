@@ -16,7 +16,8 @@ fun StreamingMarkdownRenderer(
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
     useCardStyleForHtmlCode: Boolean = false,
-    enableTypewriterEffect: Boolean = true
+    enableTypewriterEffect: Boolean = true,
+    onCitationClick: ((String) -> Unit)? = null
 ) {
     Column(modifier = modifier) {
         MarkdownRenderer(
@@ -30,7 +31,8 @@ fun StreamingMarkdownRenderer(
             onHtmlPreview = onHtmlPreview,
             onHtmlPreviewSource = onHtmlPreviewSource,
             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-            isStreaming = isStreaming && enableTypewriterEffect
+            isStreaming = isStreaming && enableTypewriterEffect,
+            onCitationClick = onCitationClick
         )
     }
 }
