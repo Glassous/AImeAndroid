@@ -64,6 +64,9 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import android.app.Activity
 import android.view.WindowManager
 import com.glassous.aime.ui.theme.ThemeViewModel
@@ -82,6 +85,7 @@ fun ChatScreen(
     val chatViewModel: ChatViewModel = viewModel()
     val toolSelectionViewModel: ToolSelectionViewModel = viewModel()
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
 
     val conversations by chatViewModel.conversations.collectAsState()
     val currentMessages by chatViewModel.currentMessages.collectAsState()
@@ -545,7 +549,15 @@ fun ChatScreen(
                     }
                 }
             ) { paddingValues ->
-                Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTapGestures(onTap = {
+                                focusManager.clearFocus()
+                            })
+                        }
+                ) {
                     if (!isImporting) {
                         if (currentMessages.isEmpty()) {
                     // 空态：问候语
