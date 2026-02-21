@@ -526,7 +526,7 @@ fun SettingsContent(
                     Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        text = if (useCloudProxy) "通过自建边缘节点转发请求，可解决部分模型无法直连的问题" else "直接从设备发起网络请求，速度更快但可能受网络限制",
+                        text = if (useCloudProxy) "通过云函数进行转发请求，可解决部分模型无法直连的问题" else "直接从设备发起网络请求，速度更快但可能受网络限制",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
