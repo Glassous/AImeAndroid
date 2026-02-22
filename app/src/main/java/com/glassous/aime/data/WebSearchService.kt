@@ -66,6 +66,8 @@ class WebSearchService(
     suspend fun search(
         query: String,
         maxResults: Int = 6,
+        useCloudProxy: Boolean = false,
+        proxyUrl: String? = null,
         onProgress: (suspend (String) -> Unit)? = null
     ): WebSearchResponse = withContext(Dispatchers.IO) {
         try {
@@ -96,7 +98,7 @@ class WebSearchService(
             val jsonResponse = response.body?.string() ?: throw IOException("响应体为空")
             
             // 解析JSON获取搜索结果
-            val searchResults = parseJsonResponse(jsonResponse, maxResults, onProgress)
+            val searchResults = parseJsonResponse(jsonResponse, maxResults, useCloudProxy, proxyUrl, onProgress)
             
             WebSearchResponse(
                 results = searchResults,
@@ -125,12 +127,19 @@ class WebSearchService(
     /**
      * 抓取网页完整信息（标题+内容）
      */
-    suspend fun fetchWebPage(url: String): SearchResult = withContext(Dispatchers.IO) {
+    suspend fun fetchWebPage(url: String, useCloudProxy: Boolean = false, proxyUrl: String? = null): SearchResult = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder()
-                .url(url)
+            val requestBuilder = Request.Builder()
                 .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-                .build()
+            
+            if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
+                requestBuilder.url(proxyUrl)
+                    .addHeader("x-target-url", url)
+            } else {
+                requestBuilder.url(url)
+            }
+
+            val request = requestBuilder.build()
 
             val response = client.newCall(request).execute()
             if (!response.isSuccessful) {
@@ -180,15 +189,22 @@ class WebSearchService(
      * @param url 网页URL
      * @return 网页文本内容
      */
-    suspend fun fetchWebContent(url: String): String = withContext(Dispatchers.IO) {
+    suspend fun fetchWebContent(url: String, useCloudProxy: Boolean = false, proxyUrl: String? = null): String = withContext(Dispatchers.IO) {
         return@withContext try {
-            val request = Request.Builder()
-                .url(url)
+            val requestBuilder = Request.Builder()
                 .addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
                 .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
                 .addHeader("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
                 .addHeader("Connection", "keep-alive")
-                .build()
+
+            if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
+                requestBuilder.url(proxyUrl)
+                    .addHeader("x-target-url", url)
+            } else {
+                requestBuilder.url(url)
+            }
+
+            val request = requestBuilder.build()
 
             val response = client.newCall(request).execute()
             
@@ -234,6 +250,8 @@ class WebSearchService(
     private suspend fun parseJsonResponse(
         jsonResponse: String,
         maxResults: Int,
+        useCloudProxy: Boolean = false,
+        proxyUrl: String? = null,
         onProgress: (suspend (String) -> Unit)? = null
     ): List<SearchResult> = coroutineScope {
         try {
@@ -287,7 +305,7 @@ class WebSearchService(
                         // 验证URL有效性（优先使用 href，其次使用 cache_link）
                         if (isValid(chosenUrl)) {
                             // 抓取网页内容
-                            val fullContent = fetchWebContent(chosenUrl)
+                            val fullContent = fetchWebContent(chosenUrl, useCloudProxy, proxyUrl)
                             
                             SearchResult(
                                 title = item.title.trim(),

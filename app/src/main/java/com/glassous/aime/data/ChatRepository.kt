@@ -70,8 +70,10 @@ class ChatRepository(
                     try {
                         onToolCallStart?.invoke(ToolType.WEB_ANALYSIS)
                         // 2. Fetch content
+                        val useCloudProxy = modelPreferences.useCloudProxy.first()
+                        val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
                         val result = withContext(Dispatchers.IO) {
-                            webSearchService.fetchWebPage(url)
+                            webSearchService.fetchWebPage(url, useCloudProxy, proxyUrl)
                         }
                         
                         // 3. Format User Message with card
@@ -189,6 +191,13 @@ class ChatRepository(
                 chatDao.insertMessage(errorMessage)
                 return Result.failure(IllegalStateException("Model group not found"))
             }
+
+            val useCloudProxy = if (model.id == BuiltInModels.AIME_MODEL_ID) {
+                true
+            } else {
+                modelPreferences.useCloudProxy.first()
+            }
+            val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
 
             // Build conversation context for OpenAI standard
             val history = chatDao.getMessagesForConversation(conversationId).first()
@@ -608,7 +617,7 @@ class ChatRepository(
                                         
                                         // 执行网络搜索
                                         val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                        val searchResponse = webSearchService.search(query, searchResultCount) { progress ->
+                                        val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl) { progress ->
                                             val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
                                             val progressMessage = assistantMessage.copy(content = progressContent)
                                             chatDao.updateMessage(progressMessage)
@@ -629,9 +638,10 @@ class ChatRepository(
                                             chatDao.updateMessage(updatedBeforeOfficial)
                                         }
 
-                                        // 构建最小化系统消息，避免消耗额外token（不附带搜索结果文本）
+                                        // 构建包含搜索结果的系统消息
                                         val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                            "已完成联网搜索，请继续回答用户问题。不要在末尾附加网址或参考链接。"
+                                            val formatted = webSearchService.formatSearchResults(searchResponse)
+                                            "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
                                         } else {
                                             "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                         }
@@ -1024,6 +1034,13 @@ class ChatRepository(
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
 
+            val useCloudProxy = if (model.id == BuiltInModels.AIME_MODEL_ID) {
+                true
+            } else {
+                modelPreferences.useCloudProxy.first()
+            }
+            val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
+
             // 删除目标消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
 
@@ -1314,7 +1331,7 @@ class ChatRepository(
                                 
                                 if (query.isNotEmpty()) {
                                     val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                    val searchResponse = webSearchService.search(query, searchResultCount)
+                                    val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl)
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                     if (searchResponse.results.isNotEmpty()) {
@@ -1331,16 +1348,18 @@ class ChatRepository(
                                         chatDao.updateMessage(updatedBeforeOfficial)
                                     }
 
-                                    // 将最小化系统消息传递给AI进行总结（不包含搜索结果文本）
+                                    // 将搜索结果传递给AI进行总结
                                     val messagesWithSearch = contextMessages.toMutableList()
+                                    val searchResultsText = if (searchResponse.results.isNotEmpty()) {
+                                        val formatted = webSearchService.formatSearchResults(searchResponse)
+                                        "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
+                                    } else {
+                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
+                                    }
                                     messagesWithSearch.add(
                                         OpenAiChatMessage(
                                             role = "system",
-                                            content = if (searchResponse.results.isNotEmpty()) {
-                                                "已完成联网搜索，请继续回答用户问题。不要在末尾附加网址或参考链接。"
-                                            } else {
-                                                "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
-                                            }
+                                            content = searchResultsText
                                         )
                                     )
                                     
@@ -2292,6 +2311,13 @@ class ChatRepository(
                     return Result.failure(IllegalStateException("Model group not found"))
                 }
 
+            val useCloudProxy = if (model.id == BuiltInModels.AIME_MODEL_ID) {
+                true
+            } else {
+                modelPreferences.useCloudProxy.first()
+            }
+            val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
+
             // 构造到该用户消息为止的上下文（包含编辑后的用户消息）并应用限制
             val contextMessagesBase = history.take(targetIndex) // 不含旧用户消息
                 .filter { !it.isError }
@@ -2609,7 +2635,7 @@ class ChatRepository(
                                     
                                     // 执行网络搜索
                                     val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                    val searchResponse = webSearchService.search(query, searchResultCount) { progress ->
+                                    val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl) { progress ->
                                         val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
                                         val progressMessage = assistantMessage.copy(content = progressContent)
                                         chatDao.updateMessage(progressMessage)
@@ -2630,9 +2656,10 @@ class ChatRepository(
                                         chatDao.updateMessage(updatedBeforeOfficial)
                                     }
 
-                                    // 构建最小化系统消息，避免消耗额外token（不附带搜索结果文本）
+                                    // 构建包含搜索结果的系统消息
                                     val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                        "已完成联网搜索，请继续回答用户问题。在回答中，**必须**使用 `(ref:n)` 格式（如 `(ref:1)`）引用搜索结果，严禁使用 `[1]` 或 `【1】` 等其他格式。确保引用的准确性。"
+                                        val formatted = webSearchService.formatSearchResults(searchResponse)
+                                        "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
                                     } else {
                                         "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                     }
