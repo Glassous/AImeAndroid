@@ -209,10 +209,11 @@ fun MarkdownRenderer(
                                     val state = (tv.tag as? TextFadeState) ?: TextFadeState().also { tv.tag = it }
                                     val currentLength = spanned.length
                                     
-                                    // 如果文本变短（可能是重新生成或编辑），重置状态
+                                    // 如果文本变短（可能是重新生成或编辑），更新状态而不是重置
                                     if (currentLength < state.lastLength) {
-                                        state.lastLength = 0
-                                        state.fadingChunks.clear()
+                                        state.lastLength = currentLength
+                                        // 移除所有起始位置超出当前长度的动画块
+                                        state.fadingChunks.removeAll { (start, _) -> start >= currentLength }
                                     }
                                     
                                     // 检测新增文本块
