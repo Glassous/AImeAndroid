@@ -562,6 +562,7 @@ class ChatRepository(
             val updateInterval = 0L
             var preLabelAdded = false
             var postLabelAdded = false
+            var toolCallHandled = false // 标志位：确保每次生成只处理一个工具调用，防止并发或重复调用
             
             try {
                 // Switch blocking network streaming to IO dispatcher to avoid main-thread networking
@@ -584,6 +585,9 @@ class ChatRepository(
                             }
                         },
                         onToolCall = { toolCall ->
+                            if (toolCallHandled) return@streamWithFallback
+                            toolCallHandled = true
+                            
                             // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
                             // 通知UI具体的工具类型以正确显示图标
                 when (toolCall.function?.name) {
@@ -1277,7 +1281,8 @@ class ChatRepository(
             val updateInterval = 0L
             var preLabelAdded = false
             var postLabelAdded = false
-            
+            var toolCallHandled = false // 标志位：确保每次生成只处理一个工具调用
+
             // 使用新插入的助手消息作为目标消息
             var assistantMessage = newAssistantMessage.copy(id = newAssistantId)
             assistantMessage = assistantMessage.copy(modelDisplayName = model.name)
@@ -1300,6 +1305,9 @@ class ChatRepository(
                         }
                     },
                     onToolCall = { toolCall ->
+                        if (toolCallHandled) return@streamWithFallback
+                        toolCallHandled = true
+
                         // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
                         // 通知UI具体的工具类型以正确显示图标
                         when (toolCall.function?.name) {

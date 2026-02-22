@@ -20,8 +20,7 @@ import androidx.compose.ui.unit.dp
 
 /**
  * 识别并展示“<think>”或“【前置回复】”格式的可折叠框。
- * - 顶部展示思考过程/前置回复
- * - 正文为正式回复，默认折叠思考过程，可点击展开/收起
+ * 支持同时展示搜索前的思考（第一段思考）、搜索结果、搜索后的思考（第二段思考）以及正式回复。
  */
 @Composable
 fun ExpandableReplyBox(
@@ -39,28 +38,25 @@ fun ExpandableReplyBox(
     onLinkClick: ((String) -> Unit)? = null
 ) {
     // 定义解析结果变量
-    var preText by remember { mutableStateOf("") }
-    var toolText by remember { mutableStateOf<String?>(null) }
+    var firstThought by remember { mutableStateOf<String?>(null) }
+    var searchResults by remember { mutableStateOf<String?>(null) }
+    var secondThought by remember { mutableStateOf<String?>(null) }
     var officialText by remember { mutableStateOf<String?>(null) }
-    var isThinkTagMode by remember { mutableStateOf(false) }
+    var firstThinkingTime by remember { mutableStateOf<String?>(null) }
+    var secondThinkingTime by remember { mutableStateOf<String?>(null) }
+    
+    // 辅助状态
     var isSearchMode by remember { mutableStateOf(false) }
-    var thinkingTime by remember { mutableStateOf<String?>(null) }
     
     // 获取UriHandler用于打开链接
     val uriHandler = LocalUriHandler.current
 
-    // 解析搜索结果中的引用链接和列表
-    val citationUrls = remember(preText, isSearchMode) {
+    // 解析搜索结果中的引用链接和列表 (用于正式回复中的引用点击)
+    val citationUrls = remember(searchResults) {
         val map = mutableMapOf<String, String>()
-        if (isSearchMode && preText.isNotEmpty()) {
-            // 匹配格式: 1. [Title](URL)
-            // Regex explain:
-            // ^(\d+)\. : 行首数字加点，捕获数字作为ID
-            // \s+ : 空格
-            // \[.*?\] : 标题部分
-            // \((.*?)\) : URL部分，捕获URL
+        if (!searchResults.isNullOrEmpty()) {
             val regex = Regex("""^(\d+)\.\s+\[.*?\]\((.*?)\)""", RegexOption.MULTILINE)
-            regex.findAll(preText).forEach { matchResult ->
+            regex.findAll(searchResults!!).forEach { matchResult ->
                 if (matchResult.groupValues.size >= 3) {
                     val id = matchResult.groupValues[1]
                     val url = matchResult.groupValues[2]
@@ -72,11 +68,11 @@ fun ExpandableReplyBox(
     }
     
     // 解析搜索结果列表用于BottomSheet展示
-    val searchResultsList = remember(preText, isSearchMode) {
+    val searchResultsList = remember(searchResults) {
         val list = mutableListOf<SearchResult>()
-        if (isSearchMode && preText.isNotEmpty()) {
+        if (!searchResults.isNullOrEmpty()) {
             val regex = Regex("""^(\d+)\.\s+\[(.*?)\]\((.*?)\)""", RegexOption.MULTILINE)
-            regex.findAll(preText).forEach { matchResult ->
+            regex.findAll(searchResults!!).forEach { matchResult ->
                 if (matchResult.groupValues.size >= 4) {
                     val id = matchResult.groupValues[1]
                     val title = matchResult.groupValues[2]
@@ -97,7 +93,6 @@ fun ExpandableReplyBox(
             results = searchResultsList,
             onDismissRequest = { showSearchBottomSheet = false },
             onLinkClick = { url ->
-                // 点击搜索结果链接
                 try {
                     if (onLinkClick != null) {
                         onLinkClick.invoke(url)
@@ -111,208 +106,80 @@ fun ExpandableReplyBox(
         )
     }
 
-
     // 解析逻辑
     LaunchedEffect(content) {
-        // 0. 优先检查 <search> 标签模式 (搜索结果)
+        var tempFirstThought: String? = null
+        var tempSearchResults: String? = null
+        var tempSecondThought: String? = null
+        var tempOfficialText: String? = null
+        var tempFirstThinkingTime: String? = null
+        var tempSecondThinkingTime: String? = null
+
         val searchStart = content.indexOf("<search>")
+        val searchEnd = content.indexOf("</search>")
+
         if (searchStart != -1) {
+            // --- 存在搜索结果 ---
             isSearchMode = true
-            isThinkTagMode = false
-            val searchEnd = content.indexOf("</search>")
             
+            // 1. 解析搜索前的内容 (第一段思考)
+            val preSearchContent = content.substring(0, searchStart).trim()
+            if (preSearchContent.isNotEmpty()) {
+                val parsed = parseThoughtContent(preSearchContent)
+                // 优先使用解析出的思考内容，如果没有则看是否有旧版前置回复
+                tempFirstThought = parsed.thought
+                tempFirstThinkingTime = parsed.time
+                
+                // 如果解析结果为空但内容不为空，且看起来像是前置回复
+                if (tempFirstThought == null && preSearchContent.contains("【前置回复】")) {
+                     tempFirstThought = preSearchContent.substringAfter("【前置回复】").trim()
+                } else if (tempFirstThought == null && parsed.official != null && parsed.official.isNotEmpty()) {
+                    // 如果既没有think标签也没有前置回复标签，但有内容，可能是未标记的思考
+                    // 这种情况下通常不做处理，或者视情况而定。
+                    // 为了防止丢失信息，如果它看起来像思考（例如在搜索之前），我们可以将其视为思考
+                    // 但 DeepSeek 等模型通常会有 <think> 标签。
+                    // 暂时忽略非思考标签的内容，除非它是纯文本
+                }
+            }
+
+            // 2. 解析搜索结果
             if (searchEnd != -1) {
-                preText = content.substring(searchStart + 8, searchEnd).trim()
-                officialText = content.substring(searchEnd + 9).trim()
+                tempSearchResults = content.substring(searchStart + 8, searchEnd).trim()
+                
+                // 3. 解析搜索后的内容 (第二段思考 + 正式回复)
+                val postSearchContent = content.substring(searchEnd + 9).trim()
+                if (postSearchContent.isNotEmpty()) {
+                    val parsed = parseThoughtContent(postSearchContent)
+                    tempSecondThought = parsed.thought
+                    tempSecondThinkingTime = parsed.time
+                    tempOfficialText = parsed.official
+                }
             } else {
-                preText = content.substring(searchStart + 8).trim()
-                officialText = null
+                // 搜索块未闭合（正在流式输出搜索结果）
+                tempSearchResults = content.substring(searchStart + 8).trim()
             }
-            toolText = null
-            thinkingTime = null
+            
         } else {
+            // --- 无搜索结果 (标准模式) ---
             isSearchMode = false
-            // 1. 优先检查 <think> 标签模式 (DeepSeek 等推理模型)
-            val thinkStart = content.indexOf("<think>")
-        if (thinkStart != -1) {
-            isThinkTagMode = true
-            val thinkEnd = content.indexOf("</think>")
-
-            if (thinkEnd != -1) {
-                // 思考已结束
-                // 提取标签内的内容（+7 是 <think> 的长度）
-                preText = content.substring(thinkStart + 7, thinkEnd).trim()
-                // 提取 </think> 之后的内容作为正式回复 (+8 是 </think> 的长度)
-                val afterThink = content.substring(thinkEnd + 8).trim()
-                if (afterThink.isNotEmpty()) {
-                    officialText = afterThink
-                } else {
-                    officialText = null
-                }
-            } else {
-                // 思考仍在流式输出中（未闭合）
-                preText = content.substring(thinkStart + 7).trim()
-                officialText = null
-            }
-            toolText = null // Think 模式下暂时不混合旧版工具文本逻辑
-            thinkingTime = null // <think> 标签模式下通常没有时间信息，除非从 API 另外获取
-        } else {
-            // 2. 检查 Blockquote Reasoning 模式 (Gemini/DeepSeek 变体)
-            // 特征：以 > 开头，且包含 "*Thought for X seconds*" 样式的行
-            var isBlockquoteReasoning = false
-            // 只要内容中包含这个特定的思考时间结束标记，我们就尝试解析，而不再严格要求每行都以 > 开头
-            // 因为某些模型输出的代码块可能不会每行都加 >
-            val lines = content.lines()
-            var thoughtLineIndex = -1
-            var tempTime: String? = null
-
-            // 倒序查找效率更高，通常在中间或结尾
-            for (i in lines.indices.reversed()) {
-                val line = lines[i].trim()
-                // 必须是引用行，且包含特定关键词
-                if (line.startsWith(">") &&
-                    line.contains("Thought for", ignoreCase = true) &&
-                    line.contains("seconds", ignoreCase = true)) {
-                    
-                    thoughtLineIndex = i
-                    val contentLine = line.removePrefix(">").trim()
-                    val cleanLine = contentLine.replace("*", "").trim()
-                    val match = Regex("Thought for (.*)", RegexOption.IGNORE_CASE).find(cleanLine)
-                    if (match != null) {
-                        // 如果能提取到具体内容，尝试只保留数字部分
-                        val timeStr = match.groupValues[1].trim()
-                        val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(timeStr)
-                        if (numberMatch != null) {
-                            tempTime = numberMatch.groupValues[1] + "秒"
-                        } else {
-                            tempTime = timeStr
-                        }
-                    } else {
-                        // 降级：直接从 cleanLine 中尝试提取数字
-                        val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(cleanLine)
-                        if (numberMatch != null) {
-                            tempTime = numberMatch.groupValues[1] + "秒"
-                        } else {
-                            tempTime = cleanLine
-                        }
-                    }
-                    break
-                }
-            }
-
-            if (thoughtLineIndex != -1) {
-                isBlockquoteReasoning = true
-                isThinkTagMode = true
-                thinkingTime = tempTime
-                
-                // 提取思考内容：从开始到 thoughtLineIndex 之前的所有行
-                val blockquoteBuilder = StringBuilder()
-                for (i in 0 until thoughtLineIndex) {
-                    val rawLine = lines[i]
-                    // 如果行以 > 开头，去除它；否则保留原样（处理未引用的代码块等）
-                    val processedLine = if (rawLine.trimStart().startsWith(">")) {
-                        // 移除第一个 > 和随后的一个空格（如果有）
-                        val trimmedStart = rawLine.trimStart()
-                        val contentWithoutQuote = trimmedStart.removePrefix(">")
-                        if (contentWithoutQuote.startsWith(" ")) {
-                            contentWithoutQuote.substring(1)
-                        } else {
-                            contentWithoutQuote
-                        }
-                    } else {
-                        rawLine
-                    }
-                    blockquoteBuilder.append(processedLine).append("\n")
-                }
-                preText = blockquoteBuilder.toString().trim()
-                
-                // 提取正式回复：thoughtLineIndex 之后的所有行
-                officialText = if (thoughtLineIndex + 1 < lines.size) {
-                    lines.subList(thoughtLineIndex + 1, lines.size).joinToString("\n").trim()
-                } else {
-                    ""
-                }
-                toolText = null
-            }
-
-            if (!isBlockquoteReasoning) {
-                // 3. 回退到旧的 【前置回复】/【第一次回复】 模式
-                isThinkTagMode = false
-                thinkingTime = null
-                val preLabelNew = "【前置回复】"
-                val preLabelOld = "【第一次回复】"
-                val tripleSep = "\n\n\n"
-
-                val preIndexCandidate = content.indexOf(preLabelNew)
-                val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
-
-                if (preIndex != -1) {
-                    val afterPreLabelStart = preIndex + if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
-                    val firstSepIndex = content.indexOf(tripleSep, afterPreLabelStart)
-
-                    val preTextEnd = if (firstSepIndex != -1) firstSepIndex else content.length
-                    preText = content.substring(afterPreLabelStart, preTextEnd).trim()
-
-                    if (firstSepIndex != -1) {
-                        val secondSepIndex = content.indexOf(tripleSep, firstSepIndex + tripleSep.length)
-                        if (secondSepIndex != -1) {
-                            toolText = content.substring(firstSepIndex + tripleSep.length, secondSepIndex).trim()
-                            officialText = content.substring(secondSepIndex + tripleSep.length).trim()
-                        } else {
-                            officialText = content.substring(firstSepIndex + tripleSep.length).trim()
-                        }
-                    } else {
-                        toolText = null
-                        officialText = null
-                    }
-                } else {
-                    // 既没有 think 也没有前置标签，降级处理（直接渲染全文）
-                    officialText = content
-                    preText = ""
-                }
-            }
+            val parsed = parseThoughtContent(content)
+            tempFirstThought = parsed.thought
+            tempFirstThinkingTime = parsed.time
+            tempOfficialText = parsed.official
+            
+            // 兼容旧版 toolText (虽然现在很少用，但保留逻辑)
+            // parseThoughtContent 不处理 toolText，如果 parsed.official 中包含 toolText 格式，需要额外处理吗？
+            // 鉴于目前主要关注 <think> 和 <search>，旧版 toolText 逻辑可能不再兼容新解析器。
+            // 如果需要完全兼容，可以在 parseThoughtContent 中加入 toolText 识别，或者在这里额外处理。
+            // 考虑到用户需求是修复联网搜索时的思考模型问题，且新版主要使用 <search>，这里简化处理。
         }
-    }
-    }
 
-    // 若解析后没有前置文本，直接渲染全文
-    if (preText.isEmpty() && officialText == content) {
-        MarkdownRenderer(
-            markdown = content,
-            textColor = textColor,
-            textSizeSp = textSizeSp,
-            onLongClick = onLongClick,
-            modifier = modifier,
-            onHtmlPreview = onHtmlPreview,
-            onHtmlPreviewSource = onHtmlPreviewSource,
-            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-            isStreaming = isStreaming && enableTypewriterEffect
-        )
-        return
-    }
-
-    // 初始状态控制：
-    // 如果是思考模式且正式回复还没出来（正在思考），强制展开以便用户看到过程。
-    // 一旦正式回复有了内容，就可以折叠起来不占地方。
-    var expanded by remember { mutableStateOf(true) }
-    // 记录是否已经执行过自动折叠，防止流式输出过程中用户手动展开后被再次折叠
-    var hasAutoCollapsed by remember { mutableStateOf(false) }
-
-    // 监听状态变化自动折叠：当正式回复开始出现时，自动收起思考过程
-    LaunchedEffect(officialText, forceExpanded) {
-        if (forceExpanded) {
-            // 如果强制展开，则始终保持展开状态
-            expanded = true
-        } else if (!officialText.isNullOrBlank()) {
-            if (!hasAutoCollapsed) {
-                expanded = false
-                hasAutoCollapsed = true
-            }
-        } else {
-            // 还在思考（或内容被重置），保持展开并重置自动折叠标记
-            expanded = true
-            hasAutoCollapsed = false
-        }
+        firstThought = tempFirstThought
+        searchResults = tempSearchResults
+        secondThought = tempSecondThought
+        officialText = tempOfficialText
+        firstThinkingTime = tempFirstThinkingTime
+        secondThinkingTime = tempSecondThinkingTime
     }
 
     Surface(
@@ -321,121 +188,61 @@ fun ExpandableReplyBox(
         color = Color.Transparent
     ) {
         Column(modifier = Modifier.padding(vertical = 6.dp)) {
-            // 顶部：折叠/展开控制栏（仅当前置文本不为空时显示）
-            if (preText.isNotEmpty()) {
-                if (isSearchMode) {
-                    // 搜索模式：显示搜索结果卡片
-                    val statusText = if (searchResultsList.isEmpty()) preText else null
-                    SearchResultsCard(
-                        resultCount = searchResultsList.size,
-                        status = statusText,
-                        onClick = { if (searchResultsList.isNotEmpty()) showSearchBottomSheet = true },
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                } else {
-                    // 思考/前置模式：原有的折叠/展开控制栏
-                    Surface(
-                        onClick = { expanded = !expanded },
-                        shape = MaterialTheme.shapes.small,
-                        color = Color.Transparent,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                text = when {
-                                    isThinkTagMode -> "深度思考过程"
-                                    else -> "前置回复"
-                                },
-                                color = MaterialTheme.colorScheme.secondary,
-                                style = MaterialTheme.typography.labelMedium,
-                                modifier = Modifier.wrapContentWidth()
-                            )
-                            if (thinkingTime != null) {
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = thinkingTime!!,
-                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    modifier = Modifier.wrapContentWidth()
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(
-                                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
-                    }
-    
-                    // 思考内容区域
-                    AnimatedVisibility(visible = expanded) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(
-                                    interactionSource = remember { MutableInteractionSource() },
-                                    indication = null
-                                ) { expanded = false }
-                                .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
-                        ) {
-                            // 思考内容使用略淡的颜色渲染，字体稍小
-                            // 如果正在流式输出且还没有正式回复（说明正在输出思考内容），则禁用代码块和LaTeX渲染以防抖动
-                            val isPreTextStreaming = isStreaming && officialText == null
-                            MarkdownRenderer(
-                                markdown = preText,
-                                textColor = textColor.copy(alpha = 0.7f),
-                                textSizeSp = textSizeSp * 0.9f,
-                                onLongClick = onLongClick,
-                                modifier = Modifier.fillMaxWidth(),
-                                enableCodeBlocks = !isPreTextStreaming,
-                                enableLatex = !isPreTextStreaming,
-                                onHtmlPreview = onHtmlPreview,
-                                onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                isStreaming = isPreTextStreaming && enableTypewriterEffect,
-                                onLinkClick = onLinkClick
-                            )
-    
-                            // 如果思考还在继续（流式且无正式回复），显示个简单的提示
-                            if (isStreaming && officialText == null) {
-                                Text(
-                                    text = "Thinking...",
-                                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.padding(top = 8.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 中间：工具调用结果区域（兼容旧逻辑）
-            if (toolText != null && toolText!!.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(8.dp))
-                MarkdownRenderer(
-                    markdown = toolText!!,
+            
+            // 1. 第一段思考 / 深度思考过程
+            if (!firstThought.isNullOrEmpty()) {
+                val title = if (searchResults != null) "第一段思考" else "深度思考过程"
+                ExpandableThoughtBlock(
+                    title = title,
+                    content = firstThought!!,
+                    thinkingTime = firstThinkingTime,
+                    isStreaming = isStreaming && searchResults == null && officialText == null, // 如果还在搜或者还在回，可能第一段还在变？通常第一段完了才搜。
                     textColor = textColor,
                     textSizeSp = textSizeSp,
                     onLongClick = onLongClick,
-                    modifier = Modifier.fillMaxWidth(),
                     onHtmlPreview = onHtmlPreview,
                     onHtmlPreviewSource = onHtmlPreviewSource,
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                    isStreaming = isStreaming && officialText == null && enableTypewriterEffect,
-                    onLinkClick = onLinkClick
+                    enableTypewriterEffect = enableTypewriterEffect,
+                    onLinkClick = onLinkClick,
+                    forceExpanded = forceExpanded
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
 
-            // 正式回复：正常渲染
-            if (officialText != null && officialText!!.isNotEmpty()) {
+            // 2. 搜索结果
+            if (!searchResults.isNullOrEmpty()) {
+                val statusText = if (searchResultsList.isEmpty()) searchResults else null
+                SearchResultsCard(
+                    resultCount = searchResultsList.size,
+                    status = statusText,
+                    onClick = { if (searchResultsList.isNotEmpty()) showSearchBottomSheet = true },
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
+            // 3. 第二段思考
+            if (!secondThought.isNullOrEmpty()) {
+                ExpandableThoughtBlock(
+                    title = "第二段思考",
+                    content = secondThought!!,
+                    thinkingTime = secondThinkingTime,
+                    isStreaming = isStreaming && officialText == null, // 如果没有正式回复，说明可能还在输出第二段思考
+                    textColor = textColor,
+                    textSizeSp = textSizeSp,
+                    onLongClick = onLongClick,
+                    onHtmlPreview = onHtmlPreview,
+                    onHtmlPreviewSource = onHtmlPreviewSource,
+                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                    enableTypewriterEffect = enableTypewriterEffect,
+                    onLinkClick = onLinkClick,
+                    forceExpanded = forceExpanded
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // 4. 正式回复
+            if (!officialText.isNullOrEmpty()) {
                 StreamingMarkdownRenderer(
                     markdown = officialText!!,
                     textColor = textColor,
@@ -458,16 +265,16 @@ fun ExpandableReplyBox(
                                         uriHandler.openUri(url)
                                     }
                                 } catch (e: Exception) {
-                                    // 无法打开链接，可能URL无效， fallback到展开详情
-                                    expanded = true
+                                    // 无法打开链接，fallback到展开详情
+                                    showSearchBottomSheet = true
                                 }
                             } else {
-                                expanded = true
+                                showSearchBottomSheet = true
                             }
                         }
                     }
                 )
-            } else if (!isStreaming && preText.isEmpty()) {
+            } else if (!isStreaming && firstThought == null && searchResults == null && secondThought == null) {
                 // 既没有思考也没有正式回复的异常情况
                 Text(
                     text = "等待回复…",
@@ -475,7 +282,242 @@ fun ExpandableReplyBox(
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(top = 8.dp)
                 )
+            } else if (isStreaming && officialText == null && (secondThought != null || searchResults != null)) {
+                 // 正在生成中... (例如正在生成第二段思考，或者刚搜完)
+                 // ExpandableThoughtBlock 会显示 "Thinking..."，这里不需要额外显示
             }
         }
     }
+}
+
+@Composable
+private fun ExpandableThoughtBlock(
+    title: String,
+    content: String,
+    thinkingTime: String?,
+    isStreaming: Boolean,
+    textColor: Color,
+    textSizeSp: Float,
+    onLongClick: () -> Unit,
+    onHtmlPreview: ((String) -> Unit)?,
+    onHtmlPreviewSource: ((String) -> Unit)?,
+    useCardStyleForHtmlCode: Boolean,
+    enableTypewriterEffect: Boolean,
+    onLinkClick: ((String) -> Unit)?,
+    forceExpanded: Boolean
+) {
+    // 初始状态控制：
+    // 如果是流式输出且内容还在生成（isStreaming=true），强制展开。
+    // 如果 forceExpanded=true，强制展开。
+    // 否则默认折叠（或者默认展开？原逻辑是默认展开，有正式回复后自动折叠。这里作为独立块，可以默认折叠，或者保持原逻辑）
+    // 为了体验，如果是正在生成的思考块，应该展开。如果是历史记录，应该折叠。
+    
+    // 这里简化逻辑：默认折叠，但如果是正在流式传输当前块，则展开。
+    var expanded by remember { mutableStateOf(false) }
+    
+    // 自动展开逻辑
+    LaunchedEffect(isStreaming, forceExpanded) {
+        if (forceExpanded || isStreaming) {
+            expanded = true
+        } else {
+            // 生成结束后自动折叠？原逻辑是“正式回复出现后自动折叠”。
+            // 这里如果是历史记录，默认为 false (remember 初始值)。
+            // 如果刚生成完 (isStreaming 变 false)，可以保持 expanded 或自动折叠。
+            // 为了整洁，生成完后自动折叠通常较好。
+            expanded = false
+        }
+    }
+
+    Surface(
+        onClick = { expanded = !expanded },
+        shape = MaterialTheme.shapes.small,
+        color = Color.Transparent,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.secondary,
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.wrapContentWidth()
+            )
+            if (thinkingTime != null) {
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = thinkingTime,
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.7f),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.wrapContentWidth()
+                )
+            }
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.weight(1f))
+        }
+    }
+
+    AnimatedVisibility(visible = expanded) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) { expanded = false }
+                .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
+        ) {
+            // 思考内容使用略淡的颜色渲染，字体稍小
+            MarkdownRenderer(
+                markdown = content,
+                textColor = textColor.copy(alpha = 0.7f),
+                textSizeSp = textSizeSp * 0.9f,
+                onLongClick = onLongClick,
+                modifier = Modifier.fillMaxWidth(),
+                enableCodeBlocks = !isStreaming, // 流式输出时禁用代码块以防抖动
+                enableLatex = !isStreaming,
+                onHtmlPreview = onHtmlPreview,
+                onHtmlPreviewSource = onHtmlPreviewSource,
+                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                isStreaming = isStreaming && enableTypewriterEffect,
+                onLinkClick = onLinkClick
+            )
+
+            if (isStreaming) {
+                Text(
+                    text = "Thinking...",
+                    color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.5f),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
+        }
+    }
+}
+
+private data class ParsedThoughtContent(
+    val thought: String?,
+    val time: String?,
+    val official: String?
+)
+
+private fun parseThoughtContent(content: String): ParsedThoughtContent {
+    // 1. 检查 <think> 标签模式
+    val thinkStart = content.indexOf("<think>")
+    if (thinkStart != -1) {
+        val thinkEnd = content.indexOf("</think>")
+        if (thinkEnd != -1) {
+            val thought = content.substring(thinkStart + 7, thinkEnd).trim()
+            val official = content.substring(thinkEnd + 8).trim()
+            return ParsedThoughtContent(thought, null, official.ifEmpty { null })
+        } else {
+            // 思考未闭合
+            val thought = content.substring(thinkStart + 7).trim()
+            return ParsedThoughtContent(thought, null, null)
+        }
+    }
+
+    // 2. 检查 Blockquote Reasoning 模式
+    // 特征：以 > 开头，且包含 "*Thought for X seconds*" 样式的行
+    val lines = content.lines()
+    var thoughtLineIndex = -1
+    var tempTime: String? = null
+
+    // 倒序查找效率更高，通常在中间或结尾
+    for (i in lines.indices.reversed()) {
+        val line = lines[i].trim()
+        if (line.startsWith(">") &&
+            line.contains("Thought for", ignoreCase = true) &&
+            line.contains("seconds", ignoreCase = true)) {
+            
+            thoughtLineIndex = i
+            val contentLine = line.removePrefix(">").trim()
+            val cleanLine = contentLine.replace("*", "").trim()
+            val match = Regex("Thought for (.*)", RegexOption.IGNORE_CASE).find(cleanLine)
+            if (match != null) {
+                val timeStr = match.groupValues[1].trim()
+                val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(timeStr)
+                if (numberMatch != null) {
+                    tempTime = numberMatch.groupValues[1] + "秒"
+                } else {
+                    tempTime = timeStr
+                }
+            } else {
+                val numberMatch = Regex("(\\d+(\\.\\d+)?)").find(cleanLine)
+                if (numberMatch != null) {
+                    tempTime = numberMatch.groupValues[1] + "秒"
+                } else {
+                    tempTime = cleanLine
+                }
+            }
+            break
+        }
+    }
+
+    if (thoughtLineIndex != -1) {
+        val blockquoteBuilder = StringBuilder()
+        for (i in 0 until thoughtLineIndex) {
+            val rawLine = lines[i]
+            val processedLine = if (rawLine.trimStart().startsWith(">")) {
+                val trimmedStart = rawLine.trimStart()
+                val contentWithoutQuote = trimmedStart.removePrefix(">")
+                if (contentWithoutQuote.startsWith(" ")) {
+                    contentWithoutQuote.substring(1)
+                } else {
+                    contentWithoutQuote
+                }
+            } else {
+                rawLine
+            }
+            blockquoteBuilder.append(processedLine).append("\n")
+        }
+        val thought = blockquoteBuilder.toString().trim()
+        
+        val official = if (thoughtLineIndex + 1 < lines.size) {
+            lines.subList(thoughtLineIndex + 1, lines.size).joinToString("\n").trim()
+        } else {
+            ""
+        }
+        
+        return ParsedThoughtContent(thought, tempTime, official.ifEmpty { null })
+    }
+
+    // 3. 检查旧版【前置回复】模式
+    val preLabelNew = "【前置回复】"
+    val preLabelOld = "【第一次回复】"
+    val tripleSep = "\n\n\n"
+
+    val preIndexCandidate = content.indexOf(preLabelNew)
+    val preIndex = if (preIndexCandidate != -1) preIndexCandidate else content.indexOf(preLabelOld)
+
+    if (preIndex != -1) {
+        val afterPreLabelStart = preIndex + if (preIndexCandidate != -1) preLabelNew.length else preLabelOld.length
+        val firstSepIndex = content.indexOf(tripleSep, afterPreLabelStart)
+
+        val preTextEnd = if (firstSepIndex != -1) firstSepIndex else content.length
+        val thought = content.substring(afterPreLabelStart, preTextEnd).trim()
+
+        val official = if (firstSepIndex != -1) {
+            val secondSepIndex = content.indexOf(tripleSep, firstSepIndex + tripleSep.length)
+            if (secondSepIndex != -1) {
+                // Skip tool text for thought parsing purpose, just take what's after
+                content.substring(secondSepIndex + tripleSep.length).trim()
+            } else {
+                content.substring(firstSepIndex + tripleSep.length).trim()
+            }
+        } else {
+            null
+        }
+        return ParsedThoughtContent(thought, null, official)
+    }
+
+    // 4. 无思考内容
+    return ParsedThoughtContent(null, null, content)
 }
