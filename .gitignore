@@ -26,6 +26,6 @@
 *.jks
 /app/src/release/
 /app/src/main/res/values/release/
-
+.idea
 docs
 .env.local
