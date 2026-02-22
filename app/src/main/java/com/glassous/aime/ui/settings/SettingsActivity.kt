@@ -19,6 +19,9 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -245,56 +248,70 @@ fun SettingsContent(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(
+        ) {
+            val screenWidth = maxWidth
+            val columns = when {
+                screenWidth < 600.dp -> 1
+                screenWidth < 840.dp -> 2
+                else -> 3
+            }
+
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
                     start = 16.dp,
                     end = 16.dp,
                     top = 16.dp,
                     bottom = 16.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
                 ),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // --- 获取分享对话 ---
-            if (!hideImportSharedButton) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-                ) {
-                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                        Text(
-                            text = "获取分享对话",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                        Text(
-                            text = "从云端导入他人分享的对话",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 16.dp)
-                        )
-
-                        Button(
-                            onClick = { showImportSharedDialog = true },
-                            modifier = Modifier.fillMaxWidth()
+                verticalItemSpacing = 16.dp,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // --- 获取分享对话 ---
+                if (!hideImportSharedButton) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
                         ) {
-                            Icon(Icons.Filled.CloudDownload, contentDescription = "获取")
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("获取分享对话")
+                            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                                Text(
+                                    text = "获取分享对话",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                                Text(
+                                    text = "从云端导入他人分享的对话",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(bottom = 16.dp)
+                                )
+
+                                Button(
+                                    onClick = { showImportSharedDialog = true },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Filled.CloudDownload, contentDescription = "获取")
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("获取分享对话")
+                                }
+                            }
                         }
                     }
                 }
-            }
 
-            // --- 主题设置 ---
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
-            ) {
+                // --- 主题设置 ---
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
                         text = "主题设置",
@@ -450,8 +467,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- 模型配置 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -479,8 +498,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- Cloud Proxy Mode ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -541,8 +562,10 @@ fun SettingsContent(
                     )
                 }
             }
+            }
 
             // --- 系统提示词配置 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -570,8 +593,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- Tools Configuration ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -599,8 +624,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- 上下文限制 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -636,9 +663,11 @@ fun SettingsContent(
                     }
                 }
             }
+            }
             
             // Removed extra spacer to reduce gap as requested
             // --- Title Generation Model ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -725,8 +754,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- 数据备份 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -758,8 +789,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- 版本更新 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -969,8 +1002,10 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
             // --- 关于 ---
+            item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
@@ -1003,9 +1038,13 @@ fun SettingsContent(
                     }
                 }
             }
+            }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+            }
         }
+    }
     }
 
     // --- Dialogs ---
