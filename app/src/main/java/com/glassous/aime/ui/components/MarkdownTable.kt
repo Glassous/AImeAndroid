@@ -64,12 +64,22 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.glassous.aime.data.ChatMessage
 import kotlin.math.max
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.LocalOverscrollConfiguration
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.input.pointer.positionChange
 
 data class TableData(
     val headers: List<String>,
     val rows: List<List<String>>
 )
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MarkdownTable(
     markdown: String,
@@ -87,6 +97,11 @@ fun MarkdownTable(
     
     val tableData = remember(markdown) { parseMarkdownTable(markdown) }
     val horizontalScrollState = rememberScrollState()
+    
+    // State to control horizontal scroll enabled status based on touch position
+    var isScrollEnabled by remember { mutableStateOf(true) }
+    val density = LocalDensity.current
+    val edgeZoneWidth = 24.dp // Width of the edge zone where scroll is disabled to allow drawer gesture
 
     Column(
         modifier = modifier
@@ -123,70 +138,108 @@ fun MarkdownTable(
                 minColWidth
             }
 
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(horizontalScrollState)
+            // Disable overscroll effect to prevent stretching and improve boundary handling
+            CompositionLocalProvider(
+                LocalOverscrollConfiguration provides null
             ) {
-                // Headers
-                if (tableData.headers.isNotEmpty()) {
-                    Row(
-                        modifier = Modifier
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                            .height(IntrinsicSize.Min) // 使分割线高度一致
-                    ) {
-                        tableData.headers.forEachIndexed { index, header ->
-                            Cell(
-                                text = header,
-                                isHeader = true,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                markwon = markwon,
-                                modifier = Modifier.width(columnWidth) // Use calculated width
-                            )
-                            if (index < tableData.headers.size - 1) {
-                                VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                var edgeZoneWidthPx = 0f
+                                
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val down = event.changes.find { it.changedToDown() }
+                                    
+                                    if (down != null) {
+                                        val x = down.position.x
+                                        val width = size.width
+                                        edgeZoneWidthPx = with(density) { edgeZoneWidth.toPx() }
+                                        val isAtStart = horizontalScrollState.value == 0
+                                        
+                                        // If at start, disable scroll initially (assume potential drawer gesture)
+                                        // If at edges, also disable scroll
+                                        if (isAtStart || x < edgeZoneWidthPx || x > width - edgeZoneWidthPx) {
+                                            isScrollEnabled = false
+                                        } else {
+                                            isScrollEnabled = true
+                                        }
+                                    }
+                                    
+                                    // If scroll is disabled but we are at start, check if user is dragging LEFT (scrolling table)
+                                    if (!isScrollEnabled && horizontalScrollState.value == 0) {
+                                        val drag = event.changes.firstOrNull()?.positionChange()
+                                        if (drag != null && drag.x < 0) {
+                                            isScrollEnabled = true
+                                        }
+                                    }
+                                }
                             }
                         }
-                    }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                }
-
-                // Rows
-                tableData.rows.forEachIndexed { rowIndex, row ->
-                    Row(
-                        modifier = Modifier
-                            .background(
-                                if (rowIndex % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
-                                else Color.Transparent
-                            )
-                            .height(IntrinsicSize.Min)
-                    ) {
-                        // 补齐列数不足的情况
-                        val cells = if (row.size < tableData.headers.size) {
-                            row + List(tableData.headers.size - row.size) { "" }
-                        } else {
-                            row
-                        }
-                        
-                        cells.forEachIndexed { colIndex, cell ->
-                            if (colIndex < tableData.headers.size) { // 只显示表头对应的列
+                        .horizontalScroll(horizontalScrollState, enabled = isScrollEnabled)
+                ) {
+                    // Headers
+                    if (tableData.headers.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                                .height(IntrinsicSize.Min) // 使分割线高度一致
+                        ) {
+                            tableData.headers.forEachIndexed { index, header ->
                                 Cell(
-                                    text = cell,
-                                    isHeader = false,
+                                    text = header,
+                                    isHeader = true,
                                     textColor = textColor,
                                     textSizeSp = textSizeSp,
                                     markwon = markwon,
                                     modifier = Modifier.width(columnWidth) // Use calculated width
                                 )
-                                if (colIndex < tableData.headers.size - 1) {
+                                if (index < tableData.headers.size - 1) {
                                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 }
                             }
                         }
-                    }
-                    if (rowIndex < tableData.rows.size - 1) {
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    }
+    
+                    // Rows
+                    tableData.rows.forEachIndexed { rowIndex, row ->
+                        Row(
+                            modifier = Modifier
+                                .background(
+                                    if (rowIndex % 2 == 1) MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f)
+                                    else Color.Transparent
+                                )
+                                .height(IntrinsicSize.Min)
+                        ) {
+                            // 补齐列数不足的情况
+                            val cells = if (row.size < tableData.headers.size) {
+                                row + List(tableData.headers.size - row.size) { "" }
+                            } else {
+                                row
+                            }
+                            
+                            cells.forEachIndexed { colIndex, cell ->
+                                if (colIndex < tableData.headers.size) { // 只显示表头对应的列
+                                    Cell(
+                                        text = cell,
+                                        isHeader = false,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        markwon = markwon,
+                                        modifier = Modifier.width(columnWidth) // Use calculated width
+                                    )
+                                    if (colIndex < tableData.headers.size - 1) {
+                                        VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                }
+                            }
+                        }
+                        if (rowIndex < tableData.rows.size - 1) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
                     }
                 }
             }
