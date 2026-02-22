@@ -194,7 +194,8 @@ fun MarkdownTable(
                                     textColor = textColor,
                                     textSizeSp = textSizeSp,
                                     markwon = markwon,
-                                    modifier = Modifier.width(columnWidth) // Use calculated width
+                                    modifier = Modifier.width(columnWidth), // Use calculated width
+                                    onClick = { isExpanded = !isExpanded }
                                 )
                                 if (index < tableData.headers.size - 1) {
                                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -229,7 +230,8 @@ fun MarkdownTable(
                                         textColor = textColor,
                                         textSizeSp = textSizeSp,
                                         markwon = markwon,
-                                        modifier = Modifier.width(columnWidth) // Use calculated width
+                                        modifier = Modifier.width(columnWidth), // Use calculated width
+                                        onClick = { isExpanded = !isExpanded }
                                     )
                                     if (colIndex < tableData.headers.size - 1) {
                                         VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -334,7 +336,8 @@ private fun Cell(
     textColor: Color,
     textSizeSp: Float,
     markwon: Markwon,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
 ) {
     Box(
         modifier = modifier
@@ -346,11 +349,13 @@ private fun Cell(
                 TextView(ctx).apply {
                     setTextColor(textColor.toArgb())
                     textSize = textSizeSp
+                    setOnClickListener { onClick() }
                 }
             },
             update = { tv ->
                 tv.setTextColor(textColor.toArgb())
                 tv.textSize = textSizeSp
+                tv.setOnClickListener { onClick() }
                 
                 // Use markwon to render markdown/latex
                 markwon.setMarkdown(tv, text)
