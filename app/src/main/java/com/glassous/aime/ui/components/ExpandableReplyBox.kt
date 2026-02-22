@@ -32,10 +32,11 @@ fun ExpandableReplyBox(
     modifier: Modifier = Modifier,
     onHtmlPreview: ((String) -> Unit)? = null,
     onHtmlPreviewSource: ((String) -> Unit)? = null,
-    useCardStyleForHtmlCode: Boolean = false,
+    useCardStyleForHtmlCode: Boolean = true,
     forceExpanded: Boolean = false, // 新增：强制展开参数
-    enableTypewriterEffect: Boolean = true,
-    onLinkClick: ((String) -> Unit)? = null
+    enableTypewriterEffect: Boolean = false,
+    onLinkClick: ((String) -> Unit)? = null,
+    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null
 ) {
     // 定义解析结果变量
     var firstThought by remember { mutableStateOf<String?>(null) }
@@ -87,23 +88,12 @@ fun ExpandableReplyBox(
     // 搜索结果BottomSheet显示状态
     var showSearchBottomSheet by remember { mutableStateOf(false) }
 
-    // 显示搜索结果BottomSheet
-    if (showSearchBottomSheet && searchResultsList.isNotEmpty()) {
-        SearchResultsBottomSheet(
-            results = searchResultsList,
-            onDismissRequest = { showSearchBottomSheet = false },
-            onLinkClick = { url ->
-                try {
-                    if (onLinkClick != null) {
-                        onLinkClick.invoke(url)
-                    } else {
-                        uriHandler.openUri(url)
-                    }
-                } catch (e: Exception) {
-                    // Ignore
-                }
-            }
-        )
+    // 显示搜索结果BottomSheet (委托给外部处理)
+    LaunchedEffect(showSearchBottomSheet) {
+        if (showSearchBottomSheet && searchResultsList.isNotEmpty()) {
+            onShowSearchResults?.invoke(searchResultsList)
+            showSearchBottomSheet = false
+        }
     }
 
     // 解析逻辑

@@ -66,11 +66,30 @@ fun ToolSelectionBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-        ) {
-            // 标题栏
+        ToolSelectionContent(
+            viewModel = viewModel,
+            onDismiss = onDismiss,
+            autoToolSelector = autoToolSelector,
+            onAutoNavigate = onAutoNavigate
+        )
+    }
+}
+
+@Composable
+fun ToolSelectionContent(
+    viewModel: ToolSelectionViewModel,
+    onDismiss: () -> Unit,
+    autoToolSelector: AutoToolSelector? = null,
+    onAutoNavigate: (String) -> Unit = {}
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val availableTools by viewModel.availableTools.collectAsStateWithLifecycle()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+    ) {
+        // 标题栏
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -134,7 +153,6 @@ fun ToolSelectionBottomSheet(
             
             // 底部间距
             Spacer(modifier = Modifier.height(16.dp))
-        }
     }
 }
 

@@ -76,6 +76,29 @@ import com.glassous.aime.data.model.ModelGroup
 
 import com.glassous.aime.ui.viewmodel.ToolSelectionViewModelFactory
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.unit.dp
+import com.glassous.aime.ui.components.ModelSelectionContent
+import com.glassous.aime.ui.components.ToolSelectionContent
+import com.glassous.aime.ui.components.SearchResultsBottomSheet
+import com.glassous.aime.ui.components.SearchResultsContent
+import com.glassous.aime.ui.components.SearchResult
+import androidx.compose.material.icons.filled.Close
+
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.ui.unit.Dp
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatScreen(
@@ -244,6 +267,9 @@ fun ChatScreen(
 
     // 新增：当前打开的网页链接，用于WebView弹窗
     var currentUrl by remember { mutableStateOf<String?>(null) }
+    
+    // 新增：当前展示的搜索结果列表
+    var currentSearchResults by remember { mutableStateOf<List<SearchResult>?>(null) }
 
     // 切换对话时触发淡入动画
     LaunchedEffect(currentConversationId) {
@@ -308,10 +334,14 @@ fun ChatScreen(
     
 
     CompositionLocalProvider(LocalDialogBlurState provides dialogBlurState) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-            drawerContent = {
+        BoxWithConstraints {
+            val isTablet = maxWidth > 600.dp
+            val screenWidth = maxWidth
+            
+            Box(modifier = Modifier.fillMaxSize()) {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    drawerContent = {
                 NavigationDrawer(
                     conversations = conversations,
                     currentConversationId = currentConversationId,
@@ -343,9 +373,33 @@ fun ChatScreen(
                 )
             }
         ) {
-            Scaffold(
-                modifier = Modifier
-                    .fillMaxSize()
+            Row(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Scaffold(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            // 智能宽度调整：
+                            // 当Side Sheet未展开时，Box宽度为全屏，此时Scaffold宽度设为60%全屏宽度。
+                            // 当Side Sheet展开时，Box宽度减小。若此时仍强制60%全屏宽度，可能会超出Box。
+                            // 因此需取 min(screenWidth * 0.6, maxWidth of Box)。
+                            // 由于Scaffold在Box中居中(Alignment.TopCenter)，这会产生良好的视觉效果。
+                            .width(
+                                if (isTablet) {
+                                    (screenWidth * 0.8f).coerceAtMost(1000.dp)
+                                } else {
+                                    Dp.Unspecified // 手机模式下由fillMaxWidth控制（或者默认填满）
+                                }
+                            )
+                            .then(
+                                if (!isTablet) Modifier.fillMaxWidth() else Modifier
+                            )
+                            // 在平板模式下增加左右间距
+                            .padding(horizontal = if (isTablet) 32.dp else 0.dp)
                     .then(
                         if (dialogBlurState.value) {
                             Modifier.blur(8.dp)
@@ -454,7 +508,22 @@ fun ChatScreen(
                                     )
                                 ) {
                                     TextButton(
-                                        onClick = { modelSelectionViewModel.showBottomSheet() },
+                                        onClick = { 
+                                            // 平板模式下，切换侧边栏内容
+                                            if (isTablet) {
+                                                if (modelSelectionUiState.showBottomSheet) {
+                                                    // 如果已经打开了模型选择，再次点击则关闭
+                                                    modelSelectionViewModel.hideBottomSheet()
+                                                } else {
+                                                    // 否则打开模型选择，并关闭其他
+                                                    toolSelectionViewModel.hideBottomSheet()
+                                                    currentSearchResults = null
+                                                    modelSelectionViewModel.showBottomSheet()
+                                                }
+                                            } else {
+                                                modelSelectionViewModel.showBottomSheet() 
+                                            }
+                                        },
                                         colors = ButtonDefaults.textButtonColors(
                                             contentColor = MaterialTheme.colorScheme.onSurface
                                         )
@@ -568,7 +637,8 @@ fun ChatScreen(
                             detectTapGestures(onTap = {
                                 focusManager.clearFocus()
                             })
-                        }
+                        },
+                    contentAlignment = Alignment.TopCenter
                 ) {
                     if (!isImporting) {
                         if (currentMessages.isEmpty()) {
@@ -782,7 +852,15 @@ fun ChatScreen(
                     LazyColumn(
                         state = listState,
                         modifier = Modifier
-                            .fillMaxSize()
+                            .fillMaxHeight()
+                            .width(
+                                if (isTablet) {
+                                    (screenWidth * 0.6f).coerceAtMost(800.dp)
+                                } else {
+                                    Dp.Unspecified
+                                }
+                            )
+                            .then(if (!isTablet) Modifier.fillMaxWidth() else Modifier)
                             .alpha(contentAlpha.value),
                         contentPadding = PaddingValues(
                             top = 8.dp,
@@ -842,6 +920,14 @@ fun ChatScreen(
                                 enableTypewriterEffect = true,
                                 onLinkClick = { url ->
                                     currentUrl = url
+                                },
+                                onShowSearchResults = { results ->
+                                    // 平板模式下，切换侧边栏内容
+                                    if (isTablet) {
+                                        modelSelectionViewModel.hideBottomSheet()
+                                        toolSelectionViewModel.hideBottomSheet()
+                                    }
+                                    currentSearchResults = results
                                 }
                             )
                         }
@@ -880,10 +966,141 @@ fun ChatScreen(
                 }
             }
         }
+        }
+        
+        // Side Sheet
+        AnimatedVisibility(
+            visible = isTablet && (modelSelectionUiState.showBottomSheet || toolSelectionUiState.showBottomSheet || currentSearchResults != null),
+            enter = expandHorizontally(expandFrom = Alignment.Start),
+            exit = shrinkHorizontally(shrinkTowards = Alignment.Start)
+        ) {
+             Surface(
+                 modifier = Modifier
+                     .width(360.dp)
+                     .fillMaxHeight()
+                     .windowInsetsPadding(WindowInsets.statusBars), // 避让状态栏
+                 color = MaterialTheme.colorScheme.surface,
+                 tonalElevation = 1.dp
+             ) {
+                 Column(modifier = Modifier.fillMaxSize()) {
+                     // 顶部按钮栏：返回与关闭
+                     Row(
+                         modifier = Modifier
+                             .fillMaxWidth()
+                             .padding(top = 8.dp, start = 8.dp, end = 8.dp),
+                         horizontalArrangement = Arrangement.SpaceBetween,
+                         verticalAlignment = Alignment.CenterVertically
+                     ) {
+                         // 返回按钮：仅在工具选择且未开启搜索结果时显示（返回模型选择）
+                         if (toolSelectionUiState.showBottomSheet && currentSearchResults == null) {
+                             IconButton(onClick = {
+                                 toolSelectionViewModel.hideBottomSheet()
+                                 modelSelectionViewModel.showBottomSheet()
+                             }) {
+                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                             }
+                         } else {
+                             Spacer(modifier = Modifier.size(48.dp)) // 占位保持关闭按钮位置
+                         }
+
+                         IconButton(onClick = {
+                             modelSelectionViewModel.hideBottomSheet()
+                             toolSelectionViewModel.hideBottomSheet()
+                             currentSearchResults = null
+                         }) {
+                             Icon(Icons.Default.Close, contentDescription = "关闭")
+                         }
+                     }
+
+                     // 使用 AnimatedContent 实现平滑过渡
+                     AnimatedContent(
+                         targetState = when {
+                             modelSelectionUiState.showBottomSheet -> "model"
+                             toolSelectionUiState.showBottomSheet -> "tool"
+                             currentSearchResults != null -> "search"
+                             else -> "none"
+                         },
+                         transitionSpec = {
+                             if (targetState == "tool" && initialState == "model") {
+                                 // Model -> Tool: Slide Left
+                                 (slideInHorizontally { width -> width } + fadeIn()).togetherWith(
+                                     slideOutHorizontally { width -> -width } + fadeOut())
+                             } else if (targetState == "model" && initialState == "tool") {
+                                 // Tool -> Model: Slide Right
+                                 (slideInHorizontally { width -> -width } + fadeIn()).togetherWith(
+                                     slideOutHorizontally { width -> width } + fadeOut())
+                             } else {
+                                 // Other: Fade
+                                 fadeIn().togetherWith(fadeOut())
+                             }
+                         },
+                         label = "sideSheetContent"
+                     ) { targetState ->
+                         when (targetState) {
+                             "model" -> {
+                                 ModelSelectionContent(
+                                     viewModel = modelSelectionViewModel,
+                                     onDismiss = { modelSelectionViewModel.hideBottomSheet() },
+                                     selectedTool = selectedTool,
+                                     onToolSelectionClick = {
+                                         // 切换到工具选择，隐藏模型选择
+                                         modelSelectionViewModel.hideBottomSheet()
+                                         toolSelectionViewModel.showBottomSheet()
+                                     },
+                                     autoProcessing = toolSelectionUiState.isProcessing,
+                                     autoSelected = isAutoSelected,
+                                     toolCallInProgress = toolCallInProgress,
+                                     currentToolType = currentToolType,
+                                     showToolSelection = availableTools.isNotEmpty()
+                                 )
+                             }
+                             "tool" -> {
+                                 val autoToolSelector = remember(selectedGroup, selectedModel) {
+                                     val group = selectedGroup
+                                     val model = selectedModel
+                                     if (group != null && model != null) {
+                                         AutoToolSelector(
+                                             baseUrl = group.baseUrl,
+                                             apiKey = group.apiKey,
+                                             modelName = model.modelName
+                                         )
+                                     } else null
+                                 }
+                                 ToolSelectionContent(
+                                     viewModel = toolSelectionViewModel,
+                                     onDismiss = { toolSelectionViewModel.hideBottomSheet() },
+                                     autoToolSelector = autoToolSelector,
+                                     onAutoNavigate = { route ->
+                                         when (route) {
+                                             "settings" -> context.startActivity(Intent(context, SettingsActivity::class.java))
+                                             else -> {}
+                                         }
+                                     }
+                                 )
+                             }
+                             "search" -> {
+                                 if (currentSearchResults != null) {
+                                     SearchResultsContent(
+                                         results = currentSearchResults!!,
+                                         onLinkClick = { url ->
+                                             currentUrl = url
+                                         }
+                                     )
+                                 }
+                             }
+                             else -> {
+                                 // None
+                             }
+                         }
+                     }
+                 }
+             }
+        }
+    }
     }
 
         // 模型选择Bottom Sheet
-        if (modelSelectionUiState.showBottomSheet) {
+        if (!isTablet && modelSelectionUiState.showBottomSheet) {
             ModelSelectionBottomSheet(
                 viewModel = modelSelectionViewModel,
                 onDismiss = { modelSelectionViewModel.hideBottomSheet() },
@@ -901,7 +1118,7 @@ fun ChatScreen(
         }
 
         // 工具选择Bottom Sheet
-        if (toolSelectionUiState.showBottomSheet) {
+        if (!isTablet && toolSelectionUiState.showBottomSheet) {
             val autoToolSelector = remember(selectedGroup, selectedModel) {
                 val group = selectedGroup
                 val model = selectedModel
@@ -923,6 +1140,17 @@ fun ChatScreen(
                         // chat 或未知路由：保持在当前聊天页
                         else -> {}
                     }
+                }
+            )
+        }
+
+        // 搜索结果Bottom Sheet
+        if (!isTablet && currentSearchResults != null) {
+            SearchResultsBottomSheet(
+                results = currentSearchResults!!,
+                onDismissRequest = { currentSearchResults = null },
+                onLinkClick = { url ->
+                    currentUrl = url
                 }
             )
         }
@@ -984,6 +1212,7 @@ fun ChatScreen(
             .navigationBarsPadding()
             .imePadding()
     )
+}
 }
 }
 }

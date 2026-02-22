@@ -51,7 +51,9 @@ fun MessageBubble(
     // 新增：强制展开深度思考区域
     forceExpandReply: Boolean = false,
     // 新增：链接点击回调
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    // 新增：搜索结果回调
+    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -204,7 +206,8 @@ fun MessageBubble(
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 forceExpanded = forceExpandReply,
                                 enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick
+                                onLinkClick = onLinkClick,
+                                onShowSearchResults = onShowSearchResults
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件

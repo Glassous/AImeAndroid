@@ -77,32 +77,43 @@ fun SearchResultsBottomSheet(
         dragHandle = { BottomSheetDefaults.DragHandle() },
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp)
+        SearchResultsContent(
+            results = results,
+            onLinkClick = onLinkClick
+        )
+    }
+}
+
+@Composable
+fun SearchResultsContent(
+    results: List<SearchResult>,
+    onLinkClick: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .padding(bottom = 32.dp)
+    ) {
+        Text(
+            text = "搜索结果",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                text = "搜索结果",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-            
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                items(results) { result ->
-                    SearchResultItem(
-                        result = result,
-                        onClick = { onLinkClick(result.url) }
-                    )
-                }
-                item { 
-                    Spacer(modifier = Modifier.height(32.dp))
-                }
+            items(results) { result ->
+                SearchResultItem(
+                    result = result,
+                    onClick = { onLinkClick(result.url) }
+                )
+            }
+            item { 
+                Spacer(modifier = Modifier.height(32.dp))
             }
         }
     }

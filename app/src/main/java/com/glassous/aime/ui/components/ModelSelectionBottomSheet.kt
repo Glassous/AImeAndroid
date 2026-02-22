@@ -82,17 +82,48 @@ fun ModelSelectionBottomSheet(
         sheetState = bottomSheetState,
         dragHandle = { BottomSheetDefaults.DragHandle() },
         contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
-     ) {
-        // 处理返回键：在模型列表页面时返回到分组列表，在分组列表页面时关闭Bottom Sheet
-        BackHandler(enabled = uiState.selectedGroup != null) {
-            viewModel.backToGroups()
-        }
-        
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-        ) {
-            // 标题栏
+    ) {
+        ModelSelectionContent(
+            viewModel = viewModel,
+            onDismiss = onDismiss,
+            onSyncResult = onSyncResult,
+            selectedTool = selectedTool,
+            onToolSelectionClick = onToolSelectionClick,
+            autoProcessing = autoProcessing,
+            autoSelected = autoSelected,
+            toolCallInProgress = toolCallInProgress,
+            currentToolType = currentToolType,
+            showToolSelection = showToolSelection
+        )
+    }
+}
+
+@Composable
+fun ModelSelectionContent(
+    viewModel: ModelSelectionViewModel,
+    onDismiss: () -> Unit,
+    onSyncResult: ((Boolean, String) -> Unit)? = null,
+    selectedTool: Tool? = null,
+    onToolSelectionClick: () -> Unit = {},
+    autoProcessing: Boolean = false,
+    autoSelected: Boolean = false,
+    toolCallInProgress: Boolean = false,
+    currentToolType: ToolType? = null,
+    showToolSelection: Boolean = true
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val groups by viewModel.groups.collectAsStateWithLifecycle()
+
+    // 处理返回键：在模型列表页面时返回到分组列表，在分组列表页面时关闭Bottom Sheet
+    BackHandler(enabled = uiState.selectedGroup != null) {
+        viewModel.backToGroups()
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+    ) {
+        // 标题栏
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -308,9 +339,9 @@ fun ModelSelectionBottomSheet(
             
             // 底部间距
             Spacer(modifier = Modifier.height(16.dp))
-        }
     }
 }
+
 
 /**
  * 工具选择项
