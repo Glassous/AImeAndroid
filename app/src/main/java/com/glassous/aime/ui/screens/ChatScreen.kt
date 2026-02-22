@@ -98,6 +98,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material.icons.filled.DragHandle
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -271,6 +274,14 @@ fun ChatScreen(
     // 新增：当前展示的搜索结果列表
     var currentSearchResults by remember { mutableStateOf<List<SearchResult>?>(null) }
 
+    // HTML预览侧边栏状态（平板模式）
+    var showHtmlPreviewSideSheet by remember { mutableStateOf(false) }
+    var htmlPreviewSideSheetCode by remember { mutableStateOf("") }
+    var htmlPreviewSideSheetIsSourceMode by remember { mutableStateOf(false) }
+    var htmlPreviewSideSheetIsRestricted by remember { mutableStateOf(false) }
+    var htmlPreviewSideSheetUrl by remember { mutableStateOf<String?>(null) }
+    var htmlPreviewSideSheetWidthFraction by remember { mutableStateOf(0.6f) }
+
     // 切换对话时触发淡入动画
     LaunchedEffect(currentConversationId) {
         contentAlpha.snapTo(0f)
@@ -384,17 +395,11 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxHeight()
                             // 智能宽度调整：
-                            // 当Side Sheet未展开时，Box宽度为全屏，此时Scaffold宽度设为60%全屏宽度。
-                            // 当Side Sheet展开时，Box宽度减小。若此时仍强制60%全屏宽度，可能会超出Box。
-                            // 因此需取 min(screenWidth * 0.6, maxWidth of Box)。
-                            // 由于Scaffold在Box中居中(Alignment.TopCenter)，这会产生良好的视觉效果。
-                            .width(
-                                if (isTablet) {
-                                    (screenWidth * 0.8f).coerceAtMost(1000.dp)
-                                } else {
-                                    Dp.Unspecified // 手机模式下由fillMaxWidth控制（或者默认填满）
-                                }
-                            )
+                            // 使用 fillMaxWidth 配合 widthIn 限制最大宽度，
+                            // 这样当 Side Sheet 挤压 Box 时，Scaffold 会自动适应剩余空间，
+                            // 同时在宽屏下也不会过宽。
+                            .fillMaxWidth()
+                            .widthIn(max = 1000.dp)
                             .then(
                                 if (!isTablet) Modifier.fillMaxWidth() else Modifier
                             )
@@ -914,8 +919,49 @@ fun ChatScreen(
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
                                 isStreaming = isStreamingMessage,
-                                onHtmlPreview = onNavigateToHtmlPreview,
-                                onHtmlPreviewSource = onNavigateToHtmlPreviewSource,
+                                onHtmlPreview = { code ->
+                                    if (isTablet) {
+                                        val isWebAnalysis = code.contains("<!-- type: web_analysis")
+                                        htmlPreviewSideSheetCode = code
+                                        htmlPreviewSideSheetIsRestricted = isWebAnalysis
+                                        if (isWebAnalysis) {
+                                            val urlRegex = Regex("url:(http[^\\s]+)")
+                                            val match = urlRegex.find(code)
+                                            htmlPreviewSideSheetUrl = match?.groupValues?.get(1)
+                                            htmlPreviewSideSheetIsSourceMode = false
+                                        } else {
+                                            htmlPreviewSideSheetUrl = null
+                                            htmlPreviewSideSheetIsSourceMode = false
+                                        }
+                                        showHtmlPreviewSideSheet = true
+                                        // Close other sheets
+                                        modelSelectionViewModel.hideBottomSheet()
+                                        toolSelectionViewModel.hideBottomSheet()
+                                        currentSearchResults = null
+                                    } else {
+                                        onNavigateToHtmlPreview(code)
+                                    }
+                                },
+                                onHtmlPreviewSource = { code ->
+                                    if (isTablet) {
+                                        val isWebAnalysis = code.contains("<!-- type: web_analysis")
+                                        htmlPreviewSideSheetCode = code
+                                        htmlPreviewSideSheetIsRestricted = isWebAnalysis
+                                        htmlPreviewSideSheetUrl = null
+                                        if (isWebAnalysis) {
+                                             htmlPreviewSideSheetIsSourceMode = false
+                                        } else {
+                                             htmlPreviewSideSheetIsSourceMode = true
+                                        }
+                                        showHtmlPreviewSideSheet = true
+                                        // Close other sheets
+                                        modelSelectionViewModel.hideBottomSheet()
+                                        toolSelectionViewModel.hideBottomSheet()
+                                        currentSearchResults = null
+                                    } else {
+                                        onNavigateToHtmlPreviewSource(code)
+                                    }
+                                },
                                 useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
                                 enableTypewriterEffect = true,
                                 onLinkClick = { url ->
@@ -1096,6 +1142,68 @@ fun ChatScreen(
                  }
              }
         }
+    // HTML Preview Side Sheet
+    val density = LocalDensity.current
+    AnimatedVisibility(
+        visible = isTablet && showHtmlPreviewSideSheet,
+        enter = expandHorizontally(expandFrom = Alignment.Start),
+        exit = shrinkHorizontally(shrinkTowards = Alignment.Start)
+    ) {
+        Row(modifier = Modifier.fillMaxHeight()) {
+            // Resize Handle
+            Box(
+                modifier = Modifier
+                    .width(12.dp)
+                    .fillMaxHeight()
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            change.consume()
+                            // Dragging left (negative) increases side sheet width
+                            // deltaFraction = -dragAmount / screenWidth
+                            val screenWidthPx = with(density) { screenWidth.toPx() }
+                            val newFraction = htmlPreviewSideSheetWidthFraction - (dragAmount / screenWidthPx)
+                            htmlPreviewSideSheetWidthFraction = newFraction.coerceIn(0.2f, 0.8f)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                // Visual indicator line
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .fillMaxHeight()
+                        .background(MaterialTheme.colorScheme.outlineVariant)
+                )
+                // Handle icon
+                Icon(
+                    imageVector = Icons.Filled.DragHandle,
+                    contentDescription = "Resize",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .background(MaterialTheme.colorScheme.surface, CircleShape)
+                        .rotate(90f)
+                )
+            }
+
+            // Side Sheet Content
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(screenWidth * htmlPreviewSideSheetWidthFraction)
+                    .background(MaterialTheme.colorScheme.surface)
+                    .windowInsetsPadding(WindowInsets.statusBars) // 避让状态栏
+            ) {
+                HtmlPreviewContent(
+                    htmlCode = htmlPreviewSideSheetCode,
+                    onClose = { showHtmlPreviewSideSheet = false },
+                    initialIsSourceMode = htmlPreviewSideSheetIsSourceMode,
+                    isRestricted = htmlPreviewSideSheetIsRestricted,
+                    previewUrl = htmlPreviewSideSheetUrl
+                )
+            }
+        }
+    }
     }
     }
 

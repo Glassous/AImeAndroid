@@ -58,10 +58,28 @@ fun HtmlPreviewScreen(
     isRestricted: Boolean = false, // 新增参数：受限模式（如网页分析）
     previewUrl: String? = null // 新增参数：如果存在则直接加载该URL
 ) {
+    HtmlPreviewContent(
+        htmlCode = htmlCode,
+        onClose = onNavigateBack,
+        initialIsSourceMode = isSourceMode,
+        isRestricted = isRestricted,
+        previewUrl = previewUrl
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HtmlPreviewContent(
+    htmlCode: String,
+    onClose: () -> Unit,
+    initialIsSourceMode: Boolean,
+    isRestricted: Boolean = false,
+    previewUrl: String? = null
+) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var isLoading by remember { mutableStateOf(true) }
-    var localIsSourceMode by remember { mutableStateOf(isSourceMode) }
+    var localIsSourceMode by remember(htmlCode) { mutableStateOf(initialIsSourceMode) }
     var showStatsDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var rotation by remember { mutableStateOf(0f) }
@@ -459,7 +477,7 @@ ${htmlCode.replace("</script>", "<\\/script>")}
             TopAppBar(
                 title = { Text("预览") },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    IconButton(onClick = onClose) {
                         Icon(Icons.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
