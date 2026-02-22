@@ -323,7 +323,7 @@ class ChatRepository(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
                     name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `^n` 格式引用搜索结果（n为搜索结果序号，例如 `^1`、`^2`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
                     parameters = com.glassous.aime.data.ToolFunctionParameters(
                         type = "object",
                         properties = mapOf(
@@ -1091,7 +1091,7 @@ class ChatRepository(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
                     name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `^n` 格式引用搜索结果（n为搜索结果序号，例如 `^1`、`^2`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
                     parameters = com.glassous.aime.data.ToolFunctionParameters(
                         type = "object",
                         properties = mapOf(
@@ -1943,7 +1943,7 @@ class ChatRepository(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
                     name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `^n` 格式引用搜索结果（n为搜索结果序号，例如 `^1`、`^2`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
                     parameters = com.glassous.aime.data.ToolFunctionParameters(
                         type = "object",
                         properties = mapOf(
@@ -2364,7 +2364,7 @@ class ChatRepository(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
                     name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `^n` 格式引用搜索结果（n为搜索结果序号，例如 `^1`、`^2`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
                     parameters = com.glassous.aime.data.ToolFunctionParameters(
                         type = "object",
                         properties = mapOf(
@@ -2632,7 +2632,7 @@ class ChatRepository(
 
                                     // 构建最小化系统消息，避免消耗额外token（不附带搜索结果文本）
                                     val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                        "已完成联网搜索，请继续回答用户问题。在回答中，**必须**使用 `^n` 格式（如 `^1`）引用搜索结果，严禁使用 `[1]` 或 `【1】` 等其他格式。确保引用的准确性。"
+                                        "已完成联网搜索，请继续回答用户问题。在回答中，**必须**使用 `(ref:n)` 格式（如 `(ref:1)`）引用搜索结果，严禁使用 `[1]` 或 `【1】` 等其他格式。确保引用的准确性。"
                                     } else {
                                         "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
                                     }

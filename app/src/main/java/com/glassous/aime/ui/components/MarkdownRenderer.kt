@@ -487,17 +487,20 @@ private fun preprocessText(input: String, enableLatex: Boolean): String {
         }
 
         if (!inInlineCode) {
-            // Handle citation ^n
-            if (c == '^' && prev != '\\') {
-                if (i + 1 < input.length && input[i+1].isDigit()) {
-                    var j = i + 1
+            // Handle citation (ref:n)
+            if (c == '(' && prev != '\\') {
+                if (i + 5 < input.length && input.substring(i + 1, i + 5) == "ref:") {
+                    var j = i + 5
+                    val startNum = j
                     while (j < input.length && input[j].isDigit()) {
                         j++
                     }
-                    val num = input.substring(i + 1, j)
-                    sb.append("[$num](citation:$num)")
-                    i = j 
-                    continue
+                    if (j > startNum && j < input.length && input[j] == ')') {
+                        val num = input.substring(startNum, j)
+                        sb.append("[$num](citation:$num)")
+                        i = j + 1
+                        continue
+                    }
                 }
             }
 
