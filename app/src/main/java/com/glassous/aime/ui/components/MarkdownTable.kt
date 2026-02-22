@@ -455,17 +455,44 @@ private fun parseMarkdownTableToCsv(markdown: String): String {
 
     val csvBuilder = StringBuilder()
     
-    // Filter out separator line (usually 2nd line, contains ---)
-    val contentLines = lines.filter { !it.trim().matches(Regex("^\\|[ :\\-]+\\|$")) }
+    // Filter out separator line (usually 2nd line, contains --- or :---:)
+    // The previous regex was not covering all cases like ":---" or ":---:" without pipes
+    // Also, handle lines that might not start/end with pipes in raw markdown
+    val contentLines = lines.filter { line ->
+        val trimmed = line.trim()
+        // Check if line contains only characters used in separators: |, -, :, space
+        val isSeparator = trimmed.all { it == '|' || it == '-' || it == ':' || it == ' ' } && trimmed.contains("-")
+        !isSeparator
+    }
 
     for (line in contentLines) {
-        val row = line.trim().trim('|').split("|")
-        val csvRow = row.joinToString(",") { cell ->
+        val trimmed = line.trim()
+        
+        // Skip empty lines
+        if (trimmed.isEmpty()) continue
+        
+        // Handle pipe-based tables (most common)
+        val segments = if (trimmed.contains("|")) {
+            trimmed.trim('|').split("|")
+        } else if (trimmed.contains(",")) {
+            // Fallback for CSV-like lines
+            trimmed.split(",")
+        } else {
+             // Fallback for space-separated or single column
+             listOf(trimmed)
+        }
+        
+        val csvRow = segments.joinToString(",") { cell ->
             // Clean markdown first
-            val cleanedCell = cleanMarkdown(cell.trim())
+            var cleanedCell = cleanMarkdown(cell.trim())
+            
+            // Remove common table alignment markers if they leaked in (e.g. :---)
+            if (cleanedCell.matches(Regex("^[:\\-]{3,}$"))) {
+                 cleanedCell = ""
+            }
             
             // Escape quotes and wrap in quotes if necessary
-            if (cleanedCell.contains(",") || cleanedCell.contains("\"")) {
+            if (cleanedCell.contains(",") || cleanedCell.contains("\"") || cleanedCell.contains("\n")) {
                 "\"${cleanedCell.replace("\"", "\"\"")}\""
             } else {
                 cleanedCell
