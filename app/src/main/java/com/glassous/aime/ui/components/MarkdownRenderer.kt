@@ -274,7 +274,11 @@ fun MarkdownRenderer(
                                     }
                                 } else {
                                     // 非流式状态，直接显示
-                                    tv.text = spanned
+                                    if (spanned is Spanned) {
+                                        markwon.setParsedMarkdown(tv, spanned)
+                                    } else {
+                                        tv.text = spanned
+                                    }
                                     // 重置状态以防下次变为流式
                                     val state = (tv.tag as? TextFadeState) ?: TextFadeState().also { tv.tag = it }
                                     state.lastLength = spanned.length
