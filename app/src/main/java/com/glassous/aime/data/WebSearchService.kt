@@ -479,17 +479,21 @@ class WebSearchService(
         formatted.append("🔍 搜索结果：「${searchResponse.query}」\n\n")
         
         searchResponse.results.forEachIndexed { index, result ->
-            formatted.append("${index + 1}. **${result.title}**\n")
-            formatted.append("   ${result.snippet}\n")
-            formatted.append("   🔗 ${result.url}\n")
+            val refIndex = index + 1
+            // 强调序号，使用 【n】格式，并明确告知 AI 引用方式
+            formatted.append("【第 $refIndex 条结果】\n")
+            formatted.append("标题：${result.title}\n")
+            formatted.append("摘要：${result.snippet}\n")
+            formatted.append("链接：${result.url}\n")
             
             // 如果有完整网页内容，添加到格式化结果中
             if (result.fullContent.isNotEmpty()) {
-                formatted.append("   📄 网页内容：\n")
-                formatted.append("   ${result.fullContent}\n")
+                formatted.append("正文内容：\n${result.fullContent}\n")
             }
-            formatted.append("\n")
+            formatted.append("\n---\n\n")
         }
+        
+        formatted.append("重要指令：在回答中引用上述搜索结果时，必须使用 `(ref:序号)` 的格式。例如，引用第 1 条结果时，请在句尾标注 `(ref:1)`。严禁使用 `[1]`、`【1】` 或其他格式。")
         
         return formatted.toString()
     }
