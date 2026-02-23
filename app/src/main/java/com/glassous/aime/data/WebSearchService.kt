@@ -502,7 +502,7 @@ class WebSearchService(
             formatted.append("\n---\n\n")
         }
         
-        formatted.append("重要指令：在回答中引用上述搜索结果时，必须使用 `(ref:序号)` 的格式。例如，引用第 1 条结果时，请在句尾标注 `(ref:1)`。严禁使用 `[1]`、`【1】` 或其他格式。")
+        formatted.append("重要指令：在回答中引用上述搜索结果时，必须使用 `(ref:序号)` 的格式。如果是多个引用，使用 `(ref:1, 2)` 的格式。例如，引用第 1 条结果时，请在句尾标注 `(ref:1)`。严禁使用 `[1]`、`【1】` 或其他格式。")
         
         return formatted.toString()
     }

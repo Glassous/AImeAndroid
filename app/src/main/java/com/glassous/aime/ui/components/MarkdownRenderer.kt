@@ -492,19 +492,35 @@ private fun preprocessText(input: String, enableLatex: Boolean): String {
         }
 
         if (!inInlineCode) {
-            // Handle citation (ref:n)
+            // Handle citation (ref:n) or (ref:n, m, ...)
             if (c == '(' && prev != '\\') {
                 if (i + 5 < input.length && input.substring(i + 1, i + 5) == "ref:") {
                     var j = i + 5
                     val startNum = j
-                    while (j < input.length && input[j].isDigit()) {
+                    // Allow digits, commas, spaces, and "ref:"
+                    while (j < input.length && input[j] != ')') {
                         j++
                     }
                     if (j > startNum && j < input.length && input[j] == ')') {
-                        val num = input.substring(startNum, j)
-                        sb.append("[$num](citation:$num)")
-                        i = j + 1
-                        continue
+                        val content = input.substring(startNum, j)
+                        // Handle both "1, 2, 3" and "1, ref:2, ref:3" formats
+                        // Remove "ref:" prefixes and split by comma/space
+                        val cleanedContent = content.replace("ref:", "").replace(",", " ")
+                        val numbers = cleanedContent.split(" ").map { it.trim() }.filter { it.isNotEmpty() && it.all { char -> char.isDigit() } }
+                        
+                        // Only process if we found valid numbers and the content was mostly valid
+                        // (To avoid matching "(ref: see figure 1)")
+                        // Check if reconstruction matches original (ignoring spaces/commas/ref:)
+                        val reconstructedLength = numbers.sumOf { it.length }
+                        val originalDigitCount = content.count { it.isDigit() }
+                        
+                        if (numbers.isNotEmpty() && reconstructedLength == originalDigitCount) {
+                            numbers.forEach { num ->
+                                sb.append("[$num](citation:$num)")
+                            }
+                            i = j + 1
+                            continue
+                        }
                     }
                 }
             }
