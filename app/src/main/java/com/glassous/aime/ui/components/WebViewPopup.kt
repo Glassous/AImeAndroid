@@ -23,14 +23,16 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
+import android.graphics.Bitmap
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WebViewPopup(
     url: String,
@@ -38,6 +40,7 @@ fun WebViewPopup(
 ) {
     val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
+    var isLoading by remember { mutableStateOf(true) }
 
     // Start enter animation
     LaunchedEffect(Unit) {
@@ -127,70 +130,107 @@ fun WebViewPopup(
                             }
                         }
                         
-                        // WebView
-                        AndroidView(
-                            factory = { ctx ->
-                                WebView(ctx).apply {
-                                    layoutParams = ViewGroup.LayoutParams(
-                                        ViewGroup.LayoutParams.MATCH_PARENT,
-                                        ViewGroup.LayoutParams.MATCH_PARENT
-                                    )
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.loadWithOverviewMode = true
-                                    settings.useWideViewPort = true
-                                    settings.setSupportZoom(true)
-                                    settings.builtInZoomControls = true
-                                    settings.displayZoomControls = false
-                                    settings.setSupportMultipleWindows(false) // Force open in same window
-                                    settings.javaScriptCanOpenWindowsAutomatically = false
-                                    
-                                    webViewClient = object : WebViewClient() {
-                                        override fun shouldOverrideUrlLoading(
-                                            view: WebView?,
-                                            request: WebResourceRequest?
-                                        ): Boolean {
-                                            val requestUrl = request?.url?.toString() ?: return false
-                                            if (requestUrl.startsWith("http://") || requestUrl.startsWith("https://")) {
-                                                // Force load in this WebView
-                                                return false
-                                            }
-                                            // Handle other schemes like mailto, tel, intent
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(requestUrl))
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                e.printStackTrace()
-                                            }
-                                            return true
-                                        }
+                        // WebView container with loading indicator
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            AndroidView(
+                                factory = { ctx ->
+                                    WebView(ctx).apply {
+                                        layoutParams = ViewGroup.LayoutParams(
+                                            ViewGroup.LayoutParams.MATCH_PARENT,
+                                            ViewGroup.LayoutParams.MATCH_PARENT
+                                        )
+                                        // Set background to transparent to avoid white flash in dark mode
+                                        setBackgroundColor(0)
                                         
-                                        // Deprecated override for older devices compatibility
-                                        override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
-                                            if (url == null) return false
-                                            if (url.startsWith("http://") || url.startsWith("https://")) {
-                                                return false
+                                        settings.javaScriptEnabled = true
+                                        settings.domStorageEnabled = true
+                                        settings.loadWithOverviewMode = true
+                                        settings.useWideViewPort = true
+                                        settings.setSupportZoom(true)
+                                        settings.builtInZoomControls = true
+                                        settings.displayZoomControls = false
+                                        settings.setSupportMultipleWindows(false) // Force open in same window
+                                        settings.javaScriptCanOpenWindowsAutomatically = false
+                                        
+                                        webViewClient = object : WebViewClient() {
+                                            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
+                                                isLoading = true
+                                                super.onPageStarted(view, url, favicon)
                                             }
-                                            try {
-                                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                                                context.startActivity(intent)
-                                            } catch (e: Exception) {
-                                                e.printStackTrace()
+
+                                            override fun onPageFinished(view: WebView?, url: String?) {
+                                                isLoading = false
+                                                super.onPageFinished(view, url)
                                             }
-                                            return true
+
+                                            override fun onReceivedError(
+                                                view: WebView?,
+                                                request: WebResourceRequest?,
+                                                error: android.webkit.WebResourceError?
+                                            ) {
+                                                isLoading = false
+                                                super.onReceivedError(view, request, error)
+                                            }
+
+                                            override fun shouldOverrideUrlLoading(
+                                                view: WebView?,
+                                                request: WebResourceRequest?
+                                            ): Boolean {
+                                                val requestUrl = request?.url?.toString() ?: return false
+                                                if (requestUrl.startsWith("http://") || requestUrl.startsWith("https://")) {
+                                                    // Force load in this WebView
+                                                    return false
+                                                }
+                                                // Handle other schemes like mailto, tel, intent
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(requestUrl))
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                                return true
+                                            }
+
+                                            // Deprecated override for older devices compatibility
+                                            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                                                if (url == null) return false
+                                                if (url.startsWith("http://") || url.startsWith("https://")) {
+                                                    return false
+                                                }
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                                                    context.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                                return true
+                                            }
                                         }
+                                        webChromeClient = WebChromeClient()
+                                        loadUrl(url)
                                     }
-                                    webChromeClient = WebChromeClient()
-                                    loadUrl(url)
-                                }
-                            },
-                            update = { webView ->
-                                if (webView.url != url && webView.originalUrl != url) {
-                                    webView.loadUrl(url)
-                                }
-                            },
-                            modifier = Modifier.fillMaxSize()
-                        )
+                                },
+                                update = { webView ->
+                                    if (webView.url != url && webView.originalUrl != url) {
+                                        webView.loadUrl(url)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .alpha(if (isLoading) 0f else 1f)
+                            )
+
+                            // Expressive Loading Indicator
+                            if (isLoading) {
+                                LoadingIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                        }
                     }
                 }
             }
