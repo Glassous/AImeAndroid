@@ -47,6 +47,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import com.glassous.aime.ui.components.MessageBubble
 
 import androidx.compose.ui.platform.LocalConfiguration
 
@@ -63,11 +64,58 @@ fun LongImagePreviewBottomSheet(
     onShareLink: () -> Unit = {},
     showLinkButton: Boolean = true
 ) {
+    val configuration = LocalConfiguration.current
+    val screenHeight = configuration.screenHeightDp.dp
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        dragHandle = null,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        LongImagePreviewContent(
+            messages = messages,
+            onDismiss = {
+                scope.launch {
+                    sheetState.hide()
+                    onDismiss()
+                }
+            },
+            chatFontSize = chatFontSize,
+            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+            replyBubbleEnabled = replyBubbleEnabled,
+            isSharing = isSharing,
+            sharedUrl = sharedUrl,
+            onShareLink = onShareLink,
+            showLinkButton = showLinkButton,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = screenHeight * 0.9f),
+            isSideSheet = false
+        )
+    }
+}
+
+@Composable
+fun LongImagePreviewContent(
+    messages: List<ChatMessage>,
+    onDismiss: () -> Unit,
+    chatFontSize: Float,
+    useCardStyleForHtmlCode: Boolean,
+    replyBubbleEnabled: Boolean,
+    isSharing: Boolean,
+    sharedUrl: String?,
+    onShareLink: () -> Unit,
+    showLinkButton: Boolean,
+    modifier: Modifier = Modifier,
+    isSideSheet: Boolean = false
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var isGenerating by remember { mutableStateOf(false) }
-    val configuration = LocalConfiguration.current
-    val screenHeight = configuration.screenHeightDp.dp
     
     // Copy feedback state
     var showSuccessFeedback by remember { mutableStateOf(false) }
@@ -92,106 +140,96 @@ fun LongImagePreviewBottomSheet(
     // We use a reference to the ComposeView that we will capture
     var captureView by remember { mutableStateOf<View?>(null) }
     
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        dragHandle = null,
-        contentWindowInsets = { WindowInsets(0, 0, 0, 0) },
-        containerColor = MaterialTheme.colorScheme.surface
+    Column(
+        modifier = modifier
     ) {
-        Column(
+        // Image Preview Area
+        Box(
             modifier = Modifier
+                .weight(1f, fill = false) // Use weight with fill=false to allow shrinking but expanding up to available space
                 .fillMaxWidth()
-                .heightIn(max = screenHeight * 0.9f) // Occupy max 90% of screen height
         ) {
-            // Image Preview Area
             Box(
                 modifier = Modifier
-                    .weight(1f, fill = false) // Use weight with fill=false to allow shrinking but expanding up to available space
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .verticalScroll(rememberScrollState())
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            ComposeView(ctx).apply {
-                                setContent {
-                                    MaterialTheme(
-                                         colorScheme = MaterialTheme.colorScheme,
-                                         typography = MaterialTheme.typography
-                                    ) {
-                                        Surface(color = MaterialTheme.colorScheme.surface) {
+                AndroidView(
+                    factory = { ctx ->
+                        ComposeView(ctx).apply {
+                            setContent {
+                                MaterialTheme(
+                                     colorScheme = MaterialTheme.colorScheme,
+                                     typography = MaterialTheme.typography
+                                ) {
+                                    Surface(color = MaterialTheme.colorScheme.surface) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(16.dp)
+                                        ) {
+                                            messages.forEach { msg ->
+                                                MessageBubble(
+                                                    message = msg,
+                                                    onShowDetails = {},
+                                                    replyBubbleEnabled = true, // 强制展开深度思考区域
+                                                    chatFontSize = chatFontSize,
+                                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                                    forceExpandReply = true // 添加参数强制展开
+                                                )
+                                                Spacer(modifier = Modifier.height(8.dp))
+                                            }
+                                            
+                                            // Extract models used in conversation (in order)
+                                            val modelsUsed = messages
+                                                .filter { !it.isFromUser && it.modelDisplayName != null }
+                                                .mapNotNull { it.modelDisplayName }
+                                                .distinct()
+                                            
+                                            // Footer
                                             Column(
                                                 modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .padding(16.dp)
+                                                    .padding(top = 16.dp)
+                                                    .align(Alignment.CenterHorizontally),
+                                                horizontalAlignment = Alignment.CenterHorizontally
                                             ) {
-                                                messages.forEach { msg ->
-                                                    MessageBubble(
-                                                        message = msg,
-                                                        onShowDetails = {},
-                                                        replyBubbleEnabled = true, // 强制展开深度思考区域
-                                                        chatFontSize = chatFontSize,
-                                                        useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                                        forceExpandReply = true // 添加参数强制展开
-                                                    )
-                                                    Spacer(modifier = Modifier.height(8.dp))
-                                                }
-                                                
-                                                // Extract models used in conversation (in order)
-                                                val modelsUsed = messages
-                                                    .filter { !it.isFromUser && it.modelDisplayName != null }
-                                                    .mapNotNull { it.modelDisplayName }
-                                                    .distinct()
-                                                
-                                                // Footer
-                                                Column(
-                                                    modifier = Modifier
-                                                        .padding(top = 16.dp)
-                                                        .align(Alignment.CenterHorizontally),
-                                                    horizontalAlignment = Alignment.CenterHorizontally
-                                                ) {
-                                                    if (modelsUsed.isNotEmpty()) {
-                                                        Text(
-                                                            text = modelsUsed.joinToString(", "), 
-                                                            style = MaterialTheme.typography.labelSmall,
-                                                            color = Color.Gray,
-                                                            modifier = Modifier.padding(bottom = 4.dp)
-                                                        )
-                                                    }
+                                                if (modelsUsed.isNotEmpty()) {
                                                     Text(
-                                                        text = buildAnnotatedString {
-                                                            withStyle(style = SpanStyle(fontFamily = FontFamily.Default)) {
-                                                                append("Generated by ")
-                                                            }
-                                                            withStyle(style = SpanStyle(fontFamily = FontFamily.Cursive)) {
-                                                                append("AIme")
-                                                            }
-                                                        },
+                                                        text = modelsUsed.joinToString(", "), 
                                                         style = MaterialTheme.typography.labelSmall,
-                                                        color = Color.Gray
+                                                        color = Color.Gray,
+                                                        modifier = Modifier.padding(bottom = 4.dp)
                                                     )
                                                 }
+                                                Text(
+                                                    text = buildAnnotatedString {
+                                                        withStyle(style = SpanStyle(fontFamily = FontFamily.Default)) {
+                                                            append("Generated by ")
+                                                        }
+                                                        withStyle(style = SpanStyle(fontFamily = FontFamily.Cursive)) {
+                                                            append("AIme")
+                                                        }
+                                                    },
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.Gray
+                                                )
                                             }
                                         }
                                     }
                                 }
                             }
-                        },
-                        update = { view ->
-                            captureView = view
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-                
-                // Floating Drag Handle
+                        }
+                    },
+                    update = { view ->
+                        captureView = view
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            
+            // Floating Drag Handle
+            if (!isSideSheet) {
                 Surface(
                     modifier = Modifier
                         .align(Alignment.TopCenter)
@@ -201,23 +239,22 @@ fun LongImagePreviewBottomSheet(
                     shape = CircleShape
                 ) {}
             }
+        }
 
-            // Bottom Action Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .navigationBarsPadding(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Cancel Button (Left)
+        // Bottom Action Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+                .navigationBarsPadding(),
+            horizontalArrangement = if (isSideSheet) Arrangement.End else Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Cancel Button (Left) - Hide if Side Sheet
+            if (!isSideSheet) {
                 Surface(
                     onClick = {
-                        scope.launch {
-                            sheetState.hide()
-                            onDismiss()
-                        }
+                        onDismiss()
                     },
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.secondaryContainer,
@@ -231,124 +268,124 @@ fun LongImagePreviewBottomSheet(
                         )
                     }
                 }
+            }
 
-                // Action Buttons (Right)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Copy Link Button
-                    if (showLinkButton) {
-                        Surface(
-                            onClick = {
-                                if (sharedUrl != null) {
-                                    clipboardManager.setText(AnnotatedString(sharedUrl))
-                                    showSuccessFeedback = true
-                                } else {
-                                    onShareLink()
-                                }
-                            },
-                            shape = CircleShape,
-                            color = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier
-                                .height(48.dp)
-                                .animateContentSize()
+            // Action Buttons (Right)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Copy Link Button
+                if (showLinkButton) {
+                    Surface(
+                        onClick = {
+                            if (sharedUrl != null) {
+                                clipboardManager.setText(AnnotatedString(sharedUrl))
+                                showSuccessFeedback = true
+                            } else {
+                                onShareLink()
+                            }
+                        },
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier
+                            .height(48.dp)
+                            .animateContentSize()
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center,
+                            modifier = Modifier.padding(horizontal = if (sharedUrl != null) 16.dp else 0.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier.padding(horizontal = if (sharedUrl != null) 16.dp else 0.dp)
+                            Box(
+                                contentAlignment = Alignment.Center, 
+                                modifier = Modifier.size(48.dp)
                             ) {
-                                Box(
-                                    contentAlignment = Alignment.Center, 
-                                    modifier = Modifier.size(48.dp)
-                                ) {
-                                    if (isSharing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(24.dp),
-                                            strokeWidth = 2.dp,
-                                            color = MaterialTheme.colorScheme.onTertiary
-                                        )
-                                    } else {
-                                        Icon(
-                                            imageVector = if (showSuccessFeedback) Icons.Default.Check else Icons.Default.Link,
-                                            contentDescription = "复制链接",
-                                            tint = MaterialTheme.colorScheme.onTertiary
-                                        )
-                                    }
-                                }
-                                
-                                if (sharedUrl != null && !isSharing) {
-                                    Text(
-                                        text = if (showSuccessFeedback) "链接已复制" else "重新复制",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.onTertiary,
-                                        modifier = Modifier.padding(end = 4.dp)
+                                if (isSharing) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onTertiary
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = if (showSuccessFeedback) Icons.Default.Check else Icons.Default.Link,
+                                        contentDescription = "复制链接",
+                                        tint = MaterialTheme.colorScheme.onTertiary
                                     )
                                 }
                             }
+                            
+                            if (sharedUrl != null && !isSharing) {
+                                Text(
+                                    text = if (showSuccessFeedback) "链接已复制" else "重新复制",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onTertiary,
+                                    modifier = Modifier.padding(end = 4.dp)
+                                )
+                            }
                         }
                     }
+                }
 
-                    // Save Button
-                    Surface(
-                        onClick = {
-                            if (!isGenerating && captureView != null) {
-                                isGenerating = true
-                                scope.launch {
-                                    val bitmap = captureBitmapFromView(captureView!!)
-                                    if (bitmap != null) {
-                                        saveBitmapToGallery(context, bitmap)
-                                    } else {
-                                        Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
-                                    }
-                                    isGenerating = false
+                // Save Button
+                Surface(
+                    onClick = {
+                        if (!isGenerating && captureView != null) {
+                            isGenerating = true
+                            scope.launch {
+                                val bitmap = captureBitmapFromView(captureView!!)
+                                if (bitmap != null) {
+                                    saveBitmapToGallery(context, bitmap)
+                                } else {
+                                    Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
                                 }
+                                isGenerating = false
                             }
-                        },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                         Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                             if (isGenerating) {
-                                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
-                             } else {
-                                 Icon(
-                                     imageVector = Icons.Default.Download,
-                                     contentDescription = "保存",
-                                     tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                 )
-                             }
                         }
+                    },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                     Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                         if (isGenerating) {
+                             CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                         } else {
+                             Icon(
+                                 imageVector = Icons.Default.Download,
+                                 contentDescription = "保存",
+                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
+                             )
+                         }
                     }
+                }
 
-                    // Share Button
-                    Surface(
-                        onClick = {
-                            if (!isGenerating && captureView != null) {
-                                isGenerating = true
-                                scope.launch {
-                                    val bitmap = captureBitmapFromView(captureView!!)
-                                    if (bitmap != null) {
-                                        shareBitmap(context, bitmap)
-                                    } else {
-                                        Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
-                                    }
-                                    isGenerating = false
+                // Share Button
+                Surface(
+                    onClick = {
+                        if (!isGenerating && captureView != null) {
+                            isGenerating = true
+                            scope.launch {
+                                val bitmap = captureBitmapFromView(captureView!!)
+                                if (bitmap != null) {
+                                    shareBitmap(context, bitmap)
+                                } else {
+                                    Toast.makeText(context, "生成图片失败", Toast.LENGTH_SHORT).show()
                                 }
+                                isGenerating = false
                             }
-                        },
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = "分享",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
                         }
+                    },
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = "分享",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
                     }
                 }
             }

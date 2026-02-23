@@ -264,6 +264,42 @@ fun ChatScreen(
 
     // 长图分享预览弹窗状态
     var showLongImageDialog by remember { mutableStateOf(false) }
+    var sharedUrl by remember { mutableStateOf<String?>(null) }
+    
+    // Reset sharedUrl when dialog is closed
+    LaunchedEffect(showLongImageDialog) {
+        if (!showLongImageDialog) {
+            sharedUrl = null
+        }
+    }
+    
+    val onShareLinkAction: () -> Unit = {
+        val title = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
+        
+        // Aggregate distinct model names from messages
+        val distinctModels = currentMessages
+            .filter { !it.isFromUser && !it.modelDisplayName.isNullOrBlank() }
+            .mapNotNull { it.modelDisplayName }
+            .distinct()
+            .joinToString(", ")
+        
+        // Fallback to selected model if no messages have model info
+        val modelsToShare = if (distinctModels.isNotBlank()) distinctModels else selectedModelDisplayName
+
+        chatViewModel.shareConversation(
+            title = title,
+            model = modelsToShare,
+            messages = currentMessages,
+            onSuccess = { url ->
+                sharedUrl = url
+            },
+            onError = { error ->
+                scope.launch {
+                    snackbarHostState.showSnackbar(error)
+                }
+            }
+        )
+    }
 
     // 内容淡入动画状态
     val contentAlpha = remember { Animatable(0f) }
@@ -1015,7 +1051,7 @@ fun ChatScreen(
         
         // Side Sheet
         AnimatedVisibility(
-            visible = isTablet && (modelSelectionUiState.showBottomSheet || toolSelectionUiState.showBottomSheet || currentSearchResults != null),
+            visible = isTablet && (modelSelectionUiState.showBottomSheet || toolSelectionUiState.showBottomSheet || currentSearchResults != null || showLongImageDialog),
             enter = expandHorizontally(expandFrom = Alignment.Start),
             exit = shrinkHorizontally(shrinkTowards = Alignment.Start)
         ) {
@@ -1052,6 +1088,7 @@ fun ChatScreen(
                              modelSelectionViewModel.hideBottomSheet()
                              toolSelectionViewModel.hideBottomSheet()
                              currentSearchResults = null
+                             showLongImageDialog = false
                          }) {
                              Icon(Icons.Default.Close, contentDescription = "关闭")
                          }
@@ -1063,6 +1100,7 @@ fun ChatScreen(
                              modelSelectionUiState.showBottomSheet -> "model"
                              toolSelectionUiState.showBottomSheet -> "tool"
                              currentSearchResults != null -> "search"
+                             showLongImageDialog -> "share"
                              else -> "none"
                          },
                          transitionSpec = {
@@ -1132,6 +1170,21 @@ fun ChatScreen(
                                          }
                                      )
                                  }
+                             }
+                             "share" -> {
+                                 com.glassous.aime.ui.components.LongImagePreviewContent(
+                                    messages = currentMessages,
+                                    onDismiss = { showLongImageDialog = false },
+                                    chatFontSize = chatFontSize,
+                                    useCardStyleForHtmlCode = htmlCodeBlockCardEnabled,
+                                    replyBubbleEnabled = replyBubbleEnabled,
+                                    isSharing = isSharing,
+                                    sharedUrl = sharedUrl,
+                                    onShareLink = onShareLinkAction,
+                                    showLinkButton = true,
+                                    modifier = Modifier.fillMaxSize(),
+                                    isSideSheet = true
+                                 )
                              }
                              else -> {
                                  // None
@@ -1263,9 +1316,7 @@ fun ChatScreen(
         }
 
     // 长图分享预览弹窗
-    if (showLongImageDialog) {
-        var sharedUrl by remember { mutableStateOf<String?>(null) }
-        
+    if (!isTablet && showLongImageDialog) {
         com.glassous.aime.ui.components.LongImagePreviewBottomSheet(
             messages = currentMessages,
             onDismiss = { showLongImageDialog = false },
@@ -1274,33 +1325,7 @@ fun ChatScreen(
             replyBubbleEnabled = replyBubbleEnabled,
             isSharing = isSharing,
             sharedUrl = sharedUrl,
-            onShareLink = {
-                val title = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
-                
-                // Aggregate distinct model names from messages
-                val distinctModels = currentMessages
-                    .filter { !it.isFromUser && !it.modelDisplayName.isNullOrBlank() }
-                    .mapNotNull { it.modelDisplayName }
-                    .distinct()
-                    .joinToString(", ")
-                
-                // Fallback to selected model if no messages have model info
-                val modelsToShare = if (distinctModels.isNotBlank()) distinctModels else selectedModelDisplayName
-
-                chatViewModel.shareConversation(
-                    title = title,
-                    model = modelsToShare,
-                    messages = currentMessages,
-                    onSuccess = { url ->
-                        sharedUrl = url
-                    },
-                    onError = { error ->
-                        scope.launch {
-                            snackbarHostState.showSnackbar(error)
-                        }
-                    }
-                )
-            }
+            onShareLink = onShareLinkAction
         )
     }
 
