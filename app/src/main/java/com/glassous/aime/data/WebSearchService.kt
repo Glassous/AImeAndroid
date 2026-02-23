@@ -102,14 +102,18 @@ class WebSearchService(
         apiKey: String? = null
     ): WebSearchResponse = withContext(Dispatchers.IO) {
         if (engine == "tavily") {
-            if (apiKey.isNullOrBlank()) {
-                onProgress?.invoke("Tavily API Key 为空，自动切换回 Pear API...")
+            val trimmedKey = apiKey?.trim()
+            if (trimmedKey.isNullOrBlank()) {
+                onProgress?.invoke("⚠️ Tavily API Key 为空，正在切换回 Pear API...")
+                kotlinx.coroutines.delay(1500)
                 return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
             }
             try {
-                return@withContext searchTavily(query, apiKey, maxResults, useCloudProxy, proxyUrl, onProgress)
+                return@withContext searchTavily(query, trimmedKey, maxResults, useCloudProxy, proxyUrl, onProgress)
             } catch (e: Exception) {
-                onProgress?.invoke("Tavily 搜索失败：${e.message}，自动切换回 Pear API...")
+                val errorMsg = e.message ?: "未知错误"
+                onProgress?.invoke("⚠️ Tavily 搜索失败：$errorMsg\n即将切换回 Pear API...")
+                kotlinx.coroutines.delay(2000) // 让错误提示停留 2 秒，让用户能看清
                 return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
             }
         } else {
