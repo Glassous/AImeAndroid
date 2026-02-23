@@ -99,7 +99,8 @@ class WebSearchService(
         proxyUrl: String? = null,
         onProgress: (suspend (String) -> Unit)? = null,
         engine: String = "pear",
-        apiKey: String? = null
+        apiKey: String? = null,
+        tavilyUseProxy: Boolean = false
     ): WebSearchResponse = withContext(Dispatchers.IO) {
         if (engine == "tavily") {
             val trimmedKey = apiKey?.trim()
@@ -109,7 +110,11 @@ class WebSearchService(
                 return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
             }
             try {
-                return@withContext searchTavily(query, trimmedKey, maxResults, useCloudProxy, proxyUrl, onProgress)
+                // 对于 Tavily，优先使用专门的 tavilyUseProxy 配置
+                // 如果 tavilyUseProxy 为 true，则使用传入的 proxyUrl（通常是 Aliyun FC 代理）
+                // 如果 tavilyUseProxy 为 false，则强制不使用代理 (useCloudProxy = false)
+                val shouldUseProxy = tavilyUseProxy && !proxyUrl.isNullOrBlank()
+                return@withContext searchTavily(query, trimmedKey, maxResults, shouldUseProxy, proxyUrl, onProgress)
             } catch (e: Exception) {
                 val errorMsg = e.message ?: "未知错误"
                 onProgress?.invoke("⚠️ Tavily 搜索失败：$errorMsg\n即将切换回 Pear API...")

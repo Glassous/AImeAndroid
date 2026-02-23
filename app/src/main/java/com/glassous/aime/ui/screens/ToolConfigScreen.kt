@@ -79,6 +79,7 @@ fun ToolConfigScreen(
     val webSearchResultCount by application.toolPreferences.webSearchResultCount.collectAsState(initial = 6)
     val webSearchEngine by application.toolPreferences.webSearchEngine.collectAsState(initial = "pear")
     val tavilyApiKey by application.toolPreferences.tavilyApiKey.collectAsState(initial = "")
+    val tavilyUseProxy by application.toolPreferences.tavilyUseProxy.collectAsState(initial = false)
     
     // 沉浸式UI设置
     val view = LocalView.current
@@ -265,6 +266,32 @@ fun ToolConfigScreen(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.padding(top = 4.dp)
                                     )
+                                    
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "使用 Aliyun FC 代理",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = "通过阿里云函数计算代理请求，解决网络问题",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Switch(
+                                            checked = tavilyUseProxy,
+                                            onCheckedChange = { 
+                                                scope.launch { application.toolPreferences.setTavilyUseProxy(it) } 
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }

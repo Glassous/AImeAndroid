@@ -623,6 +623,7 @@ class ChatRepository(
                                         val searchResultCount = toolPreferences.webSearchResultCount.first()
                                         val searchEngine = toolPreferences.webSearchEngine.first()
                                         val tavilyKey = toolPreferences.tavilyApiKey.first()
+                                        val tavilyUseProxy = toolPreferences.tavilyUseProxy.first()
                                         
                                         val searchResponse = webSearchService.search(
                                             query = query,
@@ -635,7 +636,8 @@ class ChatRepository(
                                                 chatDao.updateMessage(progressMessage)
                                             },
                                             engine = searchEngine,
-                                            apiKey = tavilyKey
+                                            apiKey = tavilyKey,
+                                            tavilyUseProxy = tavilyUseProxy
                                         )
 
                                         // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
@@ -2657,6 +2659,7 @@ class ChatRepository(
                                     val searchResultCount = toolPreferences.webSearchResultCount.first()
                                     val searchEngine = toolPreferences.webSearchEngine.first()
                                     val tavilyKey = toolPreferences.tavilyApiKey.first()
+                                    val tavilyUseProxy = toolPreferences.tavilyUseProxy.first()
                                     
                                     val searchResponse = webSearchService.search(
                                         query = query,
@@ -2669,7 +2672,8 @@ class ChatRepository(
                                             chatDao.updateMessage(progressMessage)
                                         },
                                         engine = searchEngine,
-                                        apiKey = tavilyKey
+                                        apiKey = tavilyKey,
+                                        tavilyUseProxy = tavilyUseProxy
                                     )
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）

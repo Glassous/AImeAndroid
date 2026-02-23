@@ -21,6 +21,7 @@ class ToolPreferences(private val context: Context) {
         val WEB_SEARCH_RESULT_COUNT = intPreferencesKey("web_search_result_count")
         val WEB_SEARCH_ENGINE = stringPreferencesKey("web_search_engine")
         val TAVILY_API_KEY = stringPreferencesKey("tavily_api_key")
+        val TAVILY_USE_PROXY = booleanPreferencesKey("tavily_use_proxy")
     }
 
     // Get all visible tool names
@@ -47,6 +48,11 @@ class ToolPreferences(private val context: Context) {
     val tavilyApiKey: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[TAVILY_API_KEY] ?: ""
+        }
+
+    val tavilyUseProxy: Flow<Boolean> = context.dataStore.data
+        .map { preferences ->
+            preferences[TAVILY_USE_PROXY] ?: false
         }
 
     fun getToolVisibility(toolName: String): Flow<Boolean> {
@@ -84,6 +90,12 @@ class ToolPreferences(private val context: Context) {
     suspend fun setTavilyApiKey(apiKey: String) {
         context.dataStore.edit { preferences ->
             preferences[TAVILY_API_KEY] = apiKey
+        }
+    }
+
+    suspend fun setTavilyUseProxy(useProxy: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[TAVILY_USE_PROXY] = useProxy
         }
     }
 }
