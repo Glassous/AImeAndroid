@@ -79,7 +79,11 @@ fun HtmlPreviewContent(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     var isLoading by remember { mutableStateOf(true) }
-    var localIsSourceMode by remember(htmlCode) { mutableStateOf(initialIsSourceMode) }
+    // 使用 LaunchedEffect 监听 initialIsSourceMode 的变化，确保外部模式切换能生效
+    var localIsSourceMode by remember { mutableStateOf(initialIsSourceMode) }
+    LaunchedEffect(initialIsSourceMode, htmlCode) {
+        localIsSourceMode = initialIsSourceMode
+    }
     var showStatsDialog by remember { mutableStateOf(false) }
     var showMenu by remember { mutableStateOf(false) }
     var rotation by remember { mutableStateOf(0f) }

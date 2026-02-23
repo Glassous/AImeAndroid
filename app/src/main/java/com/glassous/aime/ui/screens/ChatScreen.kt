@@ -388,6 +388,7 @@ fun ChatScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 ModalNavigationDrawer(
                     drawerState = drawerState,
+                    gesturesEnabled = if (isTablet) !showHtmlPreviewSideSheet else true,
                     drawerContent = {
                 NavigationDrawer(
                     conversations = conversations,
