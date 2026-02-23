@@ -7,6 +7,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.jsoup.Jsoup
@@ -20,7 +22,8 @@ data class SearchResult(
     val title: String,
     val url: String,
     val snippet: String,
-    val fullContent: String = "" // 添加完整网页内容字段
+    val fullContent: String = "", // 添加完整网页内容字段
+    val image: String? = null // 添加图片URL
 )
 
 // 网络搜索响应
@@ -47,6 +50,32 @@ data class PearApiSearchResult(
     @SerializedName("abstract") val abstract: String
 )
 
+// Tavily API 响应数据模型
+data class TavilyApiResponse(
+    @SerializedName("results") val results: List<TavilySearchResult>,
+    @SerializedName("images") val images: List<String>? = null,
+    @SerializedName("answer") val answer: String? = null
+)
+
+data class TavilySearchResult(
+    @SerializedName("title") val title: String,
+    @SerializedName("url") val url: String,
+    @SerializedName("content") val content: String,
+    @SerializedName("raw_content") val rawContent: String? = null,
+    @SerializedName("score") val score: Double,
+    @SerializedName("published_date") val publishedDate: String?
+)
+
+data class TavilyRequest(
+    @SerializedName("api_key") val apiKey: String,
+    @SerializedName("query") val query: String,
+    @SerializedName("search_depth") val searchDepth: String = "basic",
+    @SerializedName("include_images") val includeImages: Boolean = true,
+    @SerializedName("include_answer") val includeAnswer: Boolean = false,
+    @SerializedName("include_raw_content") val includeRawContent: Boolean = true,
+    @SerializedName("max_results") val maxResults: Int = 6
+)
+
 // 网络搜索服务
 class WebSearchService(
     private val client: OkHttpClient = OkHttpClient.Builder()
@@ -57,7 +86,7 @@ class WebSearchService(
 ) {
     
     /**
-     * 执行网络搜索 - 使用PearAPI搜索引擎
+     * 执行网络搜索
      * @param query 搜索查询
      * @param maxResults 最大结果数量
      * @param onProgress 进度回调，用于更新UI状态
@@ -68,9 +97,34 @@ class WebSearchService(
         maxResults: Int = 6,
         useCloudProxy: Boolean = false,
         proxyUrl: String? = null,
-        onProgress: (suspend (String) -> Unit)? = null
+        onProgress: (suspend (String) -> Unit)? = null,
+        engine: String = "pear",
+        apiKey: String? = null
     ): WebSearchResponse = withContext(Dispatchers.IO) {
-        try {
+        if (engine == "tavily") {
+            if (apiKey.isNullOrBlank()) {
+                onProgress?.invoke("Tavily API Key 为空，自动切换回 Pear API...")
+                return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
+            }
+            try {
+                return@withContext searchTavily(query, apiKey, maxResults, useCloudProxy, proxyUrl, onProgress)
+            } catch (e: Exception) {
+                onProgress?.invoke("Tavily 搜索失败：${e.message}，自动切换回 Pear API...")
+                return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
+            }
+        } else {
+            return@withContext searchPear(query, maxResults, useCloudProxy, proxyUrl, onProgress)
+        }
+    }
+
+    private suspend fun searchPear(
+        query: String,
+        maxResults: Int,
+        useCloudProxy: Boolean,
+        proxyUrl: String?,
+        onProgress: (suspend (String) -> Unit)?
+    ): WebSearchResponse {
+        return try {
             onProgress?.invoke("正在全网搜索「$query」...")
             
             // URL编码搜索查询
@@ -122,6 +176,71 @@ class WebSearchService(
                 totalResults = 0
             )
         }
+    }
+
+    private suspend fun searchTavily(
+        query: String,
+        apiKey: String,
+        maxResults: Int,
+        useCloudProxy: Boolean,
+        proxyUrl: String?,
+        onProgress: (suspend (String) -> Unit)?
+    ): WebSearchResponse {
+        onProgress?.invoke("正在使用 Tavily 搜索「$query」...")
+        
+        val tavilyRequest = TavilyRequest(
+            apiKey = apiKey,
+            query = query,
+            maxResults = maxResults
+        )
+        
+        val jsonBody = Gson().toJson(tavilyRequest)
+        val requestBody = jsonBody.toRequestBody("application/json; charset=utf-8".toMediaType())
+        
+        val requestBuilder = Request.Builder()
+            .post(requestBody)
+            .addHeader("Content-Type", "application/json")
+
+        if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
+             requestBuilder.url(proxyUrl)
+                .addHeader("x-target-url", "https://api.tavily.com/search")
+        } else {
+             requestBuilder.url("https://api.tavily.com/search")
+        }
+        
+        val request = requestBuilder.build()
+        val response = client.newCall(request).execute()
+        
+        if (!response.isSuccessful) {
+            throw IOException("Tavily API Error: ${response.code} ${response.message}")
+        }
+        
+        val responseBody = response.body?.string() ?: throw IOException("Empty response from Tavily")
+        val tavilyResponse = Gson().fromJson(responseBody, TavilyApiResponse::class.java)
+        
+        val results = tavilyResponse.results.mapIndexed { index, item ->
+            val image = tavilyResponse.images?.getOrNull(index)?.takeIf { it.isNotBlank() }
+            
+            // 清理 Title 和 URL，防止破坏 Markdown 格式
+            val cleanTitle = item.title.replace("[", "(").replace("]", ")").replace("\n", " ").trim()
+            val cleanUrl = item.url.trim()
+            
+            SearchResult(
+                title = cleanTitle,
+                url = cleanUrl,
+                snippet = item.content,
+                fullContent = item.rawContent ?: item.content,
+                image = image
+            )
+        }
+        
+        onProgress?.invoke("Tavily 搜索完成，找到 ${results.size} 条结果")
+        
+        return WebSearchResponse(
+            results = results,
+            query = query,
+            totalResults = results.size
+        )
     }
     
     /**

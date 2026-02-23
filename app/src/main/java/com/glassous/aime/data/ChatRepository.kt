@@ -621,17 +621,29 @@ class ChatRepository(
                                         
                                         // 执行网络搜索
                                         val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                        val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl) { progress ->
-                                            val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
-                                            val progressMessage = assistantMessage.copy(content = progressContent)
-                                            chatDao.updateMessage(progressMessage)
-                                        }
+                                        val searchEngine = toolPreferences.webSearchEngine.first()
+                                        val tavilyKey = toolPreferences.tavilyApiKey.first()
+                                        
+                                        val searchResponse = webSearchService.search(
+                                            query = query,
+                                            maxResults = searchResultCount,
+                                            useCloudProxy = useCloudProxy,
+                                            proxyUrl = proxyUrl,
+                                            onProgress = { progress ->
+                                                val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
+                                                val progressMessage = assistantMessage.copy(content = progressContent)
+                                                chatDao.updateMessage(progressMessage)
+                                            },
+                                            engine = searchEngine,
+                                            apiKey = tavilyKey
+                                        )
 
                                         // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                         if (searchResponse.results.isNotEmpty()) {
                                             val linksMarkdown = searchResponse.results.mapIndexed { index, r ->
-                                            "${index + 1}. [${r.title}](${r.url})"
-                                        }.joinToString("\n")
+                                                val base = "${index + 1}. [${r.title}](${r.url})"
+                                                if (r.image != null) "$base ![image](${r.image})" else base
+                                            }.joinToString("\n")
                                         aggregated.append("\n\n\n")
                                         aggregated.append("<search>\n")
                                         aggregated.append(linksMarkdown)
@@ -2643,16 +2655,28 @@ class ChatRepository(
                                     
                                     // 执行网络搜索
                                     val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                    val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl) { progress ->
-                                        val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
-                                        val progressMessage = assistantMessage.copy(content = progressContent)
-                                        chatDao.updateMessage(progressMessage)
-                                    }
+                                    val searchEngine = toolPreferences.webSearchEngine.first()
+                                    val tavilyKey = toolPreferences.tavilyApiKey.first()
+                                    
+                                    val searchResponse = webSearchService.search(
+                                        query = query,
+                                        maxResults = searchResultCount,
+                                        useCloudProxy = useCloudProxy,
+                                        proxyUrl = proxyUrl,
+                                        onProgress = { progress ->
+                                            val progressContent = aggregated.toString() + "\n\n<search>\n" + progress + "\n</search>"
+                                            val progressMessage = assistantMessage.copy(content = progressContent)
+                                            chatDao.updateMessage(progressMessage)
+                                        },
+                                        engine = searchEngine,
+                                        apiKey = tavilyKey
+                                    )
 
                                     // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
                                     if (searchResponse.results.isNotEmpty()) {
                                         val linksMarkdown = searchResponse.results.mapIndexed { index, r ->
-                                            "${index + 1}. [${r.title}](${r.url})"
+                                            val base = "${index + 1}. [${r.title}](${r.url})"
+                                            if (r.image != null) "$base ![image](${r.image})" else base
                                         }.joinToString("\n")
                                         aggregated.append("\n\n\n")
                                         aggregated.append("<search>\n")

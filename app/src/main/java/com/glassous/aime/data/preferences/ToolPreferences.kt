@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.glassous.aime.data.model.ToolType
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,8 @@ class ToolPreferences(private val context: Context) {
     companion object {
         val WEB_SEARCH_ENABLED = booleanPreferencesKey("web_search_enabled")
         val WEB_SEARCH_RESULT_COUNT = intPreferencesKey("web_search_result_count")
+        val WEB_SEARCH_ENGINE = stringPreferencesKey("web_search_engine")
+        val TAVILY_API_KEY = stringPreferencesKey("tavily_api_key")
     }
 
     // Get all visible tool names
@@ -34,6 +37,16 @@ class ToolPreferences(private val context: Context) {
     val webSearchResultCount: Flow<Int> = context.dataStore.data
         .map { preferences ->
             preferences[WEB_SEARCH_RESULT_COUNT] ?: 6
+        }
+
+    val webSearchEngine: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[WEB_SEARCH_ENGINE] ?: "pear"
+        }
+
+    val tavilyApiKey: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[TAVILY_API_KEY] ?: ""
         }
 
     fun getToolVisibility(toolName: String): Flow<Boolean> {
@@ -59,6 +72,18 @@ class ToolPreferences(private val context: Context) {
     suspend fun setWebSearchResultCount(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[WEB_SEARCH_RESULT_COUNT] = count
+        }
+    }
+
+    suspend fun setWebSearchEngine(engine: String) {
+        context.dataStore.edit { preferences ->
+            preferences[WEB_SEARCH_ENGINE] = engine
+        }
+    }
+
+    suspend fun setTavilyApiKey(apiKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TAVILY_API_KEY] = apiKey
         }
     }
 }

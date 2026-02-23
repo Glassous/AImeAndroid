@@ -72,13 +72,19 @@ fun ExpandableReplyBox(
     val searchResultsList = remember(searchResults) {
         val list = mutableListOf<SearchResult>()
         if (!searchResults.isNullOrEmpty()) {
-            val regex = Regex("""^(\d+)\.\s+\[(.*?)\]\((.*?)\)""", RegexOption.MULTILINE)
+            // Regex to match: 1. [Title](Url) optional ![image](ImageUrl)
+            // 优化正则：
+            // 1. 标题匹配非贪婪，但在 ] 之前不应出现换行
+            // 2. URL 匹配非贪婪
+            // 3. 图片部分可选
+            val regex = Regex("""^(\d+)\.\s+\[(.*?)\]\((.*?)\)(?:\s+!\[image\]\((.*?)\))?""", RegexOption.MULTILINE)
             regex.findAll(searchResults!!).forEach { matchResult ->
                 if (matchResult.groupValues.size >= 4) {
                     val id = matchResult.groupValues[1]
                     val title = matchResult.groupValues[2]
                     val url = matchResult.groupValues[3]
-                    list.add(SearchResult(id, title, url))
+                    val image = if (matchResult.groupValues.size > 4) matchResult.groupValues[4].takeIf { it.isNotBlank() } else null
+                    list.add(SearchResult(id, title, url, image))
                 }
             }
         }

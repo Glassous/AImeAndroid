@@ -37,6 +37,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
@@ -76,6 +77,8 @@ fun ToolConfigScreen(
 
     // Read preferences
     val webSearchResultCount by application.toolPreferences.webSearchResultCount.collectAsState(initial = 6)
+    val webSearchEngine by application.toolPreferences.webSearchEngine.collectAsState(initial = "pear")
+    val tavilyApiKey by application.toolPreferences.tavilyApiKey.collectAsState(initial = "")
     
     // 沉浸式UI设置
     val view = LocalView.current
@@ -198,6 +201,72 @@ fun ToolConfigScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            Text(
+                                text = "搜索引擎",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    scope.launch { application.toolPreferences.setWebSearchEngine("pear") }
+                                }
+                            ) {
+                                RadioButton(
+                                    selected = webSearchEngine == "pear",
+                                    onClick = { scope.launch { application.toolPreferences.setWebSearchEngine("pear") } }
+                                )
+                                Text(
+                                    text = "Pear API (默认)",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                            
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    scope.launch { application.toolPreferences.setWebSearchEngine("tavily") }
+                                }
+                            ) {
+                                RadioButton(
+                                    selected = webSearchEngine == "tavily",
+                                    onClick = { scope.launch { application.toolPreferences.setWebSearchEngine("tavily") } }
+                                )
+                                Text(
+                                    text = "Tavily Search API",
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+
+                            AnimatedVisibility(
+                                visible = webSearchEngine == "tavily",
+                                enter = expandVertically(),
+                                exit = shrinkVertically()
+                            ) {
+                                Column {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    OutlinedTextField(
+                                        value = tavilyApiKey,
+                                        onValueChange = { 
+                                            scope.launch { application.toolPreferences.setTavilyApiKey(it) } 
+                                        },
+                                        label = { Text("Tavily API Key") },
+                                        placeholder = { Text("tvly-...") },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        singleLine = true
+                                    )
+                                    Text(
+                                        text = "Tavily 免费额度有限，请使用自己的 API Key",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
