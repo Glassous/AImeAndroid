@@ -6,8 +6,22 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -41,8 +55,10 @@ import com.glassous.aime.ui.components.EditGroupDialog
 import com.glassous.aime.ui.components.EditModelDialog
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModel
 import com.glassous.aime.ui.viewmodel.ModelConfigViewModelFactory
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Warning
+
 import com.glassous.aime.data.repository.FetchStatus
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -62,6 +78,10 @@ fun ModelConfigScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+    
+    // Side Sheet State
+    var selectedGroupForSideSheet by remember { mutableStateOf<ModelGroup?>(null) }
+    var isSideSheetOpen by remember { mutableStateOf(false) }
 
     // 沉浸式UI设置
     val view = LocalView.current
@@ -107,36 +127,185 @@ fun ModelConfigScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        Box {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
-                contentPadding = PaddingValues(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 16.dp,
-                    bottom = 6.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+        Row(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            val configuration = LocalConfiguration.current
+            val screenWidth = configuration.screenWidthDp.dp
+            val isTabletMode = configuration.screenWidthDp >= 600
+            
+            // Side Sheet 宽度
+            val sideSheetWidth = 400.dp
+            
+            // 动画控制 Side Sheet 的展开比例 (0f -> 1f)
+            val sideSheetOpenFraction by animateFloatAsState(
+                targetValue = if (isSideSheetOpen && isTabletMode) 1f else 0f,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioNoBouncy,
+                    stiffness = Spring.StiffnessLow
                 ),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                label = "SideSheetAnimation"
+            )
+
+            BoxWithConstraints(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
             ) {
-                if (groups.isEmpty()) {
-                    item {
-                        EmptyStateCard(
-                            onCreateGroup = { viewModel.showCreateGroupDialog() }
-                        )
+                // 动态计算可用宽度：总宽度 - (Side Sheet 宽度 * 展开比例)
+                // 注意：这里我们通过 BoxWithConstraints 的 maxWidth 来获取当前实际宽度
+                // 当 Side Sheet 挤占空间时，Box 的宽度会自动减小
+                val currentWidth = maxWidth
+                
+                val columns = when {
+                    currentWidth < 600.dp -> 1
+                    currentWidth < 840.dp -> 2
+                    else -> 3
+                }
+
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(columns),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues),
+                    contentPadding = PaddingValues(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 16.dp,
+                        bottom = 6.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    ),
+                    verticalItemSpacing = 16.dp,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (groups.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                onCreateGroup = { viewModel.showCreateGroupDialog() }
+                            )
+                        }
+                    } else {
+                        items(groups) { group ->
+                            ModelGroupCard(
+                                group = group,
+                                onAddModel = { viewModel.showAddModelDialog(group.id) },
+                                onDeleteGroup = { viewModel.deleteGroup(group) },
+                                onDeleteModel = { viewModel.deleteModel(it) },
+                                onEditGroup = { viewModel.showEditGroupDialog(it) },
+                                onEditModel = { viewModel.showEditModelDialog(it) },
+                                viewModel = viewModel,
+                                isTabletMode = isTabletMode,
+                                onSideSheetRequest = {
+                                    selectedGroupForSideSheet = group
+                                    isSideSheetOpen = true
+                                }
+                            )
+                        }
                     }
-                } else {
-                    items(groups) { group ->
-                        ModelGroupCard(
-                            group = group,
-                            onAddModel = { viewModel.showAddModelDialog(group.id) },
-                            onDeleteGroup = { viewModel.deleteGroup(group) },
-                            onDeleteModel = { viewModel.deleteModel(it) },
-                            onEditGroup = { viewModel.showEditGroupDialog(it) },
-                            onEditModel = { viewModel.showEditModelDialog(it) },
-                            viewModel = viewModel
-                        )
+                }
+            }
+
+            // Side Sheet (Squeeze Layout with Animation)
+            if (isTabletMode) {
+                // 使用 Box 来控制宽度，实现挤压效果
+                Box(
+                    modifier = Modifier
+                        .width(sideSheetWidth * sideSheetOpenFraction)
+                        .fillMaxHeight()
+                ) {
+                    // 内容区域，保持固定宽度，通过 clip 或 offset 来隐藏
+                    Surface(
+                        modifier = Modifier
+                            .width(sideSheetWidth) // 内容保持固定宽度，避免变形
+                            .fillMaxHeight()
+                            .padding(top = paddingValues.calculateTopPadding())
+                            // 将内容向右偏移，随宽度增加而滑入
+                            .offset(x = sideSheetWidth * (1f - sideSheetOpenFraction)),
+                        color = MaterialTheme.colorScheme.surface,
+                        tonalElevation = 1.dp,
+                        shadowElevation = 4.dp
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            // Side Sheet Header
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = selectedGroupForSideSheet?.name ?: "",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 1
+                                )
+                                IconButton(onClick = { isSideSheetOpen = false }) {
+                                    Icon(Icons.Filled.Close, contentDescription = "关闭")
+                                }
+                            }
+                            
+                            HorizontalDivider()
+
+                            // Side Sheet Body (Model List)
+                            Box(modifier = Modifier.weight(1f)) {
+                                if (selectedGroupForSideSheet != null) {
+                                    val models by viewModel.getModelsByGroupId(selectedGroupForSideSheet!!.id).collectAsState(initial = emptyList())
+                                    
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .verticalScroll(rememberScrollState())
+                                            .padding(16.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = "模型列表",
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            TextButton(onClick = { viewModel.showAddModelDialog(selectedGroupForSideSheet!!.id) }) {
+                                                Icon(Icons.Filled.Add, contentDescription = null)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("添加模型")
+                                            }
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(8.dp))
+
+                                        if (models.isEmpty()) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(32.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "暂无模型，点击上方按钮添加",
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        } else {
+                                            models.forEach { model ->
+                                                ModelItem(
+                                                    model = model,
+                                                    onDelete = { viewModel.deleteModel(model) },
+                                                    onEdit = { viewModel.showEditModelDialog(model) }
+                                                )
+                                                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                                            }
+                                        }
+                                        
+                                        Spacer(modifier = Modifier.height(paddingValues.calculateBottomPadding()))
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -356,7 +525,9 @@ fun ModelGroupCard(
     onDeleteModel: (Model) -> Unit,
     onEditGroup: (ModelGroup) -> Unit,
     onEditModel: (Model) -> Unit,
-    viewModel: ModelConfigViewModel
+    viewModel: ModelConfigViewModel,
+    isTabletMode: Boolean = false,
+    onSideSheetRequest: () -> Unit = {}
 ) {
     val models by viewModel.getModelsByGroupId(group.id).collectAsState(initial = emptyList())
     var expanded by remember { mutableStateOf(false) }
@@ -407,17 +578,21 @@ fun ModelGroupCard(
                 }
 
                 Row {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                            contentDescription = if (expanded) "收起" else "展开"
-                        )
+                    if (!isTabletMode) {
+                        // 手机模式：原有展开/收起逻辑
+                        IconButton(onClick = { expanded = !expanded }) {
+                            Icon(
+                                imageVector = if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                contentDescription = if (expanded) "收起" else "展开"
+                            )
+                        }
                     }
+                    
                     IconButton(onClick = { onEditGroup(group) }) {
                         Icon(
-                            imageVector = Icons.Filled.Edit,
-                            contentDescription = "编辑分组",
-                            tint = MaterialTheme.colorScheme.primary
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = "编辑分组设置",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { showDeleteGroupConfirm = true }) {
@@ -430,8 +605,8 @@ fun ModelGroupCard(
                 }
             }
 
-            // 展开的内容
-            if (expanded) {
+            // 展开的内容 (仅在手机模式下显示)
+            if (expanded && !isTabletMode) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // 模型列表
@@ -467,6 +642,35 @@ fun ModelGroupCard(
                             onEdit = { onEditModel(model) }
                         )
                     }
+                }
+            }
+            
+            // 平板模式下的展开入口
+            if (isTabletMode) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 16.dp),
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onSideSheetRequest() }
+                        .padding(vertical = 6.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "管理模型",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
             }
 

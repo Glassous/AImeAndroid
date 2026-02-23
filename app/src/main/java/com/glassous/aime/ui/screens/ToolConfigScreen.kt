@@ -23,7 +23,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
+import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
+import androidx.compose.foundation.lazy.staggeredgrid.items
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -107,15 +110,27 @@ fun ToolConfigScreen(
         containerColor = MaterialTheme.colorScheme.background,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
-        LazyColumn(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(paddingValues)
         ) {
-            // Iterate over all available tools
-            items(ToolType.values().size) { index ->
+            val screenWidth = maxWidth
+            val columns = when {
+                screenWidth < 600.dp -> 1
+                screenWidth < 840.dp -> 2
+                else -> 3
+            }
+
+            LazyVerticalStaggeredGrid(
+                columns = StaggeredGridCells.Fixed(columns),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalItemSpacing = 16.dp,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Iterate over all available tools
+                items(ToolType.values().size) { index ->
                 val toolType = ToolType.values()[index]
                 val isVisible by application.toolPreferences.getToolVisibility(toolType.name).collectAsState(initial = true)
                 
@@ -185,6 +200,7 @@ fun ToolConfigScreen(
                             )
                         }
                     }
+                }
                 }
             }
         }
