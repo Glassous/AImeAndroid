@@ -301,10 +301,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
-            val tikuKeywords = listOf(
-                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
-            )
-            val isTikuIntent = tikuKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             val musicKeywords = listOf(
                 "音乐", "歌曲", "听歌", "播放", "mp3", "歌词", "专辑", "歌手", "搜歌", "点歌", "网易云", "QQ音乐", "酷我", "咪咕", "千千"
             )
@@ -342,23 +338,6 @@ class ChatRepository(
                             )
                         ),
                         required = listOf("city")
-                    )
-                )
-            )
-            val baiduTikuTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "baidu_tiku",
-                    description = "检索题库并返回题干/选项/答案。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "question" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "完整题干文本"
-                            )
-                        ),
-                        required = listOf("question")
                     )
                 )
             )
@@ -401,12 +380,10 @@ class ChatRepository(
                 selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
                 // selectedTool?.type == ToolType.WEB_ANALYSIS -> listOf(webAnalysisTool) // Client-side handled, no tool for LLM
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, musicSearchTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool, musicSearchTool)
+                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, musicSearchTool)
                 }
                 else -> null
             }
@@ -417,14 +394,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "本条消息可能涉及天气相关，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若用户未提供城市，请结合上下文推测或礼貌询问其所在城市名称。"
-                    )
-                )
-            }
-            if (isAutoMode && isTikuIntent) {
-                messages.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
                     )
                 )
             }
@@ -485,7 +454,6 @@ class ChatRepository(
                     "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                     "web_analysis" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_ANALYSIS)
                     "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                    "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                     "music_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.MUSIC_SEARCH)
                     else -> {}
                 }
@@ -636,59 +604,6 @@ class ChatRepository(
                                     }
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n天气工具暂时不可用：${e.message}\n\n")
-                                }
-                            } else if (toolCall.function?.name == "baidu_tiku") {
-                                try {
-                                    val arguments = toolCall.function.arguments
-                                    if (arguments != null) {
-                                        val question = safeExtractQuestion(arguments, message)
-                                        val tikuResult = BaiduTikuService().query(question)
-                                        val md = BaiduTikuService().formatAsMarkdown(tikuResult)
-                                        aggregated.append("\n\n\n")
-                                        aggregated.append(md)
-                                        aggregated.append("\n\n\n")
-                                        postLabelAdded = true
-                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                        chatDao.updateMessage(updatedBeforeOfficial)
-
-                                        val messagesWithTiku = messages.toMutableList()
-                                        val summary = if (tikuResult.success) {
-                                            val ans = tikuResult.answer.ifBlank { "暂无" }
-                                            "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
-                                        } else {
-                                            "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
-                                        }
-                                        messagesWithTiku.add(
-                                            OpenAiChatMessage(
-                                                role = "system",
-                                                content = summary
-                                            )
-                                        )
-
-                                        streamWithFallback(
-                                            primaryGroup = group,
-                                            primaryModel = model,
-                                            messages = messagesWithTiku,
-                                            tools = null,
-                                            toolChoice = null,
-                                            onDelta = { delta ->
-                                                if (!postLabelAdded) {
-                                                    aggregated.append("\n\n\n")
-                                                    postLabelAdded = true
-                                                }
-                                                aggregated.append(delta)
-                                                val currentTime = System.currentTimeMillis()
-                                                if (currentTime - lastUpdateTime >= updateInterval) {
-                                                    val updated = assistantMessage.copy(content = aggregated.toString())
-                                                    chatDao.updateMessage(updated)
-                                                    lastUpdateTime = currentTime
-                                                }
-                                            },
-                                            onToolCall = { }
-                                        )
-                                    }
-                                } catch (e: Exception) {
-                                    aggregated.append("\n\n题库工具暂时不可用：${e.message}\n\n")
                                 }
                             } else if (toolCall.function?.name == "music_search") {
                                 try {
@@ -962,10 +877,6 @@ class ChatRepository(
             )
             val userTextForIntent = history[prevUserIndex].content
             val isWeatherIntent = weatherKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
-            val tikuKeywords = listOf(
-                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
-            )
-            val isTikuIntent = tikuKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
 
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -1002,31 +913,12 @@ class ChatRepository(
                     )
                 )
             )
-            val baiduTikuTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "baidu_tiku",
-                    description = "检索题库并返回题干/选项/答案。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "question" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "完整题干文本"
-                            )
-                        ),
-                        required = listOf("question")
-                    )
-                )
-            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool)
                 }
                 else -> null
             }
@@ -1078,7 +970,6 @@ class ChatRepository(
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             else -> {}
                         }
                         if (!preLabelAdded) {
@@ -1199,58 +1090,6 @@ class ChatRepository(
                                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n天气功能暂时不可用：${e.message}")
-                            }
-                        } else if (toolCall.function?.name == "baidu_tiku") {
-                            try {
-                                val arguments = toolCall.function.arguments
-                                val question = safeExtractQuestion(arguments, userTextForIntent)
-                                if (question.isNotEmpty()) {
-                                    val tikuResult = BaiduTikuService().query(question)
-                                    val md = BaiduTikuService().formatAsMarkdown(tikuResult)
-                                    aggregated.append("\n\n\n")
-                                    aggregated.append(md)
-                                    aggregated.append("\n\n\n")
-                                    postLabelAdded = true
-                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                    chatDao.updateMessage(updatedBeforeOfficial)
-
-                                    val messagesWithTiku = contextMessages.toMutableList()
-                                    val summary = if (tikuResult.success) {
-                                        val ans = tikuResult.answer.ifBlank { "暂无" }
-                                        "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
-                                    } else {
-                                        "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
-                                    }
-                                    messagesWithTiku.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = summary
-                                        )
-                                    )
-
-                                    streamWithFallback(
-                                        primaryGroup = group,
-                                        primaryModel = model,
-                                        messages = messagesWithTiku,
-                                        tools = null,
-                                        toolChoice = null,
-                                        onDelta = { delta ->
-                                            if (!postLabelAdded) {
-                                                aggregated.append("\n\n\n")
-                                                postLabelAdded = true
-                                            }
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
-                                            if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = assistantMessage.copy(content = aggregated.toString())
-                                                chatDao.updateMessage(updated)
-                                                lastUpdateTime = currentTime
-                                            }
-                                        }
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n题库功能暂时不可用：${e.message}")
                             }
                         }
                         onToolCallEnd?.invoke()
@@ -1658,10 +1497,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
-            val tikuKeywords = listOf(
-                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
-            )
-            val isTikuIntent = tikuKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
 
             // 构建工具定义
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -1698,31 +1533,12 @@ class ChatRepository(
                     )
                 )
             )
-            val baiduTikuTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "baidu_tiku",
-                    description = "检索题库并返回题干/选项/答案。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "question" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "完整题干文本"
-                            )
-                        ),
-                        required = listOf("question")
-                    )
-                )
-            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool)
                 }
                 else -> null
             }
@@ -1733,14 +1549,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话与天气相关，请优先考虑调用工具 city_weather 获取指定城市的天气与空气质量信息。若城市不明确，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isTikuIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
                     )
                 )
             }
@@ -1780,11 +1588,10 @@ class ChatRepository(
                         },
                         onToolCall = { toolCall ->
                             when (toolCall.function?.name) {
-                                "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
-                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                                "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
-                                else -> {}
-                            }
+                            "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                            "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                            else -> {}
+                        }
                             // 注意：工具调用在重试时不再处理，只进行简单的文本生成
                             // 如果需要工具调用，用户可以使用"重新生成"功能
                             onToolCallEnd?.invoke()
@@ -1921,10 +1728,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
-            val tikuKeywords = listOf(
-                "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
-            )
-            val isTikuIntent = tikuKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
 
             var preLabelAdded = false
             var postLabelAdded = false
@@ -1979,31 +1782,12 @@ class ChatRepository(
                     )
                 )
             )
-            val baiduTikuTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "baidu_tiku",
-                    description = "检索题库并返回题干/选项/答案。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "question" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "完整题干文本"
-                            )
-                        ),
-                        required = listOf("question")
-                    )
-                )
-            )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool)
                 }
                 else -> null
             }
@@ -2014,14 +1798,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮编辑后的用户消息涉及天气，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若城市未给出，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isTikuIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮编辑后的用户消息涉及题库/考试，请优先考虑调用工具 baidu_tiku 进行题目检索与答案获取。如题干不完整，请礼貌询问或提示用户补充题目。"
                     )
                 )
             }
@@ -2047,7 +1823,6 @@ class ChatRepository(
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                                 "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                                "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                                 else -> {}
                         }
                         if (!preLabelAdded) {
@@ -2201,59 +1976,6 @@ class ChatRepository(
                             } catch (e: Exception) {
                                 aggregated.append("\n\n天气工具暂时不可用：${e.message}\n\n")
                             }
-                        } else if (toolCall.function?.name == "baidu_tiku") {
-                            try {
-                                val arguments = toolCall.function.arguments
-                                if (arguments != null) {
-                                    val question = safeExtractQuestion(arguments, trimmed)
-                                    val tikuResult = BaiduTikuService().query(question)
-                                    val md = BaiduTikuService().formatAsMarkdown(tikuResult)
-                                    aggregated.append("\n\n\n")
-                                    aggregated.append(md)
-                                    aggregated.append("\n\n\n")
-                                    postLabelAdded = true
-                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                    chatDao.updateMessage(updatedBeforeOfficial)
-
-                                    val messagesWithTiku = contextMessages.toMutableList()
-                                    val summary = if (tikuResult.success) {
-                                        val ans = tikuResult.answer.ifBlank { "暂无" }
-                                        "题目：${tikuResult.question}；答案：${ans}。请基于此给出简洁回答。"
-                                    } else {
-                                        "题库查询失败：${tikuResult.message}，请基于已有信息回复用户。"
-                                    }
-                                    messagesWithTiku.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = summary
-                                        )
-                                    )
-
-                                    streamWithFallback(
-                                        primaryGroup = group,
-                                        primaryModel = model,
-                                        messages = messagesWithTiku,
-                                        tools = null,
-                                        toolChoice = null,
-                                        onDelta = { delta ->
-                                            if (!postLabelAdded) {
-                                                aggregated.append("\n\n\n")
-                                                postLabelAdded = true
-                                            }
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
-                                            if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = assistantMessage.copy(content = aggregated.toString())
-                                                chatDao.updateMessage(updated)
-                                                lastUpdateTime = currentTime
-                                            }
-                                        },
-                                        onToolCall = { /* 不处理工具调用，避免循环 */ }
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n题库工具暂时不可用：${e.message}\n\n")
-                            }
                         }
                         onToolCallEnd?.invoke()
                     }
@@ -2383,34 +2105,6 @@ class ChatRepository(
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
 
         // Fallback: if arguments is plain text, use it directly
-        return raw
-    }
-
-    private fun safeExtractQuestion(arguments: String?, default: String): String {
-        if (arguments.isNullOrBlank()) return default
-        val raw = arguments.trim()
-        val gson = Gson()
-        fun tryParse(text: String): String? {
-            return try {
-                val reader = JsonReader(StringReader(text))
-                reader.isLenient = true
-                val type = object : TypeToken<Map<String, Any?>>() {}.type
-                val map: Map<String, Any?> = gson.fromJson(reader, type)
-                val value = map["question"] as? String
-                if (value.isNullOrBlank()) null else value
-            } catch (_: Exception) {
-                null
-            }
-        }
-        tryParse(raw)?.let { return it }
-        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
-        tryParse(normalizedSingleQuotes)?.let { return it }
-        val regexQuoted = Regex("""(?i)\"?question\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
-        )
-        val regexUnquoted = Regex("""(?i)\"?question\"?\s*[:=]\s*([^,}\n\r]+)"""
-        )
-        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
         return raw
     }
 

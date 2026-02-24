@@ -35,11 +35,6 @@ enum class ToolType(
         displayName = "城市天气查询",
         icon = Icons.Default.WbSunny,
         description = "查询指定城市的未来几天天气与空气质量"
-    ),
-    BAIDU_TIKU(
-        displayName = "百度题库搜索",
-        icon = Icons.Default.Search,
-        description = "检索题库并返回题干/选项/答案"
     );
     
     companion object {

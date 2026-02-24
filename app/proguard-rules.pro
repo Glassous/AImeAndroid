@@ -50,11 +50,6 @@
 -keep class com.glassous.aime.data.HighSpeedTrainItem { *; }
 -keep class com.glassous.aime.data.HighSpeedTicketPayload { *; }
 
-# BaiduTikuService
--keep class com.glassous.aime.data.BaiduTikuApiResponse { *; }
--keep class com.glassous.aime.data.BaiduTikuData { *; }
--keep class com.glassous.aime.data.BaiduTikuResult { *; }
-
 # LotteryService
 -keep class com.glassous.aime.data.LotteryApiResponse { *; }
 -keep class com.glassous.aime.data.LotteryItem { *; }
