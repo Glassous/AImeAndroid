@@ -14,8 +14,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Sync
  
 import androidx.compose.material3.*
@@ -71,7 +69,6 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import android.app.Activity
 import android.view.WindowManager
 import com.glassous.aime.ui.theme.ThemeViewModel
-import com.glassous.aime.data.AutoToolSelector
 import com.glassous.aime.data.model.ModelGroup
 
 import com.glassous.aime.ui.viewmodel.ToolSelectionViewModelFactory
@@ -139,7 +136,6 @@ fun ChatScreen(
 
     val toolSelectionUiState by toolSelectionViewModel.uiState.collectAsState()
     val selectedTool by toolSelectionViewModel.selectedTool.collectAsState()
-    val isAutoSelected by toolSelectionViewModel.isAutoSelected.collectAsState()
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
     val currentToolType by chatViewModel.currentToolType.collectAsState()
 
@@ -500,37 +496,6 @@ fun ChatScreen(
                                                 )
                                             }
                                         }
-                                        toolSelectionUiState.isProcessing || isAutoSelected -> {
-                                            // 自动模式：使用与 BottomSheet 一致的组合图标（齿轮 + 星星）
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.background.copy(alpha = 0.5f),
-                                                shape = CircleShape,
-                                                tonalElevation = 0.dp,
-                                                modifier = Modifier.padding(end = 8.dp)
-                                            ) {
-                                                androidx.compose.foundation.layout.Box(
-                                                    modifier = Modifier
-                                                        .size(28.dp)
-                                                        .padding(6.dp)
-                                                ) {
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Settings,
-                                                        contentDescription = "自动调用",
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.align(Alignment.Center)
-                                                    )
-                                                    Icon(
-                                                        imageVector = Icons.Filled.Star,
-                                                        contentDescription = null,
-                                                        tint = MaterialTheme.colorScheme.secondary,
-                                                        modifier = Modifier
-                                                            .size(12.dp)
-                                                            .align(Alignment.TopEnd)
-                                                            .rotate(-20f)
-                                                    )
-                                                }
-                                            }
-                                        }
                                         else -> {}
                                     }
                                 }
@@ -640,8 +605,7 @@ fun ChatScreen(
                             } else {
                                 chatViewModel.sendMessage(
                                     trimmedInput,
-                                    selectedTool,
-                                    isAutoMode = isAutoSelected
+                                    selectedTool
                                 )
                                 // 清空输入框
                                 chatViewModel.updateInputText("")
@@ -927,8 +891,7 @@ fun ChatScreen(
                                 onRegenerate = {
                                     chatViewModel.regenerateFromAssistant(
                                         it,
-                                        selectedTool,
-                                        isAutoMode = isAutoSelected
+                                        selectedTool
                                     )
                                 },
                                 onEditUserMessage = { id, text -> 
@@ -937,8 +900,7 @@ fun ChatScreen(
                                             convId,
                                             id,
                                             text,
-                                            selectedTool,
-                                            isAutoMode = isAutoSelected
+                                            selectedTool
                                         )
                                     }
                                 },
@@ -947,8 +909,7 @@ fun ChatScreen(
                                         chatViewModel.retryFailedMessage(
                                             convId,
                                             failedMessageId,
-                                            selectedTool,
-                                            isAutoMode = isAutoSelected
+                                            selectedTool
                                         )
                                     }
                                 },
@@ -1132,34 +1093,15 @@ fun ChatScreen(
                                          toolSelectionViewModel.showBottomSheet()
                                      },
                                      autoProcessing = toolSelectionUiState.isProcessing,
-                                     autoSelected = isAutoSelected,
                                      toolCallInProgress = toolCallInProgress,
                                      currentToolType = currentToolType,
                                      showToolSelection = availableTools.isNotEmpty()
                                  )
                              }
                              "tool" -> {
-                                 val autoToolSelector = remember(selectedGroup, selectedModel) {
-                                     val group = selectedGroup
-                                     val model = selectedModel
-                                     if (group != null && model != null) {
-                                         AutoToolSelector(
-                                             baseUrl = group.baseUrl,
-                                             apiKey = group.apiKey,
-                                             modelName = model.modelName
-                                         )
-                                     } else null
-                                 }
                                  ToolSelectionContent(
                                      viewModel = toolSelectionViewModel,
-                                     onDismiss = { toolSelectionViewModel.hideBottomSheet() },
-                                     autoToolSelector = autoToolSelector,
-                                     onAutoNavigate = { route ->
-                                         when (route) {
-                                             "settings" -> context.startActivity(Intent(context, SettingsActivity::class.java))
-                                             else -> {}
-                                         }
-                                     }
+                                     onDismiss = { toolSelectionViewModel.hideBottomSheet() }
                                  )
                              }
                              "search" -> {
@@ -1271,7 +1213,6 @@ fun ChatScreen(
                     toolSelectionViewModel.showBottomSheet()
                 },
                 autoProcessing = toolSelectionUiState.isProcessing,
-                autoSelected = isAutoSelected,
                 toolCallInProgress = toolCallInProgress,
                 currentToolType = currentToolType,
                 showToolSelection = availableTools.isNotEmpty()
@@ -1280,28 +1221,9 @@ fun ChatScreen(
 
         // 工具选择Bottom Sheet
         if (!isTablet && toolSelectionUiState.showBottomSheet) {
-            val autoToolSelector = remember(selectedGroup, selectedModel) {
-                val group = selectedGroup
-                val model = selectedModel
-                if (group != null && model != null) {
-                    AutoToolSelector(
-                        baseUrl = group.baseUrl,
-                        apiKey = group.apiKey,
-                        modelName = model.modelName
-                    )
-                } else null
-            }
             ToolSelectionBottomSheet(
                 viewModel = toolSelectionViewModel,
-                onDismiss = { toolSelectionViewModel.hideBottomSheet() },
-                autoToolSelector = autoToolSelector,
-                onAutoNavigate = { route ->
-                    when (route) {
-                        "settings" -> context.startActivity(Intent(context, SettingsActivity::class.java))
-                        // chat 或未知路由：保持在当前聊天页
-                        else -> {}
-                    }
-                }
+                onDismiss = { toolSelectionViewModel.hideBottomSheet() }
             )
         }
 

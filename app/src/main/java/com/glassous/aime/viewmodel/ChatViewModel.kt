@@ -90,7 +90,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentToolType = MutableStateFlow<ToolType?>(null)
     val currentToolType: StateFlow<ToolType?> = _currentToolType.asStateFlow()
 
-    fun sendMessage(content: String, selectedTool: Tool? = null, isAutoMode: Boolean = false) {
+    fun sendMessage(content: String, selectedTool: Tool? = null) {
         // Prevent sending empty messages
         if (content.isBlank()) return
         
@@ -119,7 +119,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     conversationId,
                     content,
                     selectedTool,
-                    isAutoMode,
                     onToolCallStart = { type ->
                         _currentToolType.value = type
                         _toolCallInProgress.value = true
@@ -141,7 +140,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun regenerateFromAssistant(messageId: Long, selectedTool: Tool? = null, isAutoMode: Boolean = false) {
+    fun regenerateFromAssistant(messageId: Long, selectedTool: Tool? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -151,7 +150,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         msg.conversationId,
                         msg.id,
                         selectedTool,
-                        isAutoMode,
                         onToolCallStart = { type ->
                             _currentToolType.value = type
                             _toolCallInProgress.value = true
@@ -174,8 +172,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         conversationId: Long,
         userMessageId: Long,
         newContent: String,
-        selectedTool: Tool? = null,
-        isAutoMode: Boolean = false
+        selectedTool: Tool? = null
     ) {
         if (_isLoading.value) return
         _isLoading.value = true
@@ -187,7 +184,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         userMessageId = userMessageId,
                         newContent = newContent,
                         selectedTool = selectedTool,
-                        isAutoMode = isAutoMode,
                         onToolCallStart = { type ->
                             _toolCallInProgress.value = true
                             _currentToolType.value = type
@@ -209,8 +205,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun retryFailedMessage(
         conversationId: Long,
         failedMessageId: Long,
-        selectedTool: Tool? = null,
-        isAutoMode: Boolean = false
+        selectedTool: Tool? = null
     ) {
         if (_isLoading.value) return
         _isLoading.value = true
@@ -221,7 +216,6 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         conversationId = conversationId,
                         failedMessageId = failedMessageId,
                         selectedTool = selectedTool,
-                        isAutoMode = isAutoMode,
                         onToolCallStart = { type ->
                             _toolCallInProgress.value = true
                             _currentToolType.value = type

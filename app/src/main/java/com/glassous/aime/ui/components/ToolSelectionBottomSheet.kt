@@ -41,8 +41,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.ui.viewmodel.ToolSelectionViewModel
-import com.glassous.aime.data.AutoToolSelector
-import com.glassous.aime.ui.navigation.ToolRouteMapper
 
 /**
  * 工具选择底部弹窗
@@ -51,9 +49,7 @@ import com.glassous.aime.ui.navigation.ToolRouteMapper
 @Composable
 fun ToolSelectionBottomSheet(
     viewModel: ToolSelectionViewModel,
-    onDismiss: () -> Unit,
-    autoToolSelector: AutoToolSelector? = null,
-    onAutoNavigate: (String) -> Unit = {}
+    onDismiss: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableTools by viewModel.availableTools.collectAsStateWithLifecycle()
@@ -69,9 +65,7 @@ fun ToolSelectionBottomSheet(
     ) {
         ToolSelectionContent(
             viewModel = viewModel,
-            onDismiss = onDismiss,
-            autoToolSelector = autoToolSelector,
-            onAutoNavigate = onAutoNavigate
+            onDismiss = onDismiss
         )
     }
 }
@@ -79,9 +73,7 @@ fun ToolSelectionBottomSheet(
 @Composable
 fun ToolSelectionContent(
     viewModel: ToolSelectionViewModel,
-    onDismiss: () -> Unit,
-    autoToolSelector: AutoToolSelector? = null,
-    onAutoNavigate: (String) -> Unit = {}
+    onDismiss: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val availableTools by viewModel.availableTools.collectAsStateWithLifecycle()
@@ -122,17 +114,6 @@ fun ToolSelectionContent(
                                 viewModel.selectTool(null)
                                 onDismiss()
                             }
-                        }
-                    )
-                }
-                // 第二项：自动使用工具
-                item {
-                    AutoToolItem(
-                        isProcessing = uiState.isProcessing,
-                        enabled = !uiState.isProcessing,
-                        onClick = {
-                            viewModel.enableAutoMode()
-                            onDismiss()
                         }
                     )
                 }
@@ -220,71 +201,3 @@ private fun ToolItem(
     }
 }
 
-/**
- * 顶部固定的“自动使用工具”项
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun AutoToolItem(
-    isProcessing: Boolean,
-    enabled: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled) { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 组合图标：齿轮 + 星星（代表魔法棒效果）
-            Box(
-                modifier = Modifier.size(24.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Settings,
-                    contentDescription = "自动",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                Icon(
-                    imageVector = Icons.Filled.Star,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.secondary,
-                    modifier = Modifier
-                        .size(12.dp)
-                        .align(Alignment.TopEnd)
-                        .rotate(-20f)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = "自动使用工具",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f)
-            )
-
-            if (isProcessing) {
-                LoadingIndicator(
-                    modifier = Modifier.size(18.dp)
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Filled.ChevronRight,
-                    contentDescription = "选择",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
