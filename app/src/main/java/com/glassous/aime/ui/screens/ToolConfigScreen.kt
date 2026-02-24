@@ -80,6 +80,7 @@ fun ToolConfigScreen(
     val webSearchEngine by application.toolPreferences.webSearchEngine.collectAsState(initial = "pear")
     val tavilyApiKey by application.toolPreferences.tavilyApiKey.collectAsState(initial = "")
     val tavilyUseProxy by application.toolPreferences.tavilyUseProxy.collectAsState(initial = false)
+    val musicSearchSource by application.toolPreferences.musicSearchSource.collectAsState(initial = "wy")
     
     // 沉浸式UI设置
     val view = LocalView.current
@@ -147,7 +148,7 @@ fun ToolConfigScreen(
                             application.toolPreferences.setToolVisibility(toolType.name, enabled)
                         }
                     },
-                    hasMoreSettings = toolType == ToolType.WEB_SEARCH
+                    hasMoreSettings = toolType == ToolType.WEB_SEARCH || toolType == ToolType.MUSIC_SEARCH
                 ) {
                     if (toolType == ToolType.WEB_SEARCH) {
                         Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -292,6 +293,45 @@ fun ToolConfigScreen(
                                             }
                                         )
                                     }
+                                }
+                            }
+                        }
+                    } else if (toolType == ToolType.MUSIC_SEARCH) {
+                        Column(modifier = Modifier.padding(top = 8.dp)) {
+                            Text(
+                                text = "音乐源选择:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            val sources = listOf(
+                                "wy" to "网易云",
+                                "qq" to "QQ音乐",
+                                "kw" to "酷我",
+                                "mg" to "咪咕",
+                                "qi" to "千千"
+                            )
+                            sources.forEach { (key, label) ->
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            scope.launch {
+                                                application.toolPreferences.setMusicSearchSource(key)
+                                            }
+                                        }
+                                        .padding(vertical = 4.dp)
+                                ) {
+                                    RadioButton(
+                                        selected = musicSearchSource == key,
+                                        onClick = null // Handled by Row clickable
+                                    )
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
                                 }
                             }
                         }

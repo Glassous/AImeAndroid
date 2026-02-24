@@ -24,6 +24,9 @@ import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
 import java.io.StringReader
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 
 
@@ -38,7 +41,8 @@ class ChatRepository(
     private val doubaoService: DoubaoArkService = DoubaoArkService(),
     private val webSearchService: WebSearchService = WebSearchService(),
     private val weatherService: WeatherService = WeatherService(),
-    private val stockService: StockService = StockService()
+    private val stockService: StockService = StockService(),
+    private val musicSearchService: MusicSearchService = MusicSearchService()
 ) {
     
     fun getMessagesForConversation(conversationId: Long): Flow<List<ChatMessage>> {
@@ -326,6 +330,10 @@ class ChatRepository(
                 "第"
             )
             val isLotteryIntent = lotteryKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
+            val musicKeywords = listOf(
+                "音乐", "歌曲", "听歌", "播放", "mp3", "歌词", "专辑", "歌手", "搜歌", "点歌", "网易云", "QQ音乐", "酷我", "咪咕", "千千"
+            )
+            val isMusicIntent = musicKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             
             // 构建工具定义（当选择了工具或处于自动模式时）
             val webSearchTool = com.glassous.aime.data.Tool(
@@ -458,6 +466,23 @@ class ChatRepository(
                     )
                 )
             )
+            val musicSearchTool = com.glassous.aime.data.Tool(
+                type = "function",
+                function = com.glassous.aime.data.ToolFunction(
+                    name = "music_search",
+                    description = "搜索全网音乐并获取播放链接。支持网易云、QQ音乐等平台。",
+                    parameters = com.glassous.aime.data.ToolFunctionParameters(
+                        type = "object",
+                        properties = mapOf(
+                            "keyword" to com.glassous.aime.data.ToolFunctionParameter(
+                                type = "string",
+                                description = "歌曲名称（不含歌手名等任何信息）"
+                            )
+                        ),
+                        required = listOf("keyword")
+                    )
+                )
+            )
             val webAnalysisTool = com.glassous.aime.data.Tool(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
@@ -477,6 +502,7 @@ class ChatRepository(
             )
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
+                selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
                 // selectedTool?.type == ToolType.WEB_ANALYSIS -> listOf(webAnalysisTool) // Client-side handled, no tool for LLM
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
                 selectedTool?.type == ToolType.STOCK_QUERY -> listOf(stockDataTool)
@@ -485,13 +511,14 @@ class ChatRepository(
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, musicSearchTool)
+                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, lotteryTool, musicSearchTool)
                     isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool)
                     isStockIntent -> listOf(stockDataTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
                     isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, stockDataTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, baiduTikuTool, lotteryTool, musicSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, stockDataTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool, musicSearchTool)
                 }
                 else -> null
             }
@@ -542,6 +569,14 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话涉及彩票开奖，请优先考虑调用工具 lottery_query 进行查询。若未明确彩种或期数，请礼貌询问或根据上下文推测。"
+                    )
+                )
+            }
+            if (isAutoMode && isMusicIntent) {
+                messages.add(
+                    OpenAiChatMessage(
+                        role = "system",
+                        content = "该轮对话涉及音乐/歌曲，请优先考虑调用工具 music_search 进行搜索。请只提取歌曲名作为参数，不要包含歌手名。"
                     )
                 )
             }
@@ -599,6 +634,7 @@ class ChatRepository(
                     "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                     "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                     "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
+                    "music_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.MUSIC_SEARCH)
                     else -> {}
                 }
                             if (!preLabelAdded) {
@@ -947,6 +983,119 @@ class ChatRepository(
                                     }
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n彩票开奖工具暂时不可用：${e.message}\n\n")
+                                }
+                            } else if (toolCall.function?.name == "music_search") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    if (arguments != null) {
+                                        val keyword = safeExtractKeyword(arguments)
+                                        val source = toolPreferences.musicSearchSource.first()
+                                        
+                                        // Update UI
+                                        aggregated.append("\n\n\n正在搜索音乐：$keyword (来源: $source)...\n\n\n")
+                                        val loadingMsg = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(loadingMsg)
+
+                                        // Step 1 & 2: Search for candidates
+                                        val candidates = musicSearchService.search(keyword, source)
+                                        
+                                        if (candidates.isEmpty()) {
+                                            aggregated.append("未找到相关歌曲。")
+                                        } else {
+                                            // Step 3: AI selects the best match
+                                            val candidatesJson = Gson().toJson(candidates.map { 
+                                                mapOf("id" to it.id, "name" to it.name, "artist" to it.artist, "album" to it.album) 
+                                            })
+                                            
+                                            // Extract the full user query context to help matching
+                                            // The tool only received the song name, but user might have said "Play Artist's Song"
+                                            val fullUserQuery = messages.lastOrNull { it.role == "user" }?.content ?: keyword
+
+                                            val selectionPrompt = """
+                                                用户原始请求: "$fullUserQuery"
+                                                搜索关键词(仅歌名): "$keyword"
+                                                候选歌曲列表:
+                                                $candidatesJson
+                                                
+                                                请从列表中选择最符合用户原始请求的 5 首歌曲。
+                                                必须同时匹配歌曲名和歌手名（如果用户提到了歌手）。
+                                                请只返回这 5 首歌曲的ID，用逗号分隔（例如：id1,id2,id3,id4,id5）。
+                                                如果匹配数量不足 5 首，则返回所有匹配的 ID。
+                                                如果都不匹配，返回 "None"。
+                                            """.trimIndent()
+                                            
+                                            val selectionMessages = listOf(
+                                                OpenAiChatMessage(role = "system", content = "你是一个精准的音乐选择助手。只返回用逗号分隔的ID列表。"),
+                                                OpenAiChatMessage(role = "user", content = selectionPrompt)
+                                            )
+                                            
+                                            val selectedIdsRaw = try {
+                                                // Use a non-streaming call or accumulate stream
+                                                val idBuilder = StringBuilder()
+                                                streamWithFallback(
+                                                    primaryGroup = group,
+                                                    primaryModel = model,
+                                                    messages = selectionMessages,
+                                                    tools = null,
+                                                    toolChoice = null,
+                                                    onDelta = { idBuilder.append(it) }
+                                                )
+                                                idBuilder.toString().trim()
+                                            } catch (e: Exception) {
+                                                ""
+                                            }
+                                            val selectedIdsStr = selectedIdsRaw.replace("\"", "").replace("'", "")
+                                            
+                                            // Fallback if AI returns nothing or error
+                                            val finalIds = if (selectedIdsStr.isBlank() || selectedIdsStr.equals("None", ignoreCase = true)) {
+                                                candidates.take(5).mapNotNull { it.id }
+                                            } else {
+                                                selectedIdsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                            }
+                                            
+                                            // Step 4: Fetch details and format output for all selected songs
+                                            if (finalIds.isNotEmpty()) {
+                                                // Clear previous logs
+                                                aggregated.setLength(0)
+                                                
+                                                // Fetch details in parallel
+                                                val details = try {
+                                                    supervisorScope {
+                                                        finalIds.map { id ->
+                                                            async { musicSearchService.fetchDetail(id, source) }
+                                                        }.awaitAll().filterNotNull()
+                                                    }
+                                                } catch (e: Exception) {
+                                                    emptyList()
+                                                }
+
+                                                if (details.isNotEmpty()) {
+                                                    details.forEach { detail ->
+                                                        aggregated.append("<music>\n")
+                                                        aggregated.append("Name: ${detail.name}\n")
+                                                        aggregated.append("Artist: ${detail.artist}\n")
+                                                        aggregated.append("Album: ${detail.album}\n")
+                                                        aggregated.append("URL: ${detail.url}\n")
+                                                        aggregated.append("Pic: ${detail.pic}\n")
+                                                        aggregated.append("</music>\n\n")
+                                                    }
+                                                } else {
+                                                    aggregated.append("无法获取歌曲详情。")
+                                                }
+                                            } else {
+                                                aggregated.append("未找到匹配的歌曲。")
+                                            }
+                                        }
+                                        
+                                        postLabelAdded = true
+                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                        chatDao.updateMessage(updatedBeforeOfficial)
+
+                                        // AI only responsible for searching and picking, local handles the rest.
+                                        // Stop secondary LLM generation here.
+                                    }
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n音乐搜索工具暂时不可用：${e.message}\n\n")
                                 }
                             }
                             onToolCallEnd?.invoke()
@@ -3462,6 +3611,29 @@ class ChatRepository(
         // 使用正则表达式移除 <think>...</think> 标签及其内容
         return text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
             .replace(Regex("<think>.*", RegexOption.DOT_MATCHES_ALL), "") // 处理未闭合的标签
+    }
+
+    private fun safeExtractKeyword(arguments: String?, default: String = ""): String {
+        if (arguments.isNullOrBlank()) return default
+        val raw = arguments.trim()
+        val gson = Gson()
+        fun tryParse(text: String): String? {
+            return try {
+                val reader = JsonReader(StringReader(text))
+                reader.isLenient = true
+                val type = object : TypeToken<Map<String, Any?>>() {}.type
+                val map: Map<String, Any?> = gson.fromJson(reader, type)
+                (map["keyword"] as? String)?.takeIf { it.isNotBlank() }
+            } catch (_: Exception) { null }
+        }
+        tryParse(raw)?.let { return it }
+        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
+        tryParse(normalizedSingleQuotes)?.let { return it }
+        val regexQuoted = Regex("""(?i)\"?keyword\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""")
+        val regexUnquoted = Regex("""(?i)\"?keyword\"?\s*[:=]\s*([^,}\n\r]+)""")
+        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
+        return raw
     }
 
     @SuppressLint("MissingPermission")

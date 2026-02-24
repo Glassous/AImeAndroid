@@ -5,6 +5,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
@@ -54,6 +55,11 @@ enum class ToolType(
         displayName = "百度题库搜索",
         icon = Icons.Default.Search,
         description = "检索题库并返回题干/选项/答案"
+    ),
+    MUSIC_SEARCH(
+        displayName = "音乐搜索",
+        icon = Icons.Default.MusicNote,
+        description = "搜索全网音乐并获取播放链接"
     );
     
     companion object {
