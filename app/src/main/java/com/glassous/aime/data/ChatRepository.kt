@@ -301,12 +301,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
-            // 黄金相关关键词与意图识别
-            val goldKeywords = listOf(
-                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
-                "购买黄金", "投资黄金", "金饰", "贵金属"
-            )
-            val isGoldIntent = goldKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             val hsKeywords = listOf(
                 "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
             )
@@ -359,18 +353,6 @@ class ChatRepository(
                             )
                         ),
                         required = listOf("city")
-                    )
-                )
-            )
-            val goldPriceTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "gold_price",
-                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = emptyMap(),
-                        required = null
                     )
                 )
             )
@@ -476,18 +458,16 @@ class ChatRepository(
                 selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
                 // selectedTool?.type == ToolType.WEB_ANALYSIS -> listOf(webAnalysisTool) // Client-side handled, no tool for LLM
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, musicSearchTool)
-                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, lotteryTool, musicSearchTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, goldPriceTool, baiduTikuTool, lotteryTool, musicSearchTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool, musicSearchTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, musicSearchTool)
+                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool, musicSearchTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool, musicSearchTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool, musicSearchTool)
                 }
                 else -> null
             }
@@ -498,14 +478,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "本条消息可能涉及天气相关，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若用户未提供城市，请结合上下文推测或礼貌询问其所在城市名称。"
-                    )
-                )
-            }
-            if (isAutoMode && isGoldIntent) {
-                messages.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
                     )
                 )
             }
@@ -590,7 +562,6 @@ class ChatRepository(
                     "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                     "web_analysis" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_ANALYSIS)
                     "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                    "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                     "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                     "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                     "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
@@ -744,54 +715,6 @@ class ChatRepository(
                                     }
                                 } catch (e: Exception) {
                                     aggregated.append("\n\n天气工具暂时不可用：${e.message}\n\n")
-                                }
-                            } else if (toolCall.function?.name == "gold_price") {
-                                try {
-                                    val goldResult = GoldPriceService().query()
-                                    val md = GoldPriceService().formatAsMarkdownParagraphs(goldResult)
-                                    aggregated.append("\n\n\n")
-                                    aggregated.append(md)
-                                    aggregated.append("\n\n\n")
-                                    postLabelAdded = true
-                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                    chatDao.updateMessage(updatedBeforeOfficial)
-
-                                    val messagesWithGold = messages.toMutableList()
-                                    messagesWithGold.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = md
-                                        )
-                                    )
-                                    messagesWithGold.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = "已获取黄金价格数据，请结合用户需求给出购买建议（如购买金条/首饰或回收差价等），并提示价格波动与风险。"
-                                        )
-                                    )
-                                    streamWithFallback(
-                                        primaryGroup = group,
-                                        primaryModel = model,
-                                        messages = messagesWithGold,
-                                        tools = null,
-                                        toolChoice = null,
-                                        onDelta = { delta ->
-                                            if (!postLabelAdded) {
-                                                aggregated.append("\n\n\n")
-                                                postLabelAdded = true
-                                            }
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
-                                            if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = assistantMessage.copy(content = aggregated.toString())
-                                                chatDao.updateMessage(updated)
-                                                lastUpdateTime = currentTime
-                                            }
-                                        },
-                                        onToolCall = { }
-                                    )
-                                } catch (e: Exception) {
-                                    aggregated.append("\n\n黄金价格工具暂时不可用：${e.message}\n\n")
                                 }
                             } else if (toolCall.function?.name == "baidu_tiku") {
                                 try {
@@ -1174,11 +1097,6 @@ class ChatRepository(
             )
             val userTextForIntent = history[prevUserIndex].content
             val isWeatherIntent = weatherKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
-            val goldKeywords = listOf(
-                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
-                "购买黄金", "投资黄金", "金饰", "贵金属"
-            )
-            val isGoldIntent = goldKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
             val hsKeywords = listOf(
                 "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
             )
@@ -1227,18 +1145,6 @@ class ChatRepository(
                             )
                         ),
                         required = listOf("city")
-                    )
-                )
-            )
-            val goldPriceTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "gold_price",
-                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = emptyMap(),
-                        required = null
                     )
                 )
             )
@@ -1308,17 +1214,15 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, goldPriceTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -1370,7 +1274,6 @@ class ChatRepository(
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                             "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                             "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
@@ -1953,11 +1856,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
-            val goldKeywords = listOf(
-                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
-                "购买黄金", "投资黄金", "金饰", "贵金属"
-            )
-            val isGoldIntent = goldKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
             val hsKeywords = listOf(
                 "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
             )
@@ -2006,18 +1904,6 @@ class ChatRepository(
                             )
                         ),
                         required = listOf("city")
-                    )
-                )
-            )
-            val goldPriceTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "gold_price",
-                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = emptyMap(),
-                        required = null
                     )
                 )
             )
@@ -2087,17 +1973,15 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, goldPriceTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -2108,14 +1992,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话与天气相关，请优先考虑调用工具 city_weather 获取指定城市的天气与空气质量信息。若城市不明确，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isGoldIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
                     )
                 )
             }
@@ -2182,7 +2058,6 @@ class ChatRepository(
                             when (toolCall.function?.name) {
                                 "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                                 "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                                "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                                 "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                                 "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                                 "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
@@ -2324,12 +2199,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
-            // 股票关键词与意图识别（基于编辑后的用户内容）
-            val goldKeywords = listOf(
-                "黄金", "金价", "金条", "回收价", "回收黄金", "铂金", "银价", "金店",
-                "购买黄金", "投资黄金", "金饰", "贵金属"
-            )
-            val isGoldIntent = goldKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
             val hsKeywords = listOf(
                 "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
             )
@@ -2399,18 +2268,6 @@ class ChatRepository(
                     )
                 )
             )
-            val goldPriceTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "gold_price",
-                    description = "查询黄金相关价格数据（银行金条、回收价、品牌贵金属）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = emptyMap(),
-                        required = null
-                    )
-                )
-            )
             val hsTicketTool = com.glassous.aime.data.Tool(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
@@ -2477,17 +2334,15 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.GOLD_PRICE -> listOf(goldPriceTool)
                 selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isGoldIntent -> listOf(goldPriceTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, goldPriceTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, goldPriceTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -2498,14 +2353,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮编辑后的用户消息涉及天气，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若城市未给出，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isGoldIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮编辑后的用户消息涉及黄金/贵金属，请优先考虑调用工具 gold_price 获取银行金条、回收价与品牌贵金属价格。"
                     )
                 )
             }
@@ -2556,7 +2403,6 @@ class ChatRepository(
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            "gold_price" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.GOLD_PRICE)
                             "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                             "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
@@ -2821,54 +2667,6 @@ class ChatRepository(
                                 }
                             } catch (e: Exception) {
                                 aggregated.append("\n\n彩票开奖工具暂时不可用：${e.message}\n\n")
-                            }
-                        } else if (toolCall.function?.name == "gold_price") {
-                            try {
-                                val goldResult = GoldPriceService().query()
-                                val md = GoldPriceService().formatAsMarkdownParagraphs(goldResult)
-                                aggregated.append("\n\n\n")
-                                aggregated.append(md)
-                                aggregated.append("\n\n\n")
-                                postLabelAdded = true
-                                val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                chatDao.updateMessage(updatedBeforeOfficial)
-
-                                val messagesWithGold = contextMessages.toMutableList()
-                                messagesWithGold.add(
-                                    OpenAiChatMessage(
-                                        role = "system",
-                                        content = md
-                                    )
-                                )
-                                messagesWithGold.add(
-                                    OpenAiChatMessage(
-                                        role = "system",
-                                        content = "已获取黄金价格数据，请结合用户需求给出购买建议（如购买金条/首饰或回收差价等），并提示价格波动与风险。"
-                                    )
-                                )
-                                streamWithFallback(
-                                    primaryGroup = group,
-                                    primaryModel = model,
-                                    messages = messagesWithGold,
-                                    tools = null,
-                                    toolChoice = null,
-                                    onDelta = { delta ->
-                                        if (!postLabelAdded) {
-                                            aggregated.append("\n\n\n")
-                                            postLabelAdded = true
-                                        }
-                                        aggregated.append(delta)
-                                        val currentTime = System.currentTimeMillis()
-                                        if (currentTime - lastUpdateTime >= updateInterval) {
-                                            val updated = assistantMessage.copy(content = aggregated.toString())
-                                            chatDao.updateMessage(updated)
-                                            lastUpdateTime = currentTime
-                                        }
-                                    },
-                                    onToolCall = { /* 不处理工具调用，避免循环 */ }
-                                )
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n黄金价格工具暂时不可用：${e.message}\n\n")
                             }
                         } else if (toolCall.function?.name == "hs_ticket_query") {
                             try {

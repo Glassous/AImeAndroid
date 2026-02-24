@@ -65,14 +65,6 @@
 -keep class com.glassous.aime.data.StockApiResponse { *; }
 -keep class com.glassous.aime.data.StockQueryResult { *; }
 
-# GoldPriceService
--keep class com.glassous.aime.data.BankGoldBarPrice { *; }
--keep class com.glassous.aime.data.GoldRecyclePrice { *; }
--keep class com.glassous.aime.data.PreciousMetalPrice { *; }
--keep class com.glassous.aime.data.GoldPricePayload { *; }
--keep class com.glassous.aime.data.GoldPriceApiResponse { *; }
--keep class com.glassous.aime.data.GoldPriceResult { *; }
-
 # WeatherService
 -keep class com.glassous.aime.data.WeatherDaily { *; }
 -keep class com.glassous.aime.data.WeatherQueryResult { *; }
