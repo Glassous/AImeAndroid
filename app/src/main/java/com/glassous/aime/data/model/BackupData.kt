@@ -19,7 +19,26 @@ data class AppSettings(
     @SerializedName("theme") val theme: ThemeSettings? = null,
     @SerializedName("context") val context: ContextSettings? = null,
     @SerializedName("update") val update: UpdateSettings? = null,
-    @SerializedName("systemPrompt") val systemPrompt: SystemPromptSettings? = null
+    @SerializedName("systemPrompt") val systemPrompt: SystemPromptSettings? = null,
+    @SerializedName("tool") val tool: ToolSettings? = null,
+    @SerializedName("titleGeneration") val titleGeneration: TitleGenerationSettings? = null
+)
+
+data class ToolSettings(
+    @SerializedName("webSearchEnabled") val webSearchEnabled: Boolean? = null,
+    @SerializedName("webSearchResultCount") val webSearchResultCount: Int? = null,
+    @SerializedName("webSearchEngine") val webSearchEngine: String? = null,
+    @SerializedName("tavilyApiKey") val tavilyApiKey: String? = null,
+    @SerializedName("tavilyUseProxy") val tavilyUseProxy: Boolean? = null,
+    @SerializedName("musicSearchSource") val musicSearchSource: String? = null,
+    @SerializedName("toolVisibilities") val toolVisibilities: Map<String, Boolean>? = null
+)
+
+data class TitleGenerationSettings(
+    @SerializedName("modelId") val modelId: String? = null,
+    @SerializedName("contextStrategy") val contextStrategy: Int? = null,
+    @SerializedName("contextN") val contextN: Int? = null,
+    @SerializedName("autoGenerate") val autoGenerate: Boolean? = null
 )
 
 data class SystemPromptSettings(
@@ -28,7 +47,8 @@ data class SystemPromptSettings(
     @SerializedName("enableDynamicTimestamp") val enableDynamicTimestamp: Boolean? = null,
     @SerializedName("enableDynamicLocation") val enableDynamicLocation: Boolean? = null,
     @SerializedName("enableDynamicDeviceModel") val enableDynamicDeviceModel: Boolean? = null,
-    @SerializedName("enableDynamicLanguage") val enableDynamicLanguage: Boolean? = null
+    @SerializedName("enableDynamicLanguage") val enableDynamicLanguage: Boolean? = null,
+    @SerializedName("useCloudProxy") val useCloudProxy: Boolean? = null
 )
 
 data class ThemeSettings(

@@ -30,6 +30,10 @@ import com.glassous.aime.data.model.ThemeSettings
 import com.glassous.aime.data.model.ContextSettings
 import com.glassous.aime.data.model.UpdateSettings
 import com.glassous.aime.data.model.SystemPromptSettings
+import com.glassous.aime.data.model.ToolSettings
+import com.glassous.aime.data.model.TitleGenerationSettings
+import com.glassous.aime.data.model.ToolType
+import com.glassous.aime.data.preferences.ToolPreferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +56,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
     private val themePreferences = ThemePreferences(application)
     private val contextPreferences = app.contextPreferences
     private val updatePreferences = app.updatePreferences
+    private val toolPreferences = app.toolPreferences
 
     private val gson: Gson = GsonBuilder().create()
 
@@ -100,14 +105,34 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     enableDynamicTimestamp = modelPreferences.enableDynamicTimestamp.first(),
                     enableDynamicLocation = modelPreferences.enableDynamicLocation.first(),
                     enableDynamicDeviceModel = modelPreferences.enableDynamicDeviceModel.first(),
-                    enableDynamicLanguage = modelPreferences.enableDynamicLanguage.first()
+                    enableDynamicLanguage = modelPreferences.enableDynamicLanguage.first(),
+                    useCloudProxy = modelPreferences.useCloudProxy.first()
+                )
+
+                val toolSettings = ToolSettings(
+                    webSearchEnabled = toolPreferences.webSearchEnabled.first(),
+                    webSearchResultCount = toolPreferences.webSearchResultCount.first(),
+                    webSearchEngine = toolPreferences.webSearchEngine.first(),
+                    tavilyApiKey = toolPreferences.tavilyApiKey.first(),
+                    tavilyUseProxy = toolPreferences.tavilyUseProxy.first(),
+                    musicSearchSource = toolPreferences.musicSearchSource.first(),
+                    toolVisibilities = ToolType.getAllTools().associate { it.name to toolPreferences.getToolVisibility(it.name).first() }
+                )
+
+                val titleGenerationSettings = TitleGenerationSettings(
+                    modelId = modelPreferences.titleGenerationModelId.first(),
+                    contextStrategy = modelPreferences.titleGenerationContextStrategy.first(),
+                    contextN = modelPreferences.titleGenerationContextN.first(),
+                    autoGenerate = modelPreferences.titleGenerationAutoGenerate.first()
                 )
 
                 val appSettings = AppSettings(
                     theme = themeSettings,
                     context = contextSettings,
                     update = updateSettings,
-                    systemPrompt = systemPromptSettings
+                    systemPrompt = systemPromptSettings,
+                    tool = toolSettings,
+                    titleGeneration = titleGenerationSettings
                 )
 
                 val conversations = chatDao.getAllConversations().first()
@@ -242,6 +267,24 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                         sp.enableDynamicLocation?.let { modelPreferences.setEnableDynamicLocation(it) }
                         sp.enableDynamicDeviceModel?.let { modelPreferences.setEnableDynamicDeviceModel(it) }
                         sp.enableDynamicLanguage?.let { modelPreferences.setEnableDynamicLanguage(it) }
+                        sp.useCloudProxy?.let { modelPreferences.setUseCloudProxy(it) }
+                    }
+                    settings.tool?.let { tool ->
+                        tool.webSearchEnabled?.let { toolPreferences.setWebSearchEnabled(it) }
+                        tool.webSearchResultCount?.let { toolPreferences.setWebSearchResultCount(it) }
+                        tool.webSearchEngine?.let { toolPreferences.setWebSearchEngine(it) }
+                        tool.tavilyApiKey?.let { toolPreferences.setTavilyApiKey(it) }
+                        tool.tavilyUseProxy?.let { toolPreferences.setTavilyUseProxy(it) }
+                        tool.musicSearchSource?.let { toolPreferences.setMusicSearchSource(it) }
+                        tool.toolVisibilities?.forEach { (name, visible) ->
+                            toolPreferences.setToolVisibility(name, visible)
+                        }
+                    }
+                    settings.titleGeneration?.let { tg ->
+                        tg.modelId?.let { modelPreferences.setTitleGenerationModelId(it) }
+                        tg.contextStrategy?.let { modelPreferences.setTitleGenerationContextStrategy(it) }
+                        tg.contextN?.let { modelPreferences.setTitleGenerationContextN(it) }
+                        tg.autoGenerate?.let { modelPreferences.setTitleGenerationAutoGenerate(it) }
                     }
                 }
 
