@@ -36,11 +36,12 @@ import java.util.regex.Pattern
 data class MarkdownBlock(
     val type: BlockType,
     val content: String,
-    val language: String? = null
+    val language: String? = null,
+    val musicList: List<MusicInfo>? = null
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK, MERMAID, TABLE
+    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC
 }
 
 @Composable
@@ -325,6 +326,14 @@ fun MarkdownRenderer(
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
                 }
+                BlockType.MUSIC -> {
+                    block.musicList?.let {
+                        MusicList(
+                            musicList = it,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
             }
         }
     }
@@ -332,44 +341,78 @@ fun MarkdownRenderer(
 
 fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
-    val codeBlockPattern = Pattern.compile("```(\\w+)?\\n([\\s\\S]*?)```", Pattern.MULTILINE)
-    val matcher = codeBlockPattern.matcher(markdown)
+    // Updated pattern to include <music> tags
+    // Group 1: Code block (full match)
+    // Group 2: Code block language
+    // Group 3: Code block content
+    // Group 4: Music block (full match)
+    // Group 5: Music block content
+    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)", Pattern.MULTILINE)
+    val matcher = combinedPattern.matcher(markdown)
 
     var lastEnd = 0
 
     while (matcher.find()) {
-        // 添加代码块前的文本
-        if (matcher.start() > lastEnd) {
-            val textContent = markdown.substring(lastEnd, matcher.start()).trim()
-            if (textContent.isNotEmpty()) {
-                // 进一步解析文本中的表格
-                blocks.addAll(parseTables(textContent))
+        val start = matcher.start()
+        
+        // 1. Process text between last match and current match
+        if (start > lastEnd) {
+            val textContent = markdown.substring(lastEnd, start)
+            val intermediateBlocks = parseTables(textContent)
+            
+            // Check if we should merge with previous Music block
+            val isMusicMatch = matcher.group(4) != null
+            val isPreviousMusic = blocks.lastOrNull()?.type == BlockType.MUSIC
+            val isIntermediateWhitespace = intermediateBlocks.all { it.type == BlockType.TEXT && it.content.isBlank() }
+            
+            if (isMusicMatch && isPreviousMusic && isIntermediateWhitespace) {
+                // Skip adding intermediate blocks (whitespace) to allow merging
+            } else {
+                blocks.addAll(intermediateBlocks)
             }
         }
 
-        // 添加代码块
-        val language = matcher.group(1)
-        val code = matcher.group(2) ?: ""
-        
-        if (language.equals("mermaid", ignoreCase = true)) {
-            blocks.add(MarkdownBlock(BlockType.MERMAID, code, language))
-        } else {
-            blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
+        // 2. Process current match
+        if (matcher.group(1) != null) {
+            // It's a Code Block
+            val language = matcher.group(2)
+            val code = matcher.group(3) ?: ""
+            
+            if (language.equals("mermaid", ignoreCase = true)) {
+                blocks.add(MarkdownBlock(BlockType.MERMAID, code, language))
+            } else {
+                blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
+            }
+        } else if (matcher.group(4) != null) {
+            // It's a Music Block
+            val musicContent = matcher.group(5) ?: ""
+            val musicInfo = parseMusicContent(musicContent)
+            
+            if (musicInfo != null) {
+                val lastBlock = blocks.lastOrNull()
+                if (lastBlock != null && lastBlock.type == BlockType.MUSIC) {
+                    // Merge with previous music block
+                    val newList = (lastBlock.musicList ?: emptyList()) + musicInfo
+                    blocks[blocks.lastIndex] = lastBlock.copy(musicList = newList)
+                } else {
+                    // New music block
+                    blocks.add(MarkdownBlock(BlockType.MUSIC, musicContent, null, listOf(musicInfo)))
+                }
+            }
         }
 
         lastEnd = matcher.end()
     }
 
-    // 添加最后剩余的文本
+    // Add remaining text
     if (lastEnd < markdown.length) {
-        val textContent = markdown.substring(lastEnd).trim()
-        if (textContent.isNotEmpty()) {
-            blocks.addAll(parseTables(textContent))
-        }
+        val textContent = markdown.substring(lastEnd)
+        // We don't merge music blocks across the end of the string, so just add text
+        blocks.addAll(parseTables(textContent))
     }
 
-    // 如果没有找到代码块，整个内容作为文本块（可能包含表格）
-    if (blocks.isEmpty()) {
+    // Fallback if no matches found
+    if (blocks.isEmpty() && markdown.isNotEmpty()) {
         blocks.addAll(parseTables(markdown))
     }
 

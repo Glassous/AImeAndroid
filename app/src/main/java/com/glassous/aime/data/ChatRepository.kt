@@ -1077,6 +1077,9 @@ class ChatRepository(
                                                         aggregated.append("Album: ${detail.album}\n")
                                                         aggregated.append("URL: ${detail.url}\n")
                                                         aggregated.append("Pic: ${detail.pic}\n")
+                                                        if (!detail.lrc.isNullOrEmpty()) {
+                                                            aggregated.append("Lrc: ${detail.lrc}\n")
+                                                        }
                                                         aggregated.append("</music>\n\n")
                                                     }
                                                 } else {
