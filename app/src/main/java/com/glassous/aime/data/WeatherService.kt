@@ -91,12 +91,41 @@ class WeatherService(
                 return@withContext WeatherQueryResult(false, city, emptyList(), "未找到城市坐标")
             }
 
+            queryByCoords(lat, lon, displayCity)
+        } catch (e: Exception) {
+            WeatherQueryResult(
+                success = false,
+                city = city,
+                days = emptyList(),
+                message = "天气查询异常：${e.message}"
+            )
+        }
+    }
+
+    /**
+     * 查询指定经纬度的天气
+     */
+    suspend fun query(lat: Double, lon: Double): WeatherQueryResult = withContext(Dispatchers.IO) {
+        val displayCity = "当前位置 (${String.format("%.2f", lat)}, ${String.format("%.2f", lon)})"
+        try {
+            queryByCoords(lat, lon, displayCity)
+        } catch (e: Exception) {
+            WeatherQueryResult(
+                success = false,
+                city = displayCity,
+                days = emptyList(),
+                message = "天气查询异常：${e.message}"
+            )
+        }
+    }
+
+    private fun queryByCoords(lat: Double, lon: Double, displayCity: String): WeatherQueryResult {
             val forecastUrl = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon&daily=temperature_2m_max,temperature_2m_min,weather_code,wind_speed_10m_max,wind_direction_10m_dominant&timezone=auto&forecast_days=5"
             val fcReq = Request.Builder().url(forecastUrl).addHeader("Accept", "application/json").build()
             val fcResp = client.newCall(fcReq).execute()
             val fcBody = fcResp.body?.string()
             if (!fcResp.isSuccessful || fcBody.isNullOrBlank()) {
-                return@withContext WeatherQueryResult(false, displayCity, emptyList(), "天气数据获取失败：HTTP ${fcResp.code}")
+                return WeatherQueryResult(false, displayCity, emptyList(), "天气数据获取失败：HTTP ${fcResp.code}")
             }
             val fc = gson.fromJson(fcBody, ForecastResp::class.java)
             val d = fc.daily
@@ -148,20 +177,12 @@ class WeatherService(
             }
 
             val ok = days.isNotEmpty()
-            WeatherQueryResult(
+            return WeatherQueryResult(
                 success = ok,
                 city = displayCity,
                 days = days,
                 message = if (ok) "数据请求成功" else "未获取到天气数据"
             )
-        } catch (e: Exception) {
-            WeatherQueryResult(
-                success = false,
-                city = city,
-                days = emptyList(),
-                message = "天气查询异常：${e.message}"
-            )
-        }
     }
 
     private fun weatherCodeToZh(code: Int?): String {

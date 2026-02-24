@@ -52,6 +52,133 @@ class ChatRepository(
         return chatDao.getAllConversations()
     }
 
+    private suspend fun buildSystemPrompt(): String {
+        // 注入用户配置的系统提示词
+        var systemPrompt = modelPreferences.systemPrompt.first()
+        
+        // 如果是内置模型，添加默认前缀
+        val selectedModelId = modelPreferences.selectedModelId.first()
+        if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+            val aimePrompt = "你的名称是“AIme”，由 FiaCloud 开发。"
+            systemPrompt = if (systemPrompt.isEmpty()) aimePrompt else "$aimePrompt\n$systemPrompt"
+        }
+
+        val enableDate = modelPreferences.enableDynamicDate.first()
+        val enableTimestamp = modelPreferences.enableDynamicTimestamp.first()
+        val enableLocation = modelPreferences.enableDynamicLocation.first()
+        val enableDeviceModel = modelPreferences.enableDynamicDeviceModel.first()
+        val enableLanguage = modelPreferences.enableDynamicLanguage.first()
+        
+        val dynamicInfos = mutableListOf<String>()
+        
+        if (enableDate) {
+            val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            dynamicInfos.add("当前日期: ${dateFormat.format(Date())}")
+        }
+        
+        if (enableTimestamp) {
+            dynamicInfos.add("当前时间戳: ${System.currentTimeMillis()}")
+        }
+
+        if (enableDeviceModel) {
+            dynamicInfos.add("设备型号: ${android.os.Build.MODEL}")
+        }
+
+        if (enableLanguage) {
+            dynamicInfos.add("系统语言: ${Locale.getDefault()}")
+        }
+        
+        if (enableLocation) {
+            try {
+                val location = getLastKnownLocation()
+                if (location != null) {
+                    dynamicInfos.add("当前位置: ${location.latitude}, ${location.longitude}")
+                    // Add instruction for weather tool if location is available
+                    dynamicInfos.add("注意：天气查询工具是基于经纬度运行的。如果用户查询天气，**必须**使用上述“当前位置”的经纬度调用 city_weather 工具（传递 latitude 和 longitude 参数），不要仅使用 city 参数")
+                } else {
+                    dynamicInfos.add("当前位置: 未知 (无法获取)")
+                }
+            } catch (e: Exception) {
+                dynamicInfos.add("当前位置: 未知 (权限或服务异常)")
+            }
+        }
+        
+        if (dynamicInfos.isNotEmpty()) {
+            val dynamicInfoStr = "\n\n[系统环境信息]\n" + dynamicInfos.joinToString("\n")
+            systemPrompt = if (systemPrompt.isEmpty()) dynamicInfoStr.trim() else systemPrompt + dynamicInfoStr
+        }
+        
+        return systemPrompt
+    }
+
+    private fun getTools(selectedTool: Tool?): List<com.glassous.aime.data.Tool>? {
+        val webSearchTool = com.glassous.aime.data.Tool(
+            type = "function",
+            function = com.glassous.aime.data.ToolFunction(
+                name = "web_search",
+                description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                parameters = com.glassous.aime.data.ToolFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "query" to com.glassous.aime.data.ToolFunctionParameter(
+                            type = "string",
+                            description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                        )
+                    ),
+                    required = listOf("query")
+                )
+            )
+        )
+        val cityWeatherTool = com.glassous.aime.data.Tool(
+            type = "function",
+            function = com.glassous.aime.data.ToolFunction(
+                name = "city_weather",
+                description = "查询指定城市或当前位置的未来几天天气与空气质量。此API基于地理坐标（经纬度）运行。如果你知道目标位置的经纬度（例如当前位置），必须使用 `latitude` 和 `longitude` 参数。仅当你不知道经纬度时（例如查询其他城市），才使用 `city` 参数（系统将尝试自动查找坐标）。",
+                parameters = com.glassous.aime.data.ToolFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "city" to com.glassous.aime.data.ToolFunctionParameter(
+                            type = "string",
+                            description = "目标城市或区县中文名称（仅当经纬度未知时使用）"
+                        ),
+                        "latitude" to com.glassous.aime.data.ToolFunctionParameter(
+                            type = "number",
+                            description = "纬度 (例如 39.9)"
+                        ),
+                        "longitude" to com.glassous.aime.data.ToolFunctionParameter(
+                            type = "number",
+                            description = "经度 (例如 116.4)"
+                        )
+                    ),
+                    required = listOf() // No required parameters because either city or lat/long is sufficient
+                )
+            )
+        )
+        val musicSearchTool = com.glassous.aime.data.Tool(
+            type = "function",
+            function = com.glassous.aime.data.ToolFunction(
+                name = "music_search",
+                description = "搜索全网音乐并获取播放链接。支持网易云、QQ音乐等平台。",
+                parameters = com.glassous.aime.data.ToolFunctionParameters(
+                    type = "object",
+                    properties = mapOf(
+                        "keyword" to com.glassous.aime.data.ToolFunctionParameter(
+                            type = "string",
+                            description = "歌曲名称（不含歌手名等任何信息）"
+                        )
+                    ),
+                    required = listOf("keyword")
+                )
+            )
+        )
+        return when {
+            selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
+            selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
+            selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
+            else -> null
+        }
+    }
+
     suspend fun sendMessage(
         conversationId: Long,
         message: String,
@@ -208,119 +335,12 @@ class ChatRepository(
             
             val messages = limitContext(baseMessages).toMutableList()
 
-            // 注入用户配置的系统提示词
-            var systemPrompt = modelPreferences.systemPrompt.first()
-            
-            if (model.id == BuiltInModels.AIME_MODEL_ID) {
-                val aimePrompt = "你的名称是“AIme”，由 FiaCloud 开发。"
-                systemPrompt = if (systemPrompt.isEmpty()) aimePrompt else "$aimePrompt\n$systemPrompt"
-            }
-
-            val enableDate = modelPreferences.enableDynamicDate.first()
-            val enableTimestamp = modelPreferences.enableDynamicTimestamp.first()
-            val enableLocation = modelPreferences.enableDynamicLocation.first()
-            val enableDeviceModel = modelPreferences.enableDynamicDeviceModel.first()
-            val enableLanguage = modelPreferences.enableDynamicLanguage.first()
-            
-            val dynamicInfos = mutableListOf<String>()
-            
-            if (enableDate) {
-                val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                dynamicInfos.add("当前日期: ${dateFormat.format(Date())}")
-            }
-            
-            if (enableTimestamp) {
-                dynamicInfos.add("当前时间戳: ${System.currentTimeMillis()}")
-            }
-
-            if (enableDeviceModel) {
-                dynamicInfos.add("设备型号: ${android.os.Build.MODEL}")
-            }
-
-            if (enableLanguage) {
-                dynamicInfos.add("系统语言: ${Locale.getDefault()}")
-            }
-            
-            if (enableLocation) {
-                try {
-                    val location = getLastKnownLocation()
-                    if (location != null) {
-                        dynamicInfos.add("当前位置: ${location.latitude}, ${location.longitude}")
-                    } else {
-                        dynamicInfos.add("当前位置: 未知 (无法获取)")
-                    }
-                } catch (e: Exception) {
-                    dynamicInfos.add("当前位置: 未知 (权限或服务异常)")
-                }
-            }
-            
-            if (dynamicInfos.isNotEmpty()) {
-                val dynamicInfoStr = "\n\n[系统环境信息]\n" + dynamicInfos.joinToString("\n")
-                systemPrompt = if (systemPrompt.isEmpty()) dynamicInfoStr.trim() else systemPrompt + dynamicInfoStr
-            }
-
+            val systemPrompt = buildSystemPrompt()
             if (systemPrompt.isNotBlank()) {
                 messages.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
             }
 
-            // 构建工具定义（当选择了工具时）
-            val webSearchTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                            )
-                        ),
-                        required = listOf("query")
-                    )
-                )
-            )
-            val cityWeatherTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "city_weather",
-                    description = "查询指定城市未来几天天气与空气质量。使用中文城市或区县名，如“滕州市”。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "city" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目标城市或区县中文名称"
-                            )
-                        ),
-                        required = listOf("city")
-                    )
-                )
-            )
-            val musicSearchTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "music_search",
-                    description = "搜索全网音乐并获取播放链接。支持网易云、QQ音乐等平台。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "keyword" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "歌曲名称（不含歌手名等任何信息）"
-                            )
-                        ),
-                        required = listOf("keyword")
-                    )
-                )
-            )
-            val tools = when {
-                selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
-                selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
-                selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                else -> null
-            }
+            val tools = getTools(selectedTool)
 
             // Insert assistant placeholder for streaming
             var assistantMessage = ChatMessage(
@@ -461,8 +481,28 @@ class ChatRepository(
                                 try {
                                     val arguments = toolCall.function.arguments
                                     if (arguments != null) {
-                                        val city = safeExtractCity(arguments, message)
-                                        val weatherResult = weatherService.query(city)
+                                        var lat: Double? = null
+                                        var lon: Double? = null
+                                        var cityArg: String? = null
+                                        
+                                        try {
+                                            val gson = Gson()
+                                            val type = object : TypeToken<Map<String, Any?>>() {}.type
+                                            val map: Map<String, Any?> = gson.fromJson(arguments, type)
+                                            lat = (map["latitude"] as? Number)?.toDouble()
+                                            lon = (map["longitude"] as? Number)?.toDouble()
+                                            cityArg = map["city"] as? String
+                                        } catch (e: Exception) {
+                                            // ignore
+                                        }
+
+                                        val weatherResult = if (lat != null && lon != null) {
+                                            weatherService.query(lat, lon)
+                                        } else {
+                                            val finalCity = if (!cityArg.isNullOrBlank()) cityArg else safeExtractCity(arguments, message)
+                                            weatherService.query(finalCity)
+                                        }
+                                        
                                         val weatherText = weatherService.format(weatherResult)
 
                                         val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
@@ -750,46 +790,14 @@ class ChatRepository(
             val contextMessages = limitContext(contextMessagesBase)
             val messagesWithBias = contextMessages.toMutableList()
 
-            // 构建工具定义（当选择了工具时）
-            val webSearchTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具. 重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                            )
-                        ),
-                        required = listOf("query")
-                    )
-                )
-            )
-            val cityWeatherTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "city_weather",
-                    description = "查询指定城市未来几天天气与空气质量。使用中文城市或区县名，如“滕州市”。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "city" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目标城市或区县中文名称"
-                            )
-                        ),
-                        required = listOf("city")
-                    )
-                )
-            )
-            val tools = when {
-                selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
-                selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                else -> null
+            // Inject system prompt
+            val systemPrompt = buildSystemPrompt()
+            if (systemPrompt.isNotBlank()) {
+                messagesWithBias.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
             }
+
+            // 构建工具定义（当选择了工具时）
+            val tools = getTools(selectedTool)
 
             val aggregated = StringBuilder()
             var lastUpdateTime = 0L
@@ -906,19 +914,38 @@ class ChatRepository(
                         } else if (toolCall.function?.name == "city_weather") {
                             try {
                                 val arguments = toolCall.function.arguments
-                                val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
-                                val city = safeExtractCity(arguments, userTextForIntent)
+                                var lat: Double? = null
+                                var lon: Double? = null
+                                var cityArg: String? = null
                                 
-                                if (city.isNotEmpty()) {
-                                    val weatherResult = weatherService.query(city)
+                                try {
+                                    val gson = Gson()
+                                    val type = object : TypeToken<Map<String, Any?>>() {}.type
+                                    val map: Map<String, Any?> = gson.fromJson(arguments, type)
+                                    lat = (map["latitude"] as? Number)?.toDouble()
+                                    lon = (map["longitude"] as? Number)?.toDouble()
+                                    cityArg = map["city"] as? String
+                                } catch (e: Exception) {
+                                    // ignore
+                                }
+                                
+                                val weatherResult = if (lat != null && lon != null) {
+                                    weatherService.query(lat, lon)
+                                } else {
+                                    val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
+                                    val finalCity = if (!cityArg.isNullOrBlank()) cityArg else safeExtractCity(arguments, userTextForIntent)
+                                    if (finalCity.isNotEmpty()) weatherService.query(finalCity) else null
+                                }
+                                
+                                if (weatherResult != null) {
                                     // 插入工具调用结果（Markdown表格）到消息流中，位于前置回复和正式回复之间
                                     val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
                                     aggregated.append("\n\n\n") // 工具结果开始分隔
-                                        aggregated.append(weatherTable.trim())
-                                        aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
-                                        postLabelAdded = true
-                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                        chatDao.updateMessage(updatedBeforeOfficial)
+                                    aggregated.append(weatherTable.trim())
+                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
+                                    postLabelAdded = true
+                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updatedBeforeOfficial)
                                     val messagesWithWeather = contextMessages.toMutableList()
                                     messagesWithWeather.add(
                                         OpenAiChatMessage(
@@ -1348,47 +1375,14 @@ class ChatRepository(
                 }
             val contextMessages = limitContext(contextMessagesBase)
             val messagesWithBias = contextMessages.toMutableList()
+            
+            val systemPrompt = buildSystemPrompt()
+            if (systemPrompt.isNotBlank()) {
+                messagesWithBias.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
+            }
 
             // 构建工具定义
-            val webSearchTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                            )
-                        ),
-                        required = listOf("query")
-                    )
-                )
-            )
-            val cityWeatherTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "city_weather",
-                    description = "查询指定城市未来几天天气与空气质量。使用中文城市或区县名，如\"滕州市\"。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "city" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目标城市或区县中文名称"
-                            )
-                        ),
-                        required = listOf("city")
-                    )
-                )
-            )
-            val tools = when {
-                selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
-                selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                else -> null
-            }
+            val tools = getTools(selectedTool)
 
             // 插入新的助手消息占位
             var assistantMessage = ChatMessage(
@@ -1557,6 +1551,11 @@ class ChatRepository(
             contextMessagesBase.add(OpenAiChatMessage(role = "user", content = trimmed))
             val contextMessages = limitContext(contextMessagesBase)
             val messagesWithBias = contextMessages.toMutableList()
+            
+            val systemPrompt = buildSystemPrompt()
+            if (systemPrompt.isNotBlank()) {
+                messagesWithBias.add(0, OpenAiChatMessage(role = "system", content = systemPrompt))
+            }
 
             var preLabelAdded = false
             var postLabelAdded = false
@@ -1577,45 +1576,7 @@ class ChatRepository(
             val updateInterval = 0L
 
             // 定义工具（当选择了工具或处于自动模式时）
-            val webSearchTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "web_search",
-                    description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "query" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
-                            )
-                        ),
-                        required = listOf("query")
-                    )
-                )
-            )
-            val cityWeatherTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "city_weather",
-                    description = "查询指定城市未来几天天气与空气质量。使用中文城市或区县名，如“滕州市”。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "city" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目标城市或区县中文名称"
-                            )
-                        ),
-                        required = listOf("city")
-                    )
-                )
-            )
-            val tools = when {
-                selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
-                selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                else -> null
-            }
+            val tools = getTools(selectedTool)
 
             withContext(Dispatchers.IO) {
                 streamWithFallback(
@@ -1744,8 +1705,28 @@ class ChatRepository(
                             try {
                                 val arguments = toolCall.function.arguments
                                 if (arguments != null) {
-                                    val city = safeExtractCity(arguments, "")
-                                    val weatherResult = weatherService.query(city)
+                                    var lat: Double? = null
+                                    var lon: Double? = null
+                                    var cityArg: String? = null
+                                    
+                                    try {
+                                        val gson = Gson()
+                                        val type = object : TypeToken<Map<String, Any?>>() {}.type
+                                        val map: Map<String, Any?> = gson.fromJson(arguments, type)
+                                        lat = (map["latitude"] as? Number)?.toDouble()
+                                        lon = (map["longitude"] as? Number)?.toDouble()
+                                        cityArg = map["city"] as? String
+                                    } catch (e: Exception) {
+                                        // ignore
+                                    }
+
+                                    val weatherResult = if (lat != null && lon != null) {
+                                        weatherService.query(lat, lon)
+                                    } else {
+                                        val finalCity = if (!cityArg.isNullOrBlank()) cityArg else safeExtractCity(arguments, "")
+                                        weatherService.query(finalCity)
+                                    }
+
                                     val weatherText = weatherService.format(weatherResult)
 
                                     // 插入工具调用结果（Markdown表格）到消息中，位于前置回复与正式回复之间
