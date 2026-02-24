@@ -36,11 +36,6 @@ enum class ToolType(
         icon = Icons.Default.WbSunny,
         description = "查询指定城市的未来几天天气与空气质量"
     ),
-    STOCK_QUERY(
-        displayName = "股票数据查询",
-        icon = Icons.Default.TrendingUp,
-        description = "查询指定证券代码的历史行情数据（开盘/收盘/振幅等）"
-    ),
     GOLD_PRICE(
         displayName = "黄金价格查询",
         icon = Icons.Default.TrendingUp,
