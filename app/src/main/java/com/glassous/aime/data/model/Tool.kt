@@ -36,11 +36,6 @@ enum class ToolType(
         icon = Icons.Default.WbSunny,
         description = "查询指定城市的未来几天天气与空气质量"
     ),
-    HIGH_SPEED_TICKET(
-        displayName = "高铁动车车票查询",
-        icon = Icons.Default.Search,
-        description = "查询高铁/动车的车次、时间与价格（默认当天）"
-    ),
     LOTTERY_QUERY(
         displayName = "彩票开奖查询",
         icon = Icons.Default.Search,

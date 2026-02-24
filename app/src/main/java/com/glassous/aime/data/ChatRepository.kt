@@ -301,10 +301,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
-            val hsKeywords = listOf(
-                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
-            )
-            val isHsIntent = hsKeywords.any { kw -> message.contains(kw, ignoreCase = true) }
             val tikuKeywords = listOf(
                 "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
             )
@@ -353,31 +349,6 @@ class ChatRepository(
                             )
                         ),
                         required = listOf("city")
-                    )
-                )
-            )
-            val hsTicketTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "hs_ticket_query",
-                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "from" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "出发城市或车站中文名称"
-                            ),
-                            "to" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目的城市或车站中文名称"
-                            ),
-                            "date" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
-                            )
-                        ),
-                        required = listOf("from", "to")
                     )
                 )
             )
@@ -458,16 +429,14 @@ class ChatRepository(
                 selectedTool?.type == ToolType.MUSIC_SEARCH -> listOf(musicSearchTool)
                 // selectedTool?.type == ToolType.WEB_ANALYSIS -> listOf(webAnalysisTool) // Client-side handled, no tool for LLM
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, musicSearchTool)
-                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool, musicSearchTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool, musicSearchTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool, musicSearchTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, baiduTikuTool, musicSearchTool)
+                    isMusicIntent -> listOf(musicSearchTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, lotteryTool, musicSearchTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool, musicSearchTool)
                 }
                 else -> null
             }
@@ -478,14 +447,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "本条消息可能涉及天气相关，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若用户未提供城市，请结合上下文推测或礼貌询问其所在城市名称。"
-                    )
-                )
-            }
-            if (isAutoMode && isHsIntent) {
-                messages.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
                     )
                 )
             }
@@ -562,7 +523,6 @@ class ChatRepository(
                     "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                     "web_analysis" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_ANALYSIS)
                     "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                    "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                     "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                     "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                     "music_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.MUSIC_SEARCH)
@@ -1097,10 +1057,6 @@ class ChatRepository(
             )
             val userTextForIntent = history[prevUserIndex].content
             val isWeatherIntent = weatherKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
-            val hsKeywords = listOf(
-                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
-            )
-            val isHsIntent = hsKeywords.any { kw -> userTextForIntent.contains(kw, ignoreCase = true) }
             val tikuKeywords = listOf(
                 "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
             )
@@ -1148,31 +1104,6 @@ class ChatRepository(
                     )
                 )
             )
-            val hsTicketTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "hs_ticket_query",
-                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "from" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "出发城市或车站中文名称"
-                            ),
-                            "to" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目的城市或车站中文名称"
-                            ),
-                            "date" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
-                            )
-                        ),
-                        required = listOf("from", "to")
-                    )
-                )
-            )
             val baiduTikuTool = com.glassous.aime.data.Tool(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
@@ -1214,15 +1145,13 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -1274,7 +1203,6 @@ class ChatRepository(
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                             "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                             "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                             else -> {}
@@ -1856,10 +1784,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
-            val hsKeywords = listOf(
-                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
-            )
-            val isHsIntent = hsKeywords.any { kw -> userMessage.contains(kw, ignoreCase = true) }
             val tikuKeywords = listOf(
                 "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
             )
@@ -1907,31 +1831,6 @@ class ChatRepository(
                     )
                 )
             )
-            val hsTicketTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "hs_ticket_query",
-                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "from" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "出发城市或车站中文名称"
-                            ),
-                            "to" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目的城市或车站中文名称"
-                            ),
-                            "date" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
-                            )
-                        ),
-                        required = listOf("from", "to")
-                    )
-                )
-            )
             val baiduTikuTool = com.glassous.aime.data.Tool(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
@@ -1973,15 +1872,13 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -1992,14 +1889,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮对话与天气相关，请优先考虑调用工具 city_weather 获取指定城市的天气与空气质量信息。若城市不明确，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isHsIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮对话涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
                     )
                 )
             }
@@ -2058,7 +1947,6 @@ class ChatRepository(
                             when (toolCall.function?.name) {
                                 "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
                                 "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                                "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
                                 "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                                 "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                                 else -> {}
@@ -2199,10 +2087,6 @@ class ChatRepository(
                 "今日", "明天", "后天", "温度", "湿度"
             )
             val isWeatherIntent = weatherKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
-            val hsKeywords = listOf(
-                "高铁", "动车", "火车票", "车次", "一等座", "二等座", "商务座", "余票", "票价", "购票", "直达"
-            )
-            val isHsIntent = hsKeywords.any { kw -> trimmed.contains(kw, ignoreCase = true) }
             val tikuKeywords = listOf(
                 "题库", "百度题库", "考试", "选择题", "填空题", "判断题", "解析", "答案", "真题", "单选", "多选", "题目"
             )
@@ -2268,31 +2152,6 @@ class ChatRepository(
                     )
                 )
             )
-            val hsTicketTool = com.glassous.aime.data.Tool(
-                type = "function",
-                function = com.glassous.aime.data.ToolFunction(
-                    name = "hs_ticket_query",
-                    description = "查询高铁/动车车次、时间与价格（默认为当天日期）。",
-                    parameters = com.glassous.aime.data.ToolFunctionParameters(
-                        type = "object",
-                        properties = mapOf(
-                            "from" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "出发城市或车站中文名称"
-                            ),
-                            "to" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "目的城市或车站中文名称"
-                            ),
-                            "date" to com.glassous.aime.data.ToolFunctionParameter(
-                                type = "string",
-                                description = "查询日期（yyyy-MM-dd），未提供则默认为当天"
-                            )
-                        ),
-                        required = listOf("from", "to")
-                    )
-                )
-            )
             val baiduTikuTool = com.glassous.aime.data.Tool(
                 type = "function",
                 function = com.glassous.aime.data.ToolFunction(
@@ -2334,15 +2193,13 @@ class ChatRepository(
             val tools = when {
                 selectedTool?.type == ToolType.WEB_SEARCH -> listOf(webSearchTool)
                 selectedTool?.type == ToolType.WEATHER_QUERY -> listOf(cityWeatherTool)
-                selectedTool?.type == ToolType.HIGH_SPEED_TICKET -> listOf(hsTicketTool)
                 selectedTool?.type == ToolType.BAIDU_TIKU -> listOf(baiduTikuTool)
                 selectedTool?.type == ToolType.LOTTERY_QUERY -> listOf(lotteryTool)
                 isAutoMode -> when {
-                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool)
-                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, hsTicketTool, lotteryTool)
-                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, hsTicketTool, baiduTikuTool, lotteryTool)
-                    isHsIntent -> listOf(hsTicketTool, webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
-                    else -> listOf(webSearchTool, cityWeatherTool, hsTicketTool, baiduTikuTool, lotteryTool)
+                    isLotteryIntent -> listOf(lotteryTool, webSearchTool, cityWeatherTool, baiduTikuTool)
+                    isTikuIntent -> listOf(baiduTikuTool, webSearchTool, cityWeatherTool, lotteryTool)
+                    isWeatherIntent -> listOf(cityWeatherTool, webSearchTool, baiduTikuTool, lotteryTool)
+                    else -> listOf(webSearchTool, cityWeatherTool, baiduTikuTool, lotteryTool)
                 }
                 else -> null
             }
@@ -2353,14 +2210,6 @@ class ChatRepository(
                     OpenAiChatMessage(
                         role = "system",
                         content = "该轮编辑后的用户消息涉及天气，请优先考虑调用工具 city_weather 获取天气与空气质量信息。若城市未给出，请礼貌询问或依据上下文推测。"
-                    )
-                )
-            }
-            if (isAutoMode && isHsIntent) {
-                messagesWithBias.add(
-                    OpenAiChatMessage(
-                        role = "system",
-                        content = "该轮编辑后的用户消息涉及高铁/动车车票，请优先考虑调用工具 hs_ticket_query 获取当日或指定日期的车次、时间与价格。"
                     )
                 )
             }
@@ -2402,9 +2251,8 @@ class ChatRepository(
                         // 通知UI具体的工具类型以正确显示图标
                         when (toolCall.function?.name) {
                             "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
-                            "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            "hs_ticket_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.HIGH_SPEED_TICKET)
-                            "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
+                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                                "baidu_tiku" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.BAIDU_TIKU)
                             "lottery_query" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.LOTTERY_QUERY)
                             else -> {}
                         }
@@ -2668,56 +2516,6 @@ class ChatRepository(
                             } catch (e: Exception) {
                                 aggregated.append("\n\n彩票开奖工具暂时不可用：${e.message}\n\n")
                             }
-                        } else if (toolCall.function?.name == "hs_ticket_query") {
-                            try {
-                                val arguments = toolCall.function.arguments
-                                if (arguments != null) {
-                                    val from = safeExtractFrom(arguments) ?: ""
-                                    val to = safeExtractTo(arguments) ?: ""
-                                    val date = safeExtractDate(arguments)
-                                    if (from.isNotEmpty() && to.isNotEmpty()) {
-                                        val payload = HighSpeedTicketService().query(from, to, date)
-                                        val summaryText = HighSpeedTicketService().formatCondensed(payload)
-                                        aggregated.append("\n\n\n")
-                                        aggregated.append(summaryText)
-                                        aggregated.append("\n\n\n")
-                                        postLabelAdded = true
-                                        val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                        chatDao.updateMessage(updatedBeforeOfficial)
-
-                                        val messagesWithHs = contextMessages.toMutableList()
-                                        messagesWithHs.add(
-                                            OpenAiChatMessage(
-                                                role = "system",
-                                                content = summaryText
-                                            )
-                                        )
-                                        streamWithFallback(
-                                            primaryGroup = group,
-                                            primaryModel = model,
-                                            messages = messagesWithHs,
-                                            tools = null,
-                                            toolChoice = null,
-                                            onDelta = { delta ->
-                                                if (!postLabelAdded) {
-                                                    aggregated.append("\n\n\n")
-                                                    postLabelAdded = true
-                                                }
-                                                aggregated.append(delta)
-                                                val currentTime = System.currentTimeMillis()
-                                                if (currentTime - lastUpdateTime >= updateInterval) {
-                                                    val updated = assistantMessage.copy(content = aggregated.toString())
-                                                    chatDao.updateMessage(updated)
-                                                    lastUpdateTime = currentTime
-                                                }
-                                            },
-                                            onToolCall = { /* 不处理工具调用，避免循环 */ }
-                                        )
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n高铁车票工具暂时不可用：${e.message}\n\n")
-                            }
                         }
                         onToolCallEnd?.invoke()
                     }
@@ -2965,81 +2763,6 @@ class ChatRepository(
             if (text.contains(k)) return v
         }
         return "ssq"
-    }
-
-    private fun safeExtractFrom(arguments: String?): String? {
-        if (arguments.isNullOrBlank()) return null
-        val raw = arguments.trim()
-        val gson = Gson()
-        fun tryParse(text: String): String? {
-            return try {
-                val reader = JsonReader(StringReader(text))
-                reader.isLenient = true
-                val type = object : TypeToken<Map<String, Any?>>() {}.type
-                val map: Map<String, Any?> = gson.fromJson(reader, type)
-                (map["from"] as? String)?.takeIf { it.isNotBlank() }
-            } catch (_: Exception) { null }
-        }
-        tryParse(raw)?.let { return it }
-        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
-        tryParse(normalizedSingleQuotes)?.let { return it }
-        val regexQuoted = Regex("""(?i)\"?from\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
-        )
-        val regexUnquoted = Regex("""(?i)\"?from\"?\s*[:=]\s*([^,}\n\r]+)"""
-        )
-        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        return null
-    }
-
-    private fun safeExtractTo(arguments: String?): String? {
-        if (arguments.isNullOrBlank()) return null
-        val raw = arguments.trim()
-        val gson = Gson()
-        fun tryParse(text: String): String? {
-            return try {
-                val reader = JsonReader(StringReader(text))
-                reader.isLenient = true
-                val type = object : TypeToken<Map<String, Any?>>() {}.type
-                val map: Map<String, Any?> = gson.fromJson(reader, type)
-                (map["to"] as? String)?.takeIf { it.isNotBlank() }
-            } catch (_: Exception) { null }
-        }
-        tryParse(raw)?.let { return it }
-        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
-        tryParse(normalizedSingleQuotes)?.let { return it }
-        val regexQuoted = Regex("""(?i)\"?to\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
-        )
-        val regexUnquoted = Regex("""(?i)\"?to\"?\s*[:=]\s*([^,}\n\r]+)"""
-        )
-        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        return null
-    }
-
-    private fun safeExtractDate(arguments: String?): String? {
-        if (arguments.isNullOrBlank()) return null
-        val raw = arguments.trim()
-        val gson = Gson()
-        fun tryParse(text: String): String? {
-            return try {
-                val reader = JsonReader(StringReader(text))
-                reader.isLenient = true
-                val type = object : TypeToken<Map<String, Any?>>() {}.type
-                val map: Map<String, Any?> = gson.fromJson(reader, type)
-                (map["date"] as? String)?.takeIf { it.isNotBlank() }
-            } catch (_: Exception) { null }
-        }
-        tryParse(raw)?.let { return it }
-        val normalizedSingleQuotes = if (raw.startsWith("{") && raw.contains("'")) raw.replace("'", "\"") else raw
-        tryParse(normalizedSingleQuotes)?.let { return it }
-        val regexQuoted = Regex("""(?i)\"?date\"?\s*[:=]\s*\"([^\"\n\r}]*)\"""
-        )
-        val regexUnquoted = Regex("""(?i)\"?date\"?\s*[:=]\s*([^,}\n\r]+)"""
-        )
-        regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
-        return null
     }
 
     // 统一的流式调用，失败时不再自动回调，而是抛出异常让上层处理
