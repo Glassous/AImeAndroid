@@ -36,11 +36,6 @@ enum class ToolType(
         icon = Icons.Default.WbSunny,
         description = "查询指定城市的未来几天天气与空气质量"
     ),
-    LOTTERY_QUERY(
-        displayName = "彩票开奖查询",
-        icon = Icons.Default.Search,
-        description = "查询指定彩种的最近开奖信息"
-    ),
     BAIDU_TIKU(
         displayName = "百度题库搜索",
         icon = Icons.Default.Search,
