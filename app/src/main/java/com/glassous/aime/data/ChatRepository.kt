@@ -991,8 +991,17 @@ class ChatRepository(
                                         val keyword = safeExtractKeyword(arguments)
                                         val source = toolPreferences.musicSearchSource.first()
                                         
+                                        val sourceName = when (source) {
+                                            "wy" -> "网易云"
+                                            "qq" -> "QQ音乐"
+                                            "kw" -> "酷我"
+                                            "mg" -> "咪咕"
+                                            "qi" -> "千千"
+                                            else -> source
+                                        }
+                                        
                                         // Update UI
-                                        aggregated.append("\n\n\n正在搜索音乐：$keyword (来源: $source)...\n\n\n")
+                                        aggregated.append("\n\n\n正在搜索音乐：$keyword (来源: $sourceName)...\n\n\n")
                                         val loadingMsg = assistantMessage.copy(content = aggregated.toString())
                                         chatDao.updateMessage(loadingMsg)
 

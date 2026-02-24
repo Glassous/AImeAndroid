@@ -26,6 +26,11 @@ enum class ToolType(
         icon = Icons.Default.Language,
         description = "深入分析指定网页的内容、结构与元数据"
     ),
+    MUSIC_SEARCH(
+        displayName = "音乐搜索",
+        icon = Icons.Default.MusicNote,
+        description = "搜索全网音乐并获取播放链接"
+    ),
     WEATHER_QUERY(
         displayName = "城市天气查询",
         icon = Icons.Default.WbSunny,
@@ -55,11 +60,6 @@ enum class ToolType(
         displayName = "百度题库搜索",
         icon = Icons.Default.Search,
         description = "检索题库并返回题干/选项/答案"
-    ),
-    MUSIC_SEARCH(
-        displayName = "音乐搜索",
-        icon = Icons.Default.MusicNote,
-        description = "搜索全网音乐并获取播放链接"
     );
     
     companion object {

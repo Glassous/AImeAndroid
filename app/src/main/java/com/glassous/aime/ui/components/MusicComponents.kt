@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Pause
@@ -42,6 +43,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
@@ -134,13 +136,15 @@ fun MusicItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MusicPlayerDialog(
     music: MusicInfo,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var downloadState by remember { mutableStateOf(DownloadState.IDLE) }
     
     // Media Player State
     var isPlaying by remember { mutableStateOf(false) }
@@ -407,10 +411,38 @@ fun MusicPlayerDialog(
                     // Download (Right)
                     FilledTonalIconButton(
                         onClick = {
-                            downloadMusic(context, music.url, "${music.name} - ${music.artist}.mp3")
+                            if (downloadState == DownloadState.IDLE) {
+                                val id = downloadMusic(context, music.url, "${music.name} - ${music.artist}.mp3")
+                                if (id != null) {
+                                    downloadState = DownloadState.DOWNLOADING
+                                    scope.launch {
+                                        val success = waitForDownload(context, id)
+                                        if (success) {
+                                            downloadState = DownloadState.COMPLETED
+                                        } else {
+                                            downloadState = DownloadState.IDLE
+                                            Toast.makeText(context, "下载失败", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                }
+                            }
                         }
                     ) {
-                        Icon(Icons.Default.Download, contentDescription = "Download")
+                        AnimatedContent(
+                            targetState = downloadState,
+                            transitionSpec = {
+                                (fadeIn() + scaleIn()).togetherWith(fadeOut() + scaleOut())
+                            },
+                            label = "DownloadStatus"
+                        ) { state ->
+                            when (state) {
+                                DownloadState.IDLE -> Icon(Icons.Default.Download, contentDescription = "Download")
+                                DownloadState.DOWNLOADING -> CircularWavyProgressIndicator(
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                DownloadState.COMPLETED -> Icon(Icons.Default.Check, contentDescription = "Completed")
+                            }
+                        }
                     }
                 }
             }
@@ -494,7 +526,11 @@ fun parseLrc(lrc: String): List<LrcLine> {
     return lines.sortedBy { it.time }
 }
 
-fun downloadMusic(context: Context, url: String, fileName: String) {
+enum class DownloadState {
+    IDLE, DOWNLOADING, COMPLETED
+}
+
+fun downloadMusic(context: Context, url: String, fileName: String): Long? {
     try {
         val request = DownloadManager.Request(Uri.parse(url))
             .setTitle(fileName)
@@ -505,10 +541,44 @@ fun downloadMusic(context: Context, url: String, fileName: String) {
             .setAllowedOverRoaming(true)
         
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        downloadManager.enqueue(request)
-        Toast.makeText(context, "开始下载...", Toast.LENGTH_SHORT).show()
+        val id = downloadManager.enqueue(request)
+        return id
     } catch (e: Exception) {
         Toast.makeText(context, "下载失败: ${e.message}", Toast.LENGTH_SHORT).show()
+        return null
+    }
+}
+
+suspend fun waitForDownload(context: Context, downloadId: Long): Boolean {
+    return withContext(Dispatchers.IO) {
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        var finished = false
+        var success = false
+        while (!finished) {
+            try {
+                val cursor = downloadManager.query(DownloadManager.Query().setFilterById(downloadId))
+                if (cursor != null && cursor.moveToFirst()) {
+                    val statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                    if (statusIndex >= 0) {
+                        val status = cursor.getInt(statusIndex)
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            finished = true
+                            success = true
+                        } else if (status == DownloadManager.STATUS_FAILED) {
+                            finished = true
+                            success = false
+                        }
+                    }
+                    cursor.close()
+                } else {
+                    finished = true
+                }
+            } catch (e: Exception) {
+                finished = true
+            }
+            if (!finished) delay(500)
+        }
+        success
     }
 }
 
