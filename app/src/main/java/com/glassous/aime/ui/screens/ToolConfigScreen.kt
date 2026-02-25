@@ -317,38 +317,38 @@ fun ToolConfigScreen(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Slider(
-                                    modifier = Modifier.weight(1f),
-                                    value = musicSliderValue,
-                                    onValueChange = { value ->
-                                        scope.launch {
-                                            application.toolPreferences.setMusicSearchResultCount(value.roundToInt())
-                                        }
-                                    },
-                                    valueRange = 1f..10f,
-                                    steps = 9
-                                )
-                                Spacer(modifier = Modifier.width(16.dp))
-                                OutlinedTextField(
-                                    value = musicTextValue,
-                                    onValueChange = { newValue ->
-                                        musicTextValue = newValue
-                                        val num = newValue.toIntOrNull()
-                                        if (num != null && num in 1..10) {
-                                            scope.launch {
-                                                application.toolPreferences.setMusicSearchResultCount(num)
-                                            }
-                                        }
-                                    },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    modifier = Modifier.width(80.dp),
-                                    singleLine = true
-                                )
-                            }
-                            Text(
-                                text = "设置搜索结果返回的歌曲条数 (1-10)",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                                     modifier = Modifier.weight(1f),
+                                     value = musicSliderValue,
+                                     onValueChange = { value ->
+                                         scope.launch {
+                                             application.toolPreferences.setMusicSearchResultCount(value.roundToInt())
+                                         }
+                                     },
+                                     valueRange = 1f..10f,
+                                     steps = 0
+                                 )
+                                 Spacer(modifier = Modifier.width(16.dp))
+                                 OutlinedTextField(
+                                     value = musicTextValue,
+                                     onValueChange = { newValue ->
+                                         musicTextValue = newValue
+                                         val num = newValue.toIntOrNull()
+                                         if (num != null && num >= 1) {
+                                             scope.launch {
+                                                 application.toolPreferences.setMusicSearchResultCount(num)
+                                             }
+                                         }
+                                     },
+                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                     modifier = Modifier.width(80.dp),
+                                     singleLine = true
+                                 )
+                             }
+                             Text(
+                                 text = "设置搜索结果返回的歌曲条数",
+                                 style = MaterialTheme.typography.bodySmall,
+                                 color = MaterialTheme.colorScheme.onSurfaceVariant
+                             )
 
                             Spacer(modifier = Modifier.height(16.dp))
 
