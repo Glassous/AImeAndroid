@@ -176,21 +176,26 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when (privacyUiState) {
                         is PrivacyUiState.Agreed -> {
-                            AppNavigation()
+                            androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+                                AppNavigation()
 
-                            // 显示更新对话框
-                            if (showUpdateDialog && updateInfo != null) {
-                                UpdateDialog(
-                                    updateInfo = updateInfo!!,
-                                    onDismiss = {
-                                        showUpdateDialog = false
-                                        versionUpdateViewModel.resetState()
-                                    },
-                                    onDownload = { downloadUrl ->
-                                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
-                                        startActivity(intent)
-                                    }
-                                )
+                                // 显示更新对话框
+                                if (showUpdateDialog && updateInfo != null) {
+                                    UpdateDialog(
+                                        updateInfo = updateInfo!!,
+                                        onDismiss = {
+                                            showUpdateDialog = false
+                                            versionUpdateViewModel.resetState()
+                                        },
+                                        onDownload = { downloadUrl ->
+                                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(downloadUrl))
+                                            startActivity(intent)
+                                        }
+                                    )
+                                }
+
+                                val musicPlayerViewModel: com.glassous.aime.ui.viewmodel.MusicPlayerViewModel = viewModel()
+                                com.glassous.aime.ui.components.GlobalMusicPlayer(viewModel = musicPlayerViewModel)
                             }
                         }
                         is PrivacyUiState.NotAgreed -> {

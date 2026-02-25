@@ -143,6 +143,9 @@ dependencies {
     implementation("io.noties.markwon:ext-strikethrough:4.6.2")
     implementation("io.noties.markwon:html:4.6.2")
 
+    // Image Loading (Coil)
+    implementation("io.coil-kt:coil-compose:2.6.0")
+
     implementation("com.knuddels:jtokkit:1.1.0")
 
     testImplementation(libs.junit)
