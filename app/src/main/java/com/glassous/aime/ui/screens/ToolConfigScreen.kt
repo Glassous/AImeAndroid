@@ -81,6 +81,7 @@ fun ToolConfigScreen(
     val tavilyApiKey by application.toolPreferences.tavilyApiKey.collectAsState(initial = "")
     val tavilyUseProxy by application.toolPreferences.tavilyUseProxy.collectAsState(initial = false)
     val musicSearchSource by application.toolPreferences.musicSearchSource.collectAsState(initial = "wy")
+    val musicSearchResultCount by application.toolPreferences.musicSearchResultCount.collectAsState(initial = 5)
     
     // 沉浸式UI设置
     val view = LocalView.current
@@ -298,6 +299,59 @@ fun ToolConfigScreen(
                         }
                     } else if (toolType == ToolType.MUSIC_SEARCH) {
                         Column(modifier = Modifier.padding(top = 8.dp)) {
+                            Text(
+                                text = "回复歌曲数量: $musicSearchResultCount",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+
+                            val musicSliderValue = musicSearchResultCount.toFloat().coerceIn(1f, 10f)
+                            var musicTextValue by remember { mutableStateOf(musicSearchResultCount.toString()) }
+
+                            LaunchedEffect(musicSearchResultCount) {
+                                musicTextValue = musicSearchResultCount.toString()
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Slider(
+                                    modifier = Modifier.weight(1f),
+                                    value = musicSliderValue,
+                                    onValueChange = { value ->
+                                        scope.launch {
+                                            application.toolPreferences.setMusicSearchResultCount(value.roundToInt())
+                                        }
+                                    },
+                                    valueRange = 1f..10f,
+                                    steps = 9
+                                )
+                                Spacer(modifier = Modifier.width(16.dp))
+                                OutlinedTextField(
+                                    value = musicTextValue,
+                                    onValueChange = { newValue ->
+                                        musicTextValue = newValue
+                                        val num = newValue.toIntOrNull()
+                                        if (num != null && num in 1..10) {
+                                            scope.launch {
+                                                application.toolPreferences.setMusicSearchResultCount(num)
+                                            }
+                                        }
+                                    },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.width(80.dp),
+                                    singleLine = true
+                                )
+                            }
+                            Text(
+                                text = "设置搜索结果返回的歌曲条数 (1-10)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
                             Text(
                                 text = "音乐源选择:",
                                 style = MaterialTheme.typography.bodyMedium,

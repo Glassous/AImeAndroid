@@ -50,7 +50,7 @@ class MusicSearchService(
 ) {
     private val gson = Gson()
 
-    suspend fun search(keyword: String, source: String): List<MusicSearchItem> = withContext(Dispatchers.IO) {
+    suspend fun search(keyword: String, source: String, limit: Int = 10): List<MusicSearchItem> = withContext(Dispatchers.IO) {
         val token = BuildConfig.YUNZHI_API_TOKEN
         if (token.isBlank() || token == "your-yunzhi-api-token") {
             return@withContext emptyList()
@@ -60,7 +60,7 @@ class MusicSearchService(
             // Remove spaces from keyword as requested
             val cleanKeyword = keyword.replace(" ", "")
             val encodedName = URLEncoder.encode(cleanKeyword, "UTF-8")
-            val searchUrl = "https://yunzhiapi.cn/API/hqyyid.php?name=$encodedName&type=$source&page=1&limit=10&token=$token"
+            val searchUrl = "https://yunzhiapi.cn/API/hqyyid.php?name=$encodedName&type=$source&page=1&limit=$limit&token=$token"
             
             val searchReq = Request.Builder().url(searchUrl).build()
             val searchResp = client.newCall(searchReq).execute()

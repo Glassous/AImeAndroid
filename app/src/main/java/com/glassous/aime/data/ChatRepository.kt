@@ -158,13 +158,13 @@ class ChatRepository(
             type = "function",
             function = com.glassous.aime.data.ToolFunction(
                 name = "music_search",
-                description = "搜索全网音乐并获取播放链接。支持网易云、QQ音乐等平台。",
+                description = "搜索音乐。支持按歌曲名、歌手名或“歌手名+歌曲名”进行搜索。例如：“Love Story” 或 “周杰伦 七里香” 或 “陈奕迅”。",
                 parameters = com.glassous.aime.data.ToolFunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "keyword" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "string",
-                            description = "歌曲名称（不含歌手名等任何信息）"
+                            description = "搜索关键词（可以是歌名、歌手名，或两者结合）"
                         )
                     ),
                     required = listOf("keyword")
@@ -552,6 +552,7 @@ class ChatRepository(
                                     if (arguments != null) {
                                         val keyword = safeExtractKeyword(arguments)
                                         val source = toolPreferences.musicSearchSource.first()
+                                        val limit = toolPreferences.musicSearchResultCount.first()
                                         
                                         val sourceName = when (source) {
                                             "wy" -> "网易云"
@@ -566,7 +567,7 @@ class ChatRepository(
                                         val loadingMsg = assistantMessage.copy(content = aggregated.toString())
                                         chatDao.updateMessage(loadingMsg)
 
-                                        val candidates = musicSearchService.search(keyword, source)
+                                        val candidates = musicSearchService.search(keyword, source, limit)
                                         
                                         if (candidates.isEmpty()) {
                                             aggregated.append("未找到相关歌曲。")
@@ -579,14 +580,14 @@ class ChatRepository(
 
                                             val selectionPrompt = """
                                                 用户原始请求: "$fullUserQuery"
-                                                搜索关键词(仅歌名): "$keyword"
+                                                搜索关键词: "$keyword"
                                                 候选歌曲列表:
                                                 $candidatesJson
                                                 
-                                                请从列表中选择最符合用户原始请求的 5 首歌曲。
+                                                请从列表中选择最符合用户原始请求的 $limit 首歌曲。
                                                 必须同时匹配歌曲名和歌手名（如果用户提到了歌手）。
-                                                请只返回这 5 首歌曲的ID，用逗号分隔（例如：id1,id2,id3,id4,id5）。
-                                                如果匹配数量不足 5 首，则返回所有匹配的 ID。
+                                                请只返回这 $limit 首歌曲的ID，用逗号分隔（例如：id1,id2,id3...）。
+                                                如果匹配数量不足 $limit 首，则返回所有匹配的 ID。
                                                 如果都不匹配，返回 "None"。
                                             """.trimIndent()
                                             
@@ -612,7 +613,7 @@ class ChatRepository(
                                             val selectedIdsStr = selectedIdsRaw.replace("\"", "").replace("'", "")
                                             
                                             val finalIds = if (selectedIdsStr.isBlank() || selectedIdsStr.equals("None", ignoreCase = true)) {
-                                                candidates.take(5).mapNotNull { it.id }
+                                                candidates.take(limit).mapNotNull { it.id }
                                             } else {
                                                 selectedIdsStr.split(",").map { it.trim() }.filter { it.isNotEmpty() }
                                             }

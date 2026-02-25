@@ -23,6 +23,7 @@ class ToolPreferences(private val context: Context) {
         val TAVILY_API_KEY = stringPreferencesKey("tavily_api_key")
         val TAVILY_USE_PROXY = booleanPreferencesKey("tavily_use_proxy")
         val MUSIC_SEARCH_SOURCE = stringPreferencesKey("music_search_source")
+        val MUSIC_SEARCH_RESULT_COUNT = intPreferencesKey("music_search_result_count")
     }
 
     // Get all visible tool names
@@ -59,6 +60,11 @@ class ToolPreferences(private val context: Context) {
     val musicSearchSource: Flow<String> = context.dataStore.data
         .map { preferences ->
             preferences[MUSIC_SEARCH_SOURCE] ?: "wy"
+        }
+
+    val musicSearchResultCount: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[MUSIC_SEARCH_RESULT_COUNT] ?: 5
         }
 
     fun getToolVisibility(toolName: String): Flow<Boolean> {
@@ -108,6 +114,12 @@ class ToolPreferences(private val context: Context) {
     suspend fun setMusicSearchSource(source: String) {
         context.dataStore.edit { preferences ->
             preferences[MUSIC_SEARCH_SOURCE] = source
+        }
+    }
+
+    suspend fun setMusicSearchResultCount(count: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[MUSIC_SEARCH_RESULT_COUNT] = count
         }
     }
 }
