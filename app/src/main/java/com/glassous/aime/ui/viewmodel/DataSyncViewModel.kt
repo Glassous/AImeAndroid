@@ -116,6 +116,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     tavilyApiKey = toolPreferences.tavilyApiKey.first(),
                     tavilyUseProxy = toolPreferences.tavilyUseProxy.first(),
                     musicSearchSource = toolPreferences.musicSearchSource.first(),
+                    musicSearchResultCount = toolPreferences.musicSearchResultCount.first(),
                     toolVisibilities = ToolType.getAllTools().associate { it.name to toolPreferences.getToolVisibility(it.name).first() }
                 )
 
@@ -276,6 +277,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                         tool.tavilyApiKey?.let { toolPreferences.setTavilyApiKey(it) }
                         tool.tavilyUseProxy?.let { toolPreferences.setTavilyUseProxy(it) }
                         tool.musicSearchSource?.let { toolPreferences.setMusicSearchSource(it) }
+                        tool.musicSearchResultCount?.let { toolPreferences.setMusicSearchResultCount(it) }
                         tool.toolVisibilities?.forEach { (name, visible) ->
                             toolPreferences.setToolVisibility(name, visible)
                         }

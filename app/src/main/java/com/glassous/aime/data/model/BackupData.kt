@@ -31,6 +31,7 @@ data class ToolSettings(
     @SerializedName("tavilyApiKey") val tavilyApiKey: String? = null,
     @SerializedName("tavilyUseProxy") val tavilyUseProxy: Boolean? = null,
     @SerializedName("musicSearchSource") val musicSearchSource: String? = null,
+    @SerializedName("musicSearchResultCount") val musicSearchResultCount: Int? = null,
     @SerializedName("toolVisibilities") val toolVisibilities: Map<String, Boolean>? = null
 )
 
