@@ -108,7 +108,7 @@ fun MarkdownTable(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(8.dp))
-            .background(Color.Transparent)
+            .background(if (isShareMode) MaterialTheme.colorScheme.surface else Color.Transparent)
             .border(
                 width = 1.dp,
                 color = MaterialTheme.colorScheme.outlineVariant,

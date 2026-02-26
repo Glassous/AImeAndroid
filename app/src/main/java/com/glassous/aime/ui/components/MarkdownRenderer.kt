@@ -298,7 +298,7 @@ fun MarkdownRenderer(
                     )
                 }
                 BlockType.CODE_BLOCK -> {
-                    CodeBlockWithCopy(
+                    MarkdownCodeBlock(
                         code = block.content,
                         language = block.language,
                         textSizeSp = textSizeSp,
@@ -315,7 +315,8 @@ fun MarkdownRenderer(
                         } else {
                             null
                         },
-                        useCardStyle = useCardStyleForHtmlCode
+                        useCardStyle = useCardStyleForHtmlCode,
+                        isShareMode = isShareMode
                     )
                 }
                 BlockType.TABLE -> {

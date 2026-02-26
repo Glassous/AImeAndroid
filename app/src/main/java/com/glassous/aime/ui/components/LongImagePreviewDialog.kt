@@ -153,7 +153,7 @@ fun LongImagePreviewContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                    .background(MaterialTheme.colorScheme.surface)
             ) {
                 AndroidView(
                     factory = { ctx ->
