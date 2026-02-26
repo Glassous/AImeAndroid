@@ -44,12 +44,18 @@ import java.io.File
 import java.io.FileOutputStream
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import com.glassous.aime.ui.components.MessageBubble
 
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -155,78 +161,108 @@ fun LongImagePreviewContent(
                     .verticalScroll(rememberScrollState())
                     .background(MaterialTheme.colorScheme.surface)
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        ComposeView(ctx).apply {
-                            setContent {
-                                MaterialTheme(
-                                     colorScheme = MaterialTheme.colorScheme,
-                                     typography = MaterialTheme.typography
-                                ) {
-                                    Surface(color = MaterialTheme.colorScheme.surface) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(16.dp)
+                // Auto-scaling container logic
+                Layout(
+                    content = {
+                        AndroidView(
+                            factory = { ctx ->
+                                ComposeView(ctx).apply {
+                                    setContent {
+                                        MaterialTheme(
+                                             colorScheme = MaterialTheme.colorScheme,
+                                             typography = MaterialTheme.typography
                                         ) {
-                                            messages.forEach { msg ->
-                                                MessageBubble(
-                                                    message = msg,
-                                                    onShowDetails = {},
-                                                    replyBubbleEnabled = true, // 强制展开深度思考区域
-                                                    chatFontSize = chatFontSize,
-                                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                                    forceExpandReply = true, // 添加参数强制展开
-                                                    isShareMode = true // New parameter
-                                                )
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                            }
-                                            
-                                            // Extract models used in conversation (in order)
-                                            val modelsUsed = messages
-                                                .filter { !it.isFromUser && it.modelDisplayName != null }
-                                                .mapNotNull { it.modelDisplayName }
-                                                .distinct()
-                                            
-                                            // Footer
-                                            Column(
-                                                modifier = Modifier
-                                                    .padding(top = 16.dp)
-                                                    .align(Alignment.CenterHorizontally),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                if (modelsUsed.isNotEmpty()) {
-                                                    Text(
-                                                        text = modelsUsed.joinToString(", "), 
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = Color.Gray,
-                                                        modifier = Modifier.padding(bottom = 4.dp)
-                                                    )
+                                            Surface(color = MaterialTheme.colorScheme.surface) {
+                                                Column(
+                                                    modifier = Modifier
+                                                        .wrapContentWidth(unbounded = true) // Allow content to be wider than screen
+                                                        .padding(16.dp)
+                                                ) {
+                                                    messages.forEach { msg ->
+                                                        MessageBubble(
+                                                            message = msg,
+                                                            onShowDetails = {},
+                                                            replyBubbleEnabled = true, // 强制展开深度思考区域
+                                                            chatFontSize = chatFontSize,
+                                                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                                            forceExpandReply = true, // 添加参数强制展开
+                                                            isShareMode = true // New parameter
+                                                        )
+                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                    }
+                                                    
+                                                    // Extract models used in conversation (in order)
+                                                    val modelsUsed = messages
+                                                        .filter { !it.isFromUser && it.modelDisplayName != null }
+                                                        .mapNotNull { it.modelDisplayName }
+                                                        .distinct()
+                                                    
+                                                    // Footer
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .padding(top = 16.dp)
+                                                            .align(Alignment.CenterHorizontally),
+                                                        horizontalAlignment = Alignment.CenterHorizontally
+                                                    ) {
+                                                        if (modelsUsed.isNotEmpty()) {
+                                                            Text(
+                                                                text = modelsUsed.joinToString(", "), 
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = Color.Gray,
+                                                                modifier = Modifier.padding(bottom = 4.dp)
+                                                            )
+                                                        }
+                                                        Text(
+                                                            text = buildAnnotatedString {
+                                                                withStyle(style = SpanStyle(fontFamily = FontFamily.Default)) {
+                                                                    append("Generated by ")
+                                                                }
+                                                                withStyle(style = SpanStyle(fontFamily = FontFamily.Cursive)) {
+                                                                    append("AIme")
+                                                                }
+                                                            },
+                                                            style = MaterialTheme.typography.labelSmall,
+                                                            color = Color.Gray
+                                                        )
+                                                    }
                                                 }
-                                                Text(
-                                                    text = buildAnnotatedString {
-                                                        withStyle(style = SpanStyle(fontFamily = FontFamily.Default)) {
-                                                            append("Generated by ")
-                                                        }
-                                                        withStyle(style = SpanStyle(fontFamily = FontFamily.Cursive)) {
-                                                            append("AIme")
-                                                        }
-                                                    },
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color.Gray
-                                                )
                                             }
                                         }
                                     }
                                 }
-                            }
+                            },
+                            update = { view ->
+                                captureView = view
+                            },
+                            modifier = Modifier.wrapContentWidth(unbounded = true) // Let AndroidView measure as wide as needed
+                        )
+                    }
+                ) { measurables, constraints ->
+                    // Measure with infinite width constraints to find natural width
+                    val looseConstraints = constraints.copy(maxWidth = Constraints.Infinity)
+                    val placeable = measurables[0].measure(looseConstraints)
+                    
+                    val contentWidth = placeable.width
+                    val availableWidth = constraints.maxWidth
+                    
+                    // Calculate scale factor if content is wider than available width
+                    val scale = if (contentWidth > availableWidth) {
+                        availableWidth.toFloat() / contentWidth.toFloat()
+                    } else {
+                        1f
+                    }
+                    
+                    // Layout with scaled height
+                    val scaledHeight = (placeable.height * scale).roundToInt()
+                    
+                    layout(width = availableWidth, height = scaledHeight) {
+                        placeable.placeWithLayer(0, 0) {
+                            scaleX = scale
+                            scaleY = scale
+                            transformOrigin = TransformOrigin(0f, 0f)
                         }
-                    },
-                    update = { view ->
-                        captureView = view
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                    }
+                }
             }
             
             // Floating Drag Handle

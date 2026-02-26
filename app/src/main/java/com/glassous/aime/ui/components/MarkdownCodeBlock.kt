@@ -38,6 +38,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.unit.sp
 import com.glassous.aime.data.ChatMessage
+import androidx.compose.ui.platform.LocalConfiguration
 
 @Composable
 fun MarkdownCodeBlock(
@@ -197,9 +198,22 @@ fun MarkdownCodeBlock(
         var showShareSheet by remember { mutableStateOf(false) }
         val interactionSource = remember { MutableInteractionSource() }
         
+        val configuration = LocalConfiguration.current
+        val screenWidth = configuration.screenWidthDp.dp
+        // Assuming parent padding is around 32.dp (16 start + 16 end) in LongImagePreviewDialog
+        val minWidth = if (isShareMode) (screenWidth - 32.dp) else 0.dp
+
         Column(
             modifier = modifier
-                .fillMaxWidth()
+                .let { 
+                    if (isShareMode) {
+                         // Use IntrinsicSize.Max to allow expansion beyond screen width
+                         // Use widthIn(min = ...) to ensure it fills at least the screen width (minus padding)
+                         it.width(IntrinsicSize.Max).widthIn(min = minWidth)
+                    } else {
+                         it.fillMaxWidth()
+                    }
+                }
                 .clip(RoundedCornerShape(8.dp))
                 .background(if (isShareMode) MaterialTheme.colorScheme.surface else Color.Transparent)
                 .border(
@@ -241,7 +255,7 @@ fun MarkdownCodeBlock(
                 // Use SyntaxHighlighter for code highlighting
                 val isDarkTheme = androidx.compose.foundation.isSystemInDarkTheme()
                 val highlightedCode = remember(code, language, isDarkTheme) {
-                    SyntaxHighlighter.highlight(code, language, isDarkTheme)
+                    SyntaxHighlighter.highlight(code.trimEnd().toString(), language, isDarkTheme)
                 }
                 
                 Text(
