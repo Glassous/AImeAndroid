@@ -300,56 +300,67 @@ fun MarkdownTable(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.End,
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Share Button
-                    IconButton(
-                        onClick = { showShareSheet = true },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Share,
-                            contentDescription = "Share Table",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    // Left: Label
+                    Text(
+                        text = "表格",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
 
-                    // Copy Button
-                    IconButton(
-                        onClick = {
-                            val csv = parseMarkdownTableToCsv(markdown)
-                            clipboardManager.setText(AnnotatedString(csv))
-                            Toast.makeText(context, "表格已复制为 CSV", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ContentCopy,
-                            contentDescription = "Copy CSV",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
+                    // Right: Buttons
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Share Button
+                        IconButton(
+                            onClick = { showShareSheet = true },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Share Table",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
 
-                    // Download Button
-                    IconButton(
-                        onClick = {
-                            scope.launch {
+                        // Copy Button
+                        IconButton(
+                            onClick = {
                                 val csv = parseMarkdownTableToCsv(markdown)
-                                saveCsvToFile(context, csv)
-                            }
-                        },
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Download CSV",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
+                                clipboardManager.setText(AnnotatedString(csv))
+                                Toast.makeText(context, "表格已复制为 CSV", Toast.LENGTH_SHORT).show()
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = "Copy CSV",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+
+                        // Download Button
+                        IconButton(
+                            onClick = {
+                                scope.launch {
+                                    val csv = parseMarkdownTableToCsv(markdown)
+                                    saveCsvToFile(context, csv)
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Download,
+                                contentDescription = "Download CSV",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
