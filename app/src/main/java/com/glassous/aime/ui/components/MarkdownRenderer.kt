@@ -292,9 +292,10 @@ fun MarkdownRenderer(
                     }
                 }
                 BlockType.MERMAID -> {
-                    MermaidWebView(
+                    MarkdownMermaid(
                         mermaidCode = block.content,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        isShareMode = isShareMode
                     )
                 }
                 BlockType.CODE_BLOCK -> {
