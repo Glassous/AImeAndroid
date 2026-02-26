@@ -26,6 +26,13 @@ import kotlinx.coroutines.withContext
 import java.net.URL
 import android.graphics.BitmapFactory
 import java.net.HttpURLConnection
+import java.net.URLEncoder
+import com.glassous.aime.BuildConfig
+import com.glassous.aime.data.ProxyBlacklist
+import androidx.compose.ui.platform.LocalContext
+import com.glassous.aime.AIMeApplication
+import okhttp3.OkHttpClient
+import okhttp3.Request
 
 data class SearchResult(
     val id: String,
@@ -182,21 +189,57 @@ fun RemoteImage(
 ) {
     var bitmap by remember(url) { mutableStateOf<android.graphics.Bitmap?>(null) }
     
-    LaunchedEffect(url) {
+    // 获取全局配置
+    val context = LocalContext.current
+    val application = context.applicationContext as AIMeApplication
+    val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
+    
+    LaunchedEffect(url, useCloudProxy) {
+        // 如果已经有缓存的bitmap，则跳过加载 (注意：这里只是简单的内存缓存，如果组件重组bitmap会丢失)
+        // 实际的磁盘缓存应该由图片加载库处理，或者在这里手动实现
+        // 由于这里使用的是手动下载，我们暂时依赖 Bitmap 的 remember 状态
+        if (bitmap != null) return@LaunchedEffect
+
         withContext(Dispatchers.IO) {
             try {
-                val connection = URL(url).openConnection() as HttpURLConnection
-                connection.doInput = true
-                connection.connectTimeout = 5000
-                connection.readTimeout = 10000
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-                connection.connect()
-                
-                val stream = connection.inputStream
-                val decoded = BitmapFactory.decodeStream(stream)
-                bitmap = decoded
-                stream.close()
-                connection.disconnect()
+                // 判断是否需要代理
+                val shouldProxy = useCloudProxy && 
+                                BuildConfig.CLOUDFLARE_PROXY_URL.isNotEmpty() && 
+                                ProxyBlacklist.shouldUseProxy(url)
+                                
+                if (shouldProxy) {
+                    // 使用 OkHttp 通过代理请求
+                    val client = OkHttpClient()
+                    val request = Request.Builder()
+                        .url(BuildConfig.CLOUDFLARE_PROXY_URL)
+                        .header("x-target-url", url)
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                        .build()
+                        
+                    val response = client.newCall(request).execute()
+                    if (response.isSuccessful) {
+                        val stream = response.body?.byteStream()
+                        if (stream != null) {
+                            val decoded = BitmapFactory.decodeStream(stream)
+                            bitmap = decoded
+                            stream.close()
+                        }
+                    }
+                } else {
+                    // 直连请求
+                    val connection = URL(url).openConnection() as HttpURLConnection
+                    connection.doInput = true
+                    connection.connectTimeout = 5000
+                    connection.readTimeout = 10000
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                    connection.connect()
+                    
+                    val stream = connection.inputStream
+                    val decoded = BitmapFactory.decodeStream(stream)
+                    bitmap = decoded
+                    stream.close()
+                    connection.disconnect()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
             }

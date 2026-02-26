@@ -48,6 +48,9 @@ android {
         val aliyunFcProxyUrl = envProps.getProperty("ALIYUN_FC_PROXY_URL", "")
         buildConfigField("String", "ALIYUN_FC_PROXY_URL", "\"$aliyunFcProxyUrl\"")
 
+        val cloudflareProxyUrl = envProps.getProperty("CLOUDFLARE_PROXY_URL", "")
+        buildConfigField("String", "CLOUDFLARE_PROXY_URL", "\"$cloudflareProxyUrl\"")
+
         val yunzhiApiToken = envProps.getProperty("YUNZHI_API_TOKEN", "")
         buildConfigField("String", "YUNZHI_API_TOKEN", "\"$yunzhiApiToken\"")
     }

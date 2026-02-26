@@ -39,6 +39,14 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 
+import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import com.glassous.aime.BuildConfig
+import java.net.URLEncoder
+import com.glassous.aime.data.ProxyBlacklist
+
 data class ConsoleLog(
     val type: LogType,
     val message: String,
@@ -49,6 +57,7 @@ enum class LogType {
     LOG, ERROR, WARN, INFO
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HtmlPreviewScreen(
@@ -56,14 +65,16 @@ fun HtmlPreviewScreen(
     onNavigateBack: () -> Unit,
     isSourceMode: Boolean,
     isRestricted: Boolean = false, // 新增参数：受限模式（如网页分析）
-    previewUrl: String? = null // 新增参数：如果存在则直接加载该URL
+    previewUrl: String? = null, // 新增参数：如果存在则直接加载该URL
+    useCloudProxy: Boolean = false
 ) {
     HtmlPreviewContent(
         htmlCode = htmlCode,
         onClose = onNavigateBack,
         initialIsSourceMode = isSourceMode,
         isRestricted = isRestricted,
-        previewUrl = previewUrl
+        previewUrl = previewUrl,
+        useCloudProxy = useCloudProxy
     )
 }
 
@@ -74,10 +85,12 @@ fun HtmlPreviewContent(
     onClose: () -> Unit,
     initialIsSourceMode: Boolean,
     isRestricted: Boolean = false,
-    previewUrl: String? = null
+    previewUrl: String? = null,
+    useCloudProxy: Boolean = false
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    val okHttpClient = remember { OkHttpClient() }
     var isLoading by remember { mutableStateOf(true) }
     // 使用 LaunchedEffect 监听 initialIsSourceMode 的变化，确保外部模式切换能生效
     var localIsSourceMode by remember { mutableStateOf(initialIsSourceMode) }
@@ -281,8 +294,8 @@ fun HtmlPreviewContent(
     // 加载HTML内容
     fun loadHtmlContent() {
         if (previewUrl != null && !localIsSourceMode) {
-            webViewRef?.loadUrl(previewUrl)
-            return
+             // 逻辑移到 LaunchedEffect
+             return
         }
 
         val hasHtml = Regex("<\\s*html", RegexOption.IGNORE_CASE).containsMatchIn(htmlCode)
@@ -432,9 +445,24 @@ ${htmlCode.replace("</script>", "<\\/script>")}
     }
 
     // 当切换到预览模式时加载HTML内容
-    LaunchedEffect(localIsSourceMode, webViewRef, htmlCode) {
+    LaunchedEffect(localIsSourceMode, webViewRef, htmlCode, previewUrl, useCloudProxy) {
         if (!localIsSourceMode) {
-            loadHtmlContent()
+            if (previewUrl != null) {
+                if (useCloudProxy && BuildConfig.CLOUDFLARE_PROXY_URL.isNotEmpty() && ProxyBlacklist.shouldUseProxy(previewUrl)) {
+                    try {
+                         val encodedUrl = URLEncoder.encode(previewUrl, "UTF-8")
+                         val proxyUrl = "${BuildConfig.CLOUDFLARE_PROXY_URL}?url=$encodedUrl"
+                         webViewRef?.loadUrl(proxyUrl)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "代理URL构造失败: ${e.message}", Toast.LENGTH_SHORT).show()
+                        webViewRef?.loadUrl(previewUrl)
+                    }
+                } else {
+                    webViewRef?.loadUrl(previewUrl)
+                }
+            } else {
+                loadHtmlContent()
+            }
         }
     }
 
@@ -621,6 +649,47 @@ ${htmlCode.replace("</script>", "<\\/script>")}
                             webViewClient = object : WebViewClient() {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     isLoading = false
+                                }
+
+                                override fun shouldInterceptRequest(
+                                                view: WebView?,
+                                                request: WebResourceRequest?
+                                            ): WebResourceResponse? {
+                                                val resourceUrl = request?.url?.toString() ?: return null
+                                                
+                                                // 如果没有开启云端代理，或者请求的已经是代理地址本身，则不拦截
+                                                if (!useCloudProxy || resourceUrl.startsWith(BuildConfig.CLOUDFLARE_PROXY_URL)) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
+
+                                                // 检查是否在黑名单中
+                                                if (!ProxyBlacklist.shouldUseProxy(resourceUrl)) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
+
+                                                try {
+                                                    // 使用 OkHttpClient 通过代理地址去拉取子资源
+                                                    val okHttpRequest = Request.Builder()
+                                            .url(BuildConfig.CLOUDFLARE_PROXY_URL) // 请求代理服务器
+                                            .addHeader("x-target-url", resourceUrl) // 告诉代理要抓哪个资源
+                                            .addHeader("User-Agent", request?.requestHeaders?.get("User-Agent") ?: "")
+                                            .build()
+                                            
+                                        val response = okHttpClient.newCall(okHttpRequest).execute()
+                                        
+                                        // 提取正确的 MimeType
+                                        val contentType = response.header("content-type") ?: "text/plain"
+                                        val mimeType = contentType.split(";")[0].trim()
+                                        val encoding = "utf-8"
+                                        
+                                        return WebResourceResponse(
+                                            mimeType,
+                                            encoding,
+                                            response.body?.byteStream()
+                                        )
+                                    } catch (e: Exception) {
+                                        return super.shouldInterceptRequest(view, request)
+                                    }
                                 }
                             }
                             settings.javaScriptEnabled = true

@@ -6,8 +6,12 @@ import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import com.glassous.aime.BuildConfig
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -17,6 +21,7 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material3.*
@@ -32,21 +37,28 @@ import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.delay
 import android.graphics.Bitmap
 
+import com.glassous.aime.data.ProxyBlacklist
+
+import java.net.URLEncoder
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun WebViewPopup(
     url: String,
-    onDismissRequest: () -> Unit
+    onDismissRequest: () -> Unit,
+    useCloudProxy: Boolean = false
 ) {
     val context = LocalContext.current
+    val okHttpClient = remember { OkHttpClient() }
     var visible by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
+    var progress by remember { mutableFloatStateOf(0f) }
 
     // Start enter animation
     LaunchedEffect(Unit) {
         visible = true
     }
-
+    
     // Function to handle dismissal with animation
     fun dismiss() {
         visible = false
@@ -175,6 +187,47 @@ fun WebViewPopup(
                                                 super.onReceivedError(view, request, error)
                                             }
 
+                                            override fun shouldInterceptRequest(
+                                                view: WebView?,
+                                                request: WebResourceRequest?
+                                            ): WebResourceResponse? {
+                                                val resourceUrl = request?.url?.toString() ?: return null
+                                                
+                                                // 如果没有开启云端代理，或者请求的已经是代理地址本身，则不拦截
+                                                if (!useCloudProxy || resourceUrl.startsWith(BuildConfig.CLOUDFLARE_PROXY_URL)) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
+                                                
+                                                // 检查是否在黑名单中
+                                                if (!ProxyBlacklist.shouldUseProxy(resourceUrl)) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
+                                            
+                                                try {
+                                                    // 使用 OkHttpClient 通过代理地址去拉取子资源
+                                                    val okHttpRequest = Request.Builder()
+                                                        .url(BuildConfig.CLOUDFLARE_PROXY_URL) // 请求代理服务器
+                                                        .addHeader("x-target-url", resourceUrl) // 告诉代理要抓哪个资源
+                                                        .addHeader("User-Agent", request?.requestHeaders?.get("User-Agent") ?: "")
+                                                        .build()
+                                                        
+                                                    val response = okHttpClient.newCall(okHttpRequest).execute()
+                                                    
+                                                    // 提取正确的 MimeType
+                                                    val contentType = response.header("content-type") ?: "text/plain"
+                                                    val mimeType = contentType.split(";")[0].trim()
+                                                    val encoding = "utf-8"
+                                                    
+                                                    return WebResourceResponse(
+                                                        mimeType,
+                                                        encoding,
+                                                        response.body?.byteStream()
+                                                    )
+                                                } catch (e: Exception) {
+                                                    return super.shouldInterceptRequest(view, request)
+                                                }
+                                            }
+
                                             override fun shouldOverrideUrlLoading(
                                                 view: WebView?,
                                                 request: WebResourceRequest?
@@ -209,13 +262,41 @@ fun WebViewPopup(
                                                 return true
                                             }
                                         }
-                                        webChromeClient = WebChromeClient()
-                                        loadUrl(url)
+                                        webChromeClient = object : WebChromeClient() {
+                                            override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                                progress = newProgress / 100f
+                                                super.onProgressChanged(view, newProgress)
+                                            }
+                                        }
+                                        
+                                        // Initial load
+                                        val loadUrl = if (useCloudProxy && BuildConfig.CLOUDFLARE_PROXY_URL.isNotEmpty() && ProxyBlacklist.shouldUseProxy(url)) {
+                                            try {
+                                                val encodedUrl = URLEncoder.encode(url, "UTF-8")
+                                                "${BuildConfig.CLOUDFLARE_PROXY_URL}?url=$encodedUrl"
+                                            } catch (e: Exception) {
+                                                url
+                                            }
+                                        } else {
+                                            url
+                                        }
+                                        loadUrl(loadUrl)
                                     }
                                 },
                                 update = { webView ->
-                                    if (webView.url != url && webView.originalUrl != url) {
-                                        webView.loadUrl(url)
+                                    val targetUrl = if (useCloudProxy && BuildConfig.CLOUDFLARE_PROXY_URL.isNotEmpty() && ProxyBlacklist.shouldUseProxy(url)) {
+                                        try {
+                                            val encodedUrl = URLEncoder.encode(url, "UTF-8")
+                                            "${BuildConfig.CLOUDFLARE_PROXY_URL}?url=$encodedUrl"
+                                        } catch (e: Exception) {
+                                            url
+                                        }
+                                    } else {
+                                        url
+                                    }
+                                    
+                                    if (webView.url != targetUrl && webView.originalUrl != targetUrl) {
+                                        webView.loadUrl(targetUrl)
                                     }
                                 },
                                 modifier = Modifier
@@ -225,10 +306,22 @@ fun WebViewPopup(
 
                             // Expressive Loading Indicator
                             if (isLoading) {
-                                LoadingIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                                Column(
+                                    modifier = Modifier.align(Alignment.Center),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    LoadingIndicator(
+                                        modifier = Modifier.size(48.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Spacer(modifier = Modifier.height(16.dp))
+                                    LinearProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.width(120.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                                    )
+                                }
                             }
                         }
                     }

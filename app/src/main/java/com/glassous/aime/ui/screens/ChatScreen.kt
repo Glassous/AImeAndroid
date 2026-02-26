@@ -116,6 +116,7 @@ fun ChatScreen(
         factory = ToolSelectionViewModelFactory(application.toolPreferences)
     )
     val focusManager = LocalFocusManager.current
+    val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
 
     val conversations by chatViewModel.conversations.collectAsState()
     val currentMessages by chatViewModel.currentMessages.collectAsState()
@@ -1194,7 +1195,8 @@ fun ChatScreen(
                     onClose = { showHtmlPreviewSideSheet = false },
                     initialIsSourceMode = htmlPreviewSideSheetIsSourceMode,
                     isRestricted = htmlPreviewSideSheetIsRestricted,
-                    previewUrl = htmlPreviewSideSheetUrl
+                    previewUrl = htmlPreviewSideSheetUrl,
+                    useCloudProxy = useCloudProxy
                 )
             }
         }
@@ -1256,7 +1258,8 @@ fun ChatScreen(
     if (currentUrl != null) {
         WebViewPopup(
             url = currentUrl!!,
-            onDismissRequest = { currentUrl = null }
+            onDismissRequest = { currentUrl = null },
+            useCloudProxy = useCloudProxy
         )
     }
 

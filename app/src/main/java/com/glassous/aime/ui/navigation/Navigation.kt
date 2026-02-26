@@ -1,6 +1,8 @@
 package com.glassous.aime.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
@@ -121,12 +123,14 @@ fun AppNavigation() {
         composable(
             route = Screen.HtmlPreview.route
         ) {
+            val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
             HtmlPreviewScreen(
                 htmlCode = htmlPreviewViewModel.htmlCode.value.orEmpty(),
                 onNavigateBack = { navController.popBackStack() },
                 isSourceMode = htmlPreviewViewModel.isSourceMode.value ?: false,
                 isRestricted = htmlPreviewViewModel.isRestrictedMode.value ?: false,
-                previewUrl = htmlPreviewViewModel.previewUrl.value
+                previewUrl = htmlPreviewViewModel.previewUrl.value,
+                useCloudProxy = useCloudProxy
             )
         }
     }
