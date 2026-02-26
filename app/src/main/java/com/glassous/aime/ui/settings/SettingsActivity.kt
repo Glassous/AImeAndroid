@@ -212,7 +212,7 @@ fun SettingsContent(
     val autoCheckUpdateEnabled by versionUpdateViewModel.autoCheckUpdateEnabled.collectAsState()
 
     // Data Sync Launchers
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) {
             syncViewModel.exportToUri(context, uri) { ok, msg ->
                 scope.launch { snackbarHostState.showSnackbar(msg) }
@@ -778,12 +778,12 @@ fun SettingsContent(
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedButton(
-                            onClick = { exportLauncher.launch("aime-backup-${System.currentTimeMillis()}.json") },
+                            onClick = { exportLauncher.launch("aime-backup-${System.currentTimeMillis()}.zip") },
                             modifier = Modifier.weight(1f)
                         ) { Text("导出") }
 
                         OutlinedButton(
-                            onClick = { importLauncher.launch(arrayOf("application/json")) },
+                            onClick = { importLauncher.launch(arrayOf("application/zip", "application/json")) },
                             modifier = Modifier.weight(1f)
                         ) { Text("导入") }
                     }

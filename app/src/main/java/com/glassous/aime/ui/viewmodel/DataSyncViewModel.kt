@@ -235,33 +235,45 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
 
                 // Try to read as ZIP
                 try {
-                    val zipIn = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile))
-                    var entry = zipIn.nextEntry
-                    while (entry != null) {
-                        if (entry.name == "backup.json") {
-                            // Read JSON content
-                            val baos = java.io.ByteArrayOutputStream()
-                            zipIn.copyTo(baos)
-                            jsonContent = baos.toString("UTF-8")
-                        } else if (entry.name.startsWith("images/")) {
-                            // Extract image
-                            val fileName = java.io.File(entry.name).name
-                            val targetFile = java.io.File(imagesDir, fileName)
-                            java.io.FileOutputStream(targetFile).use { out ->
-                                zipIn.copyTo(out)
+                    java.util.zip.ZipFile(tempFile).use { zipFile ->
+                        val entries = zipFile.entries()
+                        while (entries.hasMoreElements()) {
+                            val entry = entries.nextElement()
+                            if (entry.name == "backup.json") {
+                                // Read JSON content
+                                zipFile.getInputStream(entry).use { input ->
+                                    jsonContent = input.bufferedReader().readText()
+                                }
+                            } else if (entry.name.startsWith("images/") && !entry.isDirectory) {
+                                // Extract image
+                                val fileName = java.io.File(entry.name).name
+                                if (fileName.isNotEmpty()) {
+                                    val targetFile = java.io.File(imagesDir, fileName)
+                                    zipFile.getInputStream(entry).use { input ->
+                                        java.io.FileOutputStream(targetFile).use { output ->
+                                            input.copyTo(output)
+                                        }
+                                    }
+                                }
                             }
                         }
-                        zipIn.closeEntry()
-                        entry = zipIn.nextEntry
                     }
-                    zipIn.close()
                 } catch (e: Exception) {
                     // Not a valid zip or error reading zip
+                    e.printStackTrace()
                 }
 
                 // If not zip or failed, try reading as plain JSON
                 if (jsonContent == null) {
-                    jsonContent = tempFile.readText()
+                    try {
+                        jsonContent = tempFile.readText()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                if (jsonContent == null) {
+                    throw IllegalArgumentException("无法读取备份文件内容")
                 }
 
                 // 检测文件格式
