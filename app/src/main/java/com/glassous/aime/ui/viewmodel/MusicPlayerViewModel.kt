@@ -83,23 +83,46 @@ class MusicPlayerViewModel : ViewModel() {
         }
     }
 
-    fun playMusic(music: MusicInfo, list: List<MusicInfo> = emptyList()) {
+    fun playMusic(music: MusicInfo, list: List<MusicInfo> = emptyList(), autoExpand: Boolean = true) {
         if (list.isNotEmpty()) {
             _playlist.value = list
         }
         
-        // If it's the same music, just ensure player is shown
+        // If it's the same music, just ensure player is shown if autoExpand is true
         if (_currentMusic.value?.url == music.url) {
-            _showPlayer.value = true
-            _isMinimized.value = false
-            _showMiniPlayer.value = false
+            if (autoExpand) {
+                _showPlayer.value = true
+                _isMinimized.value = false
+                _showMiniPlayer.value = false
+            }
             return
         }
 
         _currentMusic.value = music
-        _showPlayer.value = true
-        _isMinimized.value = false
-        _showMiniPlayer.value = false
+        if (autoExpand) {
+            _showPlayer.value = true
+            _isMinimized.value = false
+            _showMiniPlayer.value = false
+        } else {
+             // Keep current state
+             // If already minimized, stay minimized (showMiniPlayer=true, showPlayer=false)
+             // If already expanded, stay expanded? No, if autoExpand=false, usually we are in minimized mode.
+             // But let's respect _isMinimized state.
+             if (_isMinimized.value) {
+                _showPlayer.value = false
+                _showMiniPlayer.value = true
+             } else {
+                 // If not minimized (maybe closed?), and we play music without autoExpand,
+                 // should we show mini player?
+                 // If closed, _isMinimized is false.
+                 // So if we play in background, maybe show mini player?
+                 _showPlayer.value = false
+                 _showMiniPlayer.value = true
+                 _isMinimized.value = true
+             }
+        }
+
+        
         _error.value = null
         _isBuffering.value = true
         
@@ -152,7 +175,8 @@ class MusicPlayerViewModel : ViewModel() {
         val index = currentList.indexOfFirst { it.url == current.url }
         if (index != -1) {
             val nextIndex = (index + 1) % currentList.size
-            playMusic(currentList[nextIndex])
+            // Don't expand if currently minimized
+            playMusic(currentList[nextIndex], autoExpand = !_isMinimized.value)
         }
     }
 
@@ -164,7 +188,8 @@ class MusicPlayerViewModel : ViewModel() {
         val index = currentList.indexOfFirst { it.url == current.url }
         if (index != -1) {
             val prevIndex = (index - 1 + currentList.size) % currentList.size
-            playMusic(currentList[prevIndex])
+            // Don't expand if currently minimized
+            playMusic(currentList[prevIndex], autoExpand = !_isMinimized.value)
         }
     }
 

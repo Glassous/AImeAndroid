@@ -32,20 +32,31 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.asAndroidPath
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -55,6 +66,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.regex.Pattern
+import androidx.compose.foundation.interaction.MutableInteractionSource
 
 data class MusicInfo(
     val name: String,
@@ -117,6 +129,7 @@ fun GlobalMusicPlayer(
     val showMiniPlayer by viewModel.showMiniPlayer.collectAsState()
     val currentMusic by viewModel.currentMusic.collectAsState()
     val progress by viewModel.progress.collectAsState()
+    val isPlaying by viewModel.isPlaying.collectAsState()
 
     // Mini Player
     // 使用 Box 作为容器以便定位到右上角
@@ -134,7 +147,11 @@ fun GlobalMusicPlayer(
                 MiniPlayer(
                     music = music,
                     progress = progress,
-                    onClick = { viewModel.expand() }
+                    isPlaying = isPlaying,
+                    onClick = { viewModel.expand() },
+                    onPrev = { viewModel.playPrev() },
+                    onNext = { viewModel.playNext() },
+                    onTogglePlay = { viewModel.togglePlayPause() }
                 )
             }
         }
@@ -149,27 +166,36 @@ fun GlobalMusicPlayer(
     }
 }
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun MiniPlayer(
     music: MusicInfo,
     progress: Float,
-    onClick: () -> Unit
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onPrev: () -> Unit,
+    onNext: () -> Unit,
+    onTogglePlay: () -> Unit
 ) {
     val primaryColor = MaterialTheme.colorScheme.primary
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
-    val density = LocalDensity.current
+    var showControls by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier
             .size(44.dp) // 适应 TopBar 高度
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { showControls = true },
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ),
         contentAlignment = Alignment.Center
     ) {
         // 进度条背景
         androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize().padding(2.dp)) {
             val strokeWidth = 2.dp.toPx()
-            // 40dp (44 - 4) content size. Radius 12dp relative to 40dp? 
-            // Previous was 16dp on 60dp. 16/60 = 0.26. 0.26 * 40 = 10.4. Let's use 10dp.
             val cornerRadius = 10.dp.toPx()
             
             val path = Path().apply {
@@ -195,16 +221,18 @@ fun MiniPlayer(
                 val length = pathMeasure.length
                 val segmentPath = Path()
                 
-                // Start from top center (approximate) or just start from beginning of path (top-left usually)
-                // To make it look like circular progress starting from top, we can rotate the canvas -90 degrees?
-                // Or just accept the path start. Let's just draw it.
-                
                 pathMeasure.getSegment(0f, length * progress, segmentPath, true)
-                drawPath(
-                    path = segmentPath,
-                    color = primaryColor,
-                    style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
-                )
+                
+                // Reverse direction (Counter-Clockwise) by flipping horizontally
+                withTransform({
+                    scale(scaleX = -1f, scaleY = 1f, pivot = center)
+                }) {
+                    drawPath(
+                        path = segmentPath,
+                        color = primaryColor,
+                        style = Stroke(width = strokeWidth, cap = StrokeCap.Round)
+                    )
+                }
             }
         }
 
@@ -218,6 +246,17 @@ fun MiniPlayer(
                 url = music.pic,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
+            )
+        }
+        
+        if (showControls) {
+            MusicControlPopup(
+                visible = showControls,
+                onDismiss = { showControls = false },
+                onPrev = onPrev,
+                onNext = onNext,
+                onPauseToggle = onTogglePlay,
+                isPlaying = isPlaying
             )
         }
     }
