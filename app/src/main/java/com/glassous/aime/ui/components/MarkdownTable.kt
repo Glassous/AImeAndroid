@@ -72,6 +72,7 @@ import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.input.pointer.positionChange
+import androidx.compose.ui.unit.isFinite
 
 data class TableData(
     val headers: List<String>,
@@ -95,6 +96,7 @@ fun MarkdownTable(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     
     val tableData = remember(markdown) { parseMarkdownTable(markdown) }
     val horizontalScrollState = rememberScrollState()
@@ -133,7 +135,9 @@ fun MarkdownTable(
                     }
                 }
         ) {
-            val screenWidth = maxWidth
+            // 在分享模式下，如果 constraints 是无限的（LongImagePreviewDialog），使用屏幕宽度作为基准
+            val actualMaxWidth = if (maxWidth.isFinite) maxWidth else configuration.screenWidthDp.dp
+            val screenWidth = actualMaxWidth
             
             // In share mode, we want to ensure the table is fully visible and not scrolling
             // So we might need to adjust column widths to fit or allow expansion
@@ -156,7 +160,7 @@ fun MarkdownTable(
             // Let's implement a "Fit to Width" strategy for share mode if possible, 
             // OR simply calculate widths such that they fit.
             
-            val minColWidth = if (isShareMode) 50.dp else 150.dp // Relax min width in share mode to allow fitting
+            val minColWidth = if (isShareMode) 80.dp else 150.dp // 增加分享模式下的最小宽度，避免太窄
             val colCount = if (tableData.headers.isNotEmpty()) tableData.headers.size else 1
             val totalMinWidth = minColWidth * colCount
             
@@ -400,8 +404,13 @@ private fun Cell(
         contentAlignment = Alignment.CenterStart
     ) {
         AndroidView(
+            modifier = Modifier.fillMaxWidth(),
             factory = { ctx ->
                 TextView(ctx).apply {
+                    layoutParams = android.view.ViewGroup.LayoutParams(
+                        android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                        android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+                    )
                     setTextColor(textColor.toArgb())
                     textSize = textSizeSp
                     setOnClickListener { onClick() }
@@ -416,6 +425,10 @@ private fun Cell(
                 // Preprocess text to ensure consistent behavior with main renderer (e.g. latex $ -> $$, sup/sub)
                 val processedText = preprocessText(text, true)
                 markwon.setMarkdown(tv, processedText)
+
+                // 修复表格内部分宽度失效问题：显式启用换行并设置最大宽度
+                // 此功能原本是为代码块禁用换行设计的，但表格需要换行
+                tv.setHorizontallyScrolling(false)
                 
                 // Enforce header bold styling
                 if (isHeader) {
