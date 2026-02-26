@@ -17,7 +17,8 @@ data class ChatMessage(
     val modelDisplayName: String? = null,
     val isDeleted: Boolean = false,
     val deletedAt: Date? = null,
-    val errorDetails: String? = null
+    val errorDetails: String? = null,
+    val imagePaths: List<String> = emptyList()
 )
 
 @Entity(tableName = "conversations")

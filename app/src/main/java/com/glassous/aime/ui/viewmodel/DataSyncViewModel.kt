@@ -138,15 +138,26 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
 
                 val conversations = chatDao.getAllConversations().first()
                 val backupConversations = mutableListOf<BackupConversation>()
+                val imagesToZip = mutableSetOf<String>()
+
                 for (c in conversations) {
                     val msgs = chatDao.getMessagesForConversation(c.id).first()
                     val backupMessages = msgs.map { m ->
+                        val relativeImagePaths = m.imagePaths.mapNotNull { absolutePath ->
+                            val file = java.io.File(absolutePath)
+                            if (file.exists()) {
+                                imagesToZip.add(absolutePath)
+                                "images/${file.name}"
+                            } else null
+                        }
+
                         BackupMessage(
                             content = m.content,
                             isFromUser = m.isFromUser,
                             timestamp = m.timestamp.time,
                             isError = m.isError,
-                            modelDisplayName = m.modelDisplayName
+                            modelDisplayName = m.modelDisplayName,
+                            imagePaths = relativeImagePaths.ifEmpty { null }
                         )
                     }
                     backupConversations.add(
@@ -161,7 +172,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                 }
 
                 val backup = BackupData(
-                    version = 1,
+                    version = 2, // Incremented version
                     exportedAt = System.currentTimeMillis(),
                     modelGroups = groups,
                     models = models,
@@ -170,12 +181,35 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     appSettings = appSettings
                 )
 
-                context.contentResolver.openOutputStream(uri)?.use { os ->
-                    OutputStreamWriter(os, Charsets.UTF_8).use { writer ->
-                        gson.toJson(backup, writer)
-                    }
-                } ?: throw IllegalStateException("无法打开导出文件")
+                // Create temp zip file
+                val tempZipFile = java.io.File.createTempFile("backup", ".zip", context.cacheDir)
+                val zipOut = java.util.zip.ZipOutputStream(java.io.FileOutputStream(tempZipFile))
 
+                // Write backup.json
+                val jsonEntry = java.util.zip.ZipEntry("backup.json")
+                zipOut.putNextEntry(jsonEntry)
+                val writer = java.io.OutputStreamWriter(zipOut, Charsets.UTF_8)
+                gson.toJson(backup, writer)
+                writer.flush()
+                zipOut.closeEntry()
+
+                // Write images
+                imagesToZip.forEach { absolutePath ->
+                    val file = java.io.File(absolutePath)
+                    val entry = java.util.zip.ZipEntry("images/${file.name}")
+                    zipOut.putNextEntry(entry)
+                    java.io.FileInputStream(file).use { it.copyTo(zipOut) }
+                    zipOut.closeEntry()
+                }
+
+                zipOut.close()
+
+                // Copy temp zip to uri
+                context.contentResolver.openOutputStream(uri)?.use { os ->
+                    java.io.FileInputStream(tempZipFile).use { it.copyTo(os) }
+                }
+                
+                tempZipFile.delete()
                 onResult(true, "导出成功")
             } catch (e: Exception) {
                 onResult(false, "导出失败：${e.message}")
@@ -187,15 +221,51 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
     fun importFromUri(context: Context, uri: Uri, onResult: (Boolean, String) -> Unit) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // 读取文件内容
-                val jsonContent = context.contentResolver.openInputStream(uri)?.use { ins ->
-                    InputStreamReader(ins, Charsets.UTF_8).use { reader ->
-                        reader.readText()
+                // Copy to temp file first to handle both ZIP and JSON
+                val tempFile = java.io.File.createTempFile("import", ".tmp", context.cacheDir)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    java.io.FileOutputStream(tempFile).use { output ->
+                        input.copyTo(output)
                     }
-                } ?: throw IllegalStateException("无法读取导入文件")
+                }
+
+                var jsonContent: String? = null
+                val imagesDir = java.io.File(context.filesDir, "images")
+                if (!imagesDir.exists()) imagesDir.mkdirs()
+
+                // Try to read as ZIP
+                try {
+                    val zipIn = java.util.zip.ZipInputStream(java.io.FileInputStream(tempFile))
+                    var entry = zipIn.nextEntry
+                    while (entry != null) {
+                        if (entry.name == "backup.json") {
+                            // Read JSON content
+                            val baos = java.io.ByteArrayOutputStream()
+                            zipIn.copyTo(baos)
+                            jsonContent = baos.toString("UTF-8")
+                        } else if (entry.name.startsWith("images/")) {
+                            // Extract image
+                            val fileName = java.io.File(entry.name).name
+                            val targetFile = java.io.File(imagesDir, fileName)
+                            java.io.FileOutputStream(targetFile).use { out ->
+                                zipIn.copyTo(out)
+                            }
+                        }
+                        zipIn.closeEntry()
+                        entry = zipIn.nextEntry
+                    }
+                    zipIn.close()
+                } catch (e: Exception) {
+                    // Not a valid zip or error reading zip
+                }
+
+                // If not zip or failed, try reading as plain JSON
+                if (jsonContent == null) {
+                    jsonContent = tempFile.readText()
+                }
 
                 // 检测文件格式
-                val format = BackupDataConverter.detectBackupFormat(jsonContent)
+                val format = BackupDataConverter.detectBackupFormat(jsonContent!!)
                 
                 val backup: BackupData = when (format) {
                     BackupFormat.COMPATIBLE -> {
@@ -290,7 +360,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
 
-                // 导入会话与消息（覆盖模式）
+                // 导入会话与消息
                 backup.conversations.forEach { bc ->
                     val newConversationId = chatDao.insertConversation(
                         Conversation(
@@ -302,6 +372,12 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     )
                     // 插入消息
                     bc.messages.forEach { bm ->
+                        // Restore absolute image paths
+                        val restoredImagePaths = bm.imagePaths?.map { relativePath ->
+                            val fileName = java.io.File(relativePath).name
+                            java.io.File(imagesDir, fileName).absolutePath
+                        } ?: emptyList()
+
                         chatDao.insertMessage(
                             ChatMessage(
                                 conversationId = newConversationId,
@@ -309,14 +385,15 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                                 isFromUser = bm.isFromUser,
                                 timestamp = Date(bm.timestamp),
                                 isError = bm.isError ?: false,
-                                modelDisplayName = bm.modelDisplayName
+                                modelDisplayName = bm.modelDisplayName,
+                                imagePaths = restoredImagePaths
                             )
                         )
                     }
                 }
 
+                tempFile.delete()
                 
-
                 val formatName = when (format) {
                     BackupFormat.COMPATIBLE -> "兼容格式"
                     BackupFormat.INTERNAL -> "标准格式"
@@ -324,6 +401,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                 }
                 onResult(true, "导入成功 ($formatName)")
             } catch (e: Exception) {
+                e.printStackTrace()
                 onResult(false, "导入失败：${e.message}")
             }
         }

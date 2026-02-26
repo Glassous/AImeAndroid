@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Settings
@@ -65,6 +66,7 @@ fun ModelSelectionBottomSheet(
     onSyncResult: ((Boolean, String) -> Unit)? = null,
     selectedTool: Tool? = null,
     onToolSelectionClick: () -> Unit = {},
+    onAttachmentSelectionClick: () -> Unit = {},
     autoProcessing: Boolean = false,
     autoSelected: Boolean = false,
     toolCallInProgress: Boolean = false,
@@ -89,6 +91,7 @@ fun ModelSelectionBottomSheet(
             onSyncResult = onSyncResult,
             selectedTool = selectedTool,
             onToolSelectionClick = onToolSelectionClick,
+            onAttachmentSelectionClick = onAttachmentSelectionClick,
             autoProcessing = autoProcessing,
             autoSelected = autoSelected,
             toolCallInProgress = toolCallInProgress,
@@ -105,6 +108,7 @@ fun ModelSelectionContent(
     onSyncResult: ((Boolean, String) -> Unit)? = null,
     selectedTool: Tool? = null,
     onToolSelectionClick: () -> Unit = {},
+    onAttachmentSelectionClick: () -> Unit = {},
     autoProcessing: Boolean = false,
     autoSelected: Boolean = false,
     toolCallInProgress: Boolean = false,
@@ -319,6 +323,7 @@ fun ModelSelectionContent(
                                 // 打开工具选择弹窗
                                 onToolSelectionClick()
                             },
+                            onAttachmentSelectionClick = onAttachmentSelectionClick,
                             onBuiltInModelClick = { model ->
                                 viewModel.selectModel(model, onSyncResult)
                             },
@@ -394,6 +399,56 @@ private fun ToolSelectionItem(
 }
 
 /**
+ * 附件选择项
+ */
+@Composable
+private fun AttachmentSelectionItem(
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // 图标
+            Icon(
+                imageVector = Icons.Filled.AttachFile,
+                contentDescription = "上传附件",
+                modifier = Modifier.size(24.dp),
+                tint = MaterialTheme.colorScheme.primary
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // 名称
+            Text(
+                text = "上传附件",
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f)
+            )
+            
+            // 右箭头
+            Icon(
+                imageVector = Icons.Filled.ChevronRight,
+                contentDescription = "选择",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+/**
  * 分组列表
  */
 @Composable
@@ -401,6 +456,7 @@ private fun GroupList(
     groups: List<ModelGroup>,
     onGroupClick: (ModelGroup) -> Unit,
     onToolSelectionClick: () -> Unit,
+    onAttachmentSelectionClick: () -> Unit,
     onBuiltInModelClick: (Model) -> Unit,
     showToolSelection: Boolean
 ) {
@@ -416,6 +472,13 @@ private fun GroupList(
                     onClick = onToolSelectionClick
                 )
             }
+        }
+
+        // 附件上传模块
+        item {
+            AttachmentSelectionItem(
+                onClick = onAttachmentSelectionClick
+            )
         }
 
         // 内置AIme模型

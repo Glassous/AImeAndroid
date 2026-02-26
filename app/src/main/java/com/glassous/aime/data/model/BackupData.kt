@@ -95,5 +95,6 @@ data class BackupMessage(
     @SerializedName("isFromUser") val isFromUser: Boolean,
     @SerializedName("timestamp") val timestamp: Long,
     @SerializedName("isError") val isError: Boolean?,
-    @SerializedName("modelDisplayName") val modelDisplayName: String? = null
+    @SerializedName("modelDisplayName") val modelDisplayName: String? = null,
+    @SerializedName("imagePaths") val imagePaths: List<String>? = null
 )

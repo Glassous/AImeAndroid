@@ -182,6 +182,7 @@ class ChatRepository(
     suspend fun sendMessage(
         conversationId: Long,
         message: String,
+        imagePaths: List<String> = emptyList(),
         selectedTool: Tool? = null,
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
@@ -191,7 +192,7 @@ class ChatRepository(
             var webAnalysisToolUsed = false
 
             // Client-side handling for Web Analysis
-            if (selectedTool?.type == ToolType.WEB_ANALYSIS) {
+            if (selectedTool?.type == ToolType.WEB_ANALYSIS && imagePaths.isEmpty()) {
                 // 1. Extract URL
                 val url = safeExtractUrl(null, message)
                 // Remove url != message check to allow single URL messages
@@ -241,7 +242,8 @@ class ChatRepository(
                 conversationId = conversationId,
                 content = processedMessage,
                 isFromUser = true,
-                timestamp = Date()
+                timestamp = Date(),
+                imagePaths = imagePaths
             )
             val insertedId = chatDao.insertMessage(userMessage)
 
@@ -308,17 +310,19 @@ class ChatRepository(
             val history = chatDao.getMessagesForConversation(conversationId).first()
             val baseMessages = history
                 .filter { !it.isError }
-                .map {
-                    OpenAiChatMessage(
-                        role = if (it.isFromUser) "user" else "assistant",
-                        content = it.content
-                    )
-                }
+                .map { toOpenAiMessage(it) }
                 .toMutableList()
             
             val isMessageIncluded = history.any { it.id == insertedId }
             if (!isMessageIncluded) {
-                baseMessages.add(OpenAiChatMessage(role = "user", content = processedMessage))
+                val userMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = processedMessage,
+                    isFromUser = true,
+                    timestamp = Date(),
+                    imagePaths = imagePaths
+                )
+                baseMessages.add(toOpenAiMessage(userMsg))
             }
             
             if (webAnalysisToolUsed) {
@@ -1368,12 +1372,7 @@ class ChatRepository(
             // 构造上下文
             val contextMessagesBase = history.take(prevUserIndex + 1)
                 .filter { !it.isError }
-                .map {
-                    OpenAiChatMessage(
-                        role = if (it.isFromUser) "user" else "assistant",
-                        content = it.content
-                    )
-                }
+                .map { toOpenAiMessage(it) }
             val contextMessages = limitContext(contextMessagesBase)
             val messagesWithBias = contextMessages.toMutableList()
             
@@ -1542,12 +1541,7 @@ class ChatRepository(
             // 构造到该用户消息为止的上下文（包含编辑后的用户消息）并应用限制
             val contextMessagesBase = history.take(targetIndex) // 不含旧用户消息
                 .filter { !it.isError }
-                .map {
-                    OpenAiChatMessage(
-                        role = if (it.isFromUser) "user" else "assistant",
-                        content = it.content
-                    )
-                }
+                .map { toOpenAiMessage(it) }
                 .toMutableList()
             contextMessagesBase.add(OpenAiChatMessage(role = "user", content = trimmed))
             val contextMessages = limitContext(contextMessagesBase)
@@ -2002,6 +1996,71 @@ class ChatRepository(
             } catch (e: Exception) {
                 null
             }
+        }
+    }
+
+    private fun toOpenAiMessage(message: ChatMessage): OpenAiChatMessage {
+        val content: Any = if (message.imagePaths.isNotEmpty()) {
+            val parts = mutableListOf<OpenAiContentPart>()
+            if (message.content.isNotBlank()) {
+                parts.add(OpenAiContentPart(type = "text", text = message.content))
+            }
+            message.imagePaths.forEach { path ->
+                val base64 = encodeImageToBase64(path)
+                if (base64 != null) {
+                    parts.add(OpenAiContentPart(
+                        type = "image_url",
+                        imageUrl = OpenAiImageUrl(url = "data:image/jpeg;base64,$base64")
+                    ))
+                }
+            }
+            if (parts.isEmpty()) message.content else parts
+        } else {
+            message.content
+        }
+        return OpenAiChatMessage(
+            role = if (message.isFromUser) "user" else "assistant",
+            content = content
+        )
+    }
+
+    private fun encodeImageToBase64(path: String): String? {
+        return try {
+            val file = java.io.File(path)
+            if (!file.exists()) return null
+            val bitmap = android.graphics.BitmapFactory.decodeFile(path) ?: return null
+            
+            // Resize if too large (e.g. max 1024px)
+            val maxDim = 1024
+            val scale = if (bitmap.width > maxDim || bitmap.height > maxDim) {
+                val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                if (ratio > 1) {
+                    maxDim.toFloat() / bitmap.width
+                } else {
+                    maxDim.toFloat() / bitmap.height
+                }
+            } else {
+                1f
+            }
+            
+            val finalBitmap = if (scale < 1f) {
+                android.graphics.Bitmap.createScaledBitmap(
+                    bitmap,
+                    (bitmap.width * scale).toInt(),
+                    (bitmap.height * scale).toInt(),
+                    true
+                )
+            } else {
+                bitmap
+            }
+
+            val outputStream = java.io.ByteArrayOutputStream()
+            finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val bytes = outputStream.toByteArray()
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }

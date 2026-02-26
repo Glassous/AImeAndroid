@@ -22,12 +22,18 @@ import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
 
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LoadingIndicator
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.filled.Close
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -46,7 +52,10 @@ fun ChatInput(
     modifier: Modifier = Modifier,
     overlayAlpha: Float = 0.5f,
     // 新增：输入框内部背景透明度（默认与当前实现一致）
-    innerAlpha: Float = 0.9f
+    innerAlpha: Float = 0.9f,
+    // 新增：附件预览
+    attachedImages: List<String> = emptyList(),
+    onRemoveAttachment: (String) -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     // 固定发送按钮高度为输入框初始高度（硬编码）
@@ -60,19 +69,67 @@ fun ChatInput(
         color = MaterialTheme.colorScheme.background.copy(alpha = overlayAlpha.coerceIn(0f, 1f)),
         tonalElevation = 0.dp
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(
-                    start = 16.dp,
-                    end = 16.dp,
-                    top = 0.dp,
-                    bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-                ),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            OutlinedTextField(
+            // 附件预览区域
+            AnimatedVisibility(
+                visible = attachedImages.isNotEmpty(),
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally()
+            ) {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(attachedImages) { path ->
+                        Box(
+                            modifier = Modifier.size(72.dp)
+                        ) {
+                            AsyncImage(
+                                model = path,
+                                contentDescription = "预览图片",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(RoundedCornerShape(8.dp)),
+                                contentScale = ContentScale.Crop
+                            )
+                            
+                            // 删除按钮
+                            IconButton(
+                                onClick = { onRemoveAttachment(path) },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .size(20.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "删除",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(
+                        start = 16.dp,
+                        end = 16.dp,
+                        top = 0.dp,
+                        bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+                    ),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputChange,
                 modifier = Modifier
@@ -175,10 +232,11 @@ fun ChatInput(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "发送"
                             )
-                        }
                     }
                 }
             }
         }
     }
+}
+}
 }

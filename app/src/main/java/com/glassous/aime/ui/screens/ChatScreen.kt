@@ -140,7 +140,38 @@ fun ChatScreen(
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
     val currentToolType by chatViewModel.currentToolType.collectAsState()
 
+    // 附件相关状态
+    var showAttachmentSelectionSheet by rememberSaveable { mutableStateOf(false) }
+    val attachedImages by chatViewModel.attachedImages.collectAsState()
     
+    val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris ->
+        uris.forEach { uri ->
+            chatViewModel.addAttachment(uri, context)
+        }
+    }
+    
+    var tempPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.TakePicture()
+    ) { success ->
+        if (success && tempPhotoUri != null) {
+            chatViewModel.addAttachment(tempPhotoUri!!, context)
+        }
+    }
+    
+    fun createTempPictureUri(): android.net.Uri {
+        val tempFile = java.io.File.createTempFile("camera_", ".jpg", context.cacheDir).apply {
+            createNewFile()
+            deleteOnExit()
+        }
+        return androidx.core.content.FileProvider.getUriForFile(
+            context, 
+            "${context.packageName}.fileprovider", 
+            tempFile
+        )
+    }
 
     // 读取极简模式以控制 UI 可见性
     val themePreferences = remember { ThemePreferences(context) }
@@ -592,47 +623,49 @@ fun ChatScreen(
                         ChatInput(
                             inputText = inputText,
                             placeholderText = if (selectedTool?.type == com.glassous.aime.data.model.ToolType.WEB_ANALYSIS) "输入网址链接" else null,
-                        onInputChange = chatViewModel::updateInputText,
-                        onSendMessage = {
-                            val trimmedInput = inputText.trim()
-                            // 检查是否为分享链接
-                            if (chatViewModel.isSharedConversationUrl(trimmedInput)) {
-                                chatViewModel.importSharedConversation(trimmedInput) { success, message ->
-                                    scope.launch {
-                                        snackbarHostState.showSnackbar(message)
+                            onInputChange = chatViewModel::updateInputText,
+                            onSendMessage = {
+                                val trimmedInput = inputText.trim()
+                                // 检查是否为分享链接
+                                if (chatViewModel.isSharedConversationUrl(trimmedInput)) {
+                                    chatViewModel.importSharedConversation(trimmedInput) { success, message ->
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar(message)
+                                        }
                                     }
-                                }
-                                chatViewModel.updateInputText("")
-                            } else {
-                                chatViewModel.sendMessage(
-                                    trimmedInput,
-                                    selectedTool
-                                )
-                                // 清空输入框
-                                chatViewModel.updateInputText("")
-                            }
-                        },
-                        isLoading = isLoading,
-                        minimalMode = minimalMode,
-                        hideInputBorder = minimalModeConfig.hideInputBorder,
-                        hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
-                        hideInputPlaceholder = minimalModeConfig.hideInputPlaceholder,
-                        // 内嵌按钮配置
-                        showScrollToBottomButton = currentMessages.isNotEmpty() && !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
-                        onScrollToBottomClick = {
-                            scope.launch {
-                                if (currentMessages.isNotEmpty()) {
-                                    // 滚动到列表的最底部，包括底部的Spacer
-                                    listState.animateScrollToItem(
-                                        index = currentMessages.size + 1, // 滚动到底部Spacer项（消息数量+顶部Spacer+底部Spacer）
-                                        scrollOffset = 0 // 确保完全滚动到底部
+                                    chatViewModel.updateInputText("")
+                                } else {
+                                    chatViewModel.sendMessage(
+                                        trimmedInput,
+                                        selectedTool
                                     )
                                 }
-                            }
-                        },
-                        overlayAlpha = chatUiOverlayAlpha,
-                        innerAlpha = chatInputInnerAlpha
-                    )
+                            },
+                            isLoading = isLoading,
+                            minimalMode = minimalMode,
+                            hideInputBorder = minimalModeConfig.hideInputBorder,
+                            hideSendButtonBackground = minimalModeConfig.hideSendButtonBackground,
+                            modifier = Modifier.padding(
+                                bottom = if (isTablet) 0.dp else 0.dp // WindowInsets handled in ChatInput
+                            ),
+                            overlayAlpha = themePreferences.chatInputInnerAlpha.collectAsState(initial = 0.9f).value,
+                            attachedImages = attachedImages,
+                            onRemoveAttachment = { path -> chatViewModel.removeAttachment(path) },
+                            // 内嵌按钮配置
+                            showScrollToBottomButton = currentMessages.isNotEmpty() && !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
+                            onScrollToBottomClick = {
+                                scope.launch {
+                                    if (currentMessages.isNotEmpty()) {
+                                        // 滚动到列表的最底部，包括底部的Spacer
+                                        listState.animateScrollToItem(
+                                            index = currentMessages.size + 1, // 滚动到底部Spacer项（消息数量+顶部Spacer+底部Spacer）
+                                            scrollOffset = 0 // 确保完全滚动到底部
+                                        )
+                                    }
+                                }
+                            },
+                            innerAlpha = chatInputInnerAlpha
+                        )
                     }
                 }
             ) { paddingValues ->
@@ -1014,7 +1047,7 @@ fun ChatScreen(
         
         // Side Sheet
         AnimatedVisibility(
-            visible = isTablet && (modelSelectionUiState.showBottomSheet || toolSelectionUiState.showBottomSheet || currentSearchResults != null || showLongImageDialog),
+            visible = isTablet && (modelSelectionUiState.showBottomSheet || toolSelectionUiState.showBottomSheet || showAttachmentSelectionSheet || currentSearchResults != null || showLongImageDialog),
             enter = expandHorizontally(expandFrom = Alignment.Start),
             exit = shrinkHorizontally(shrinkTowards = Alignment.Start)
         ) {
@@ -1036,9 +1069,10 @@ fun ChatScreen(
                          verticalAlignment = Alignment.CenterVertically
                      ) {
                          // 返回按钮：仅在工具选择且未开启搜索结果时显示（返回模型选择）
-                         if (toolSelectionUiState.showBottomSheet && currentSearchResults == null) {
+                         if ((toolSelectionUiState.showBottomSheet || showAttachmentSelectionSheet) && currentSearchResults == null) {
                              IconButton(onClick = {
-                                 toolSelectionViewModel.hideBottomSheet()
+                                 if (toolSelectionUiState.showBottomSheet) toolSelectionViewModel.hideBottomSheet()
+                                 if (showAttachmentSelectionSheet) showAttachmentSelectionSheet = false
                                  modelSelectionViewModel.showBottomSheet()
                              }) {
                                  Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -1050,6 +1084,7 @@ fun ChatScreen(
                          IconButton(onClick = {
                              modelSelectionViewModel.hideBottomSheet()
                              toolSelectionViewModel.hideBottomSheet()
+                             showAttachmentSelectionSheet = false
                              currentSearchResults = null
                              showLongImageDialog = false
                          }) {
@@ -1062,6 +1097,7 @@ fun ChatScreen(
                          targetState = when {
                              modelSelectionUiState.showBottomSheet -> "model"
                              toolSelectionUiState.showBottomSheet -> "tool"
+                             showAttachmentSelectionSheet -> "attachment"
                              currentSearchResults != null -> "search"
                              showLongImageDialog -> "share"
                              else -> "none"
@@ -1093,6 +1129,10 @@ fun ChatScreen(
                                          modelSelectionViewModel.hideBottomSheet()
                                          toolSelectionViewModel.showBottomSheet()
                                      },
+                                     onAttachmentSelectionClick = {
+                                         modelSelectionViewModel.hideBottomSheet()
+                                         showAttachmentSelectionSheet = true
+                                     },
                                      autoProcessing = toolSelectionUiState.isProcessing,
                                      toolCallInProgress = toolCallInProgress,
                                      currentToolType = currentToolType,
@@ -1103,6 +1143,21 @@ fun ChatScreen(
                                  ToolSelectionContent(
                                      viewModel = toolSelectionViewModel,
                                      onDismiss = { toolSelectionViewModel.hideBottomSheet() }
+                                 )
+                             }
+                             "attachment" -> {
+                                 com.glassous.aime.ui.components.AttachmentSelectionContent(
+                                     onDismiss = { showAttachmentSelectionSheet = false },
+                                     onPickImage = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                                     onTakePhoto = {
+                                         try {
+                                             val uri = createTempPictureUri()
+                                             tempPhotoUri = uri
+                                             cameraLauncher.launch(uri)
+                                         } catch (e: Exception) {
+                                             // Handle error
+                                         }
+                                     }
                                  )
                              }
                              "search" -> {
@@ -1212,12 +1267,34 @@ fun ChatScreen(
                 
                 selectedTool = selectedTool,
                 onToolSelectionClick = {
+                    modelSelectionViewModel.hideBottomSheet()
                     toolSelectionViewModel.showBottomSheet()
+                },
+                onAttachmentSelectionClick = {
+                    modelSelectionViewModel.hideBottomSheet()
+                    showAttachmentSelectionSheet = true
                 },
                 autoProcessing = toolSelectionUiState.isProcessing,
                 toolCallInProgress = toolCallInProgress,
                 currentToolType = currentToolType,
                 showToolSelection = availableTools.isNotEmpty()
+            )
+        }
+
+        // 附件选择Bottom Sheet
+        if (!isTablet && showAttachmentSelectionSheet) {
+            com.glassous.aime.ui.components.AttachmentSelectionBottomSheet(
+                onDismiss = { showAttachmentSelectionSheet = false },
+                onPickImage = { imagePickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                onTakePhoto = {
+                    try {
+                        val uri = createTempPictureUri()
+                        tempPhotoUri = uri
+                        cameraLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        // Handle error
+                    }
+                }
             )
         }
 

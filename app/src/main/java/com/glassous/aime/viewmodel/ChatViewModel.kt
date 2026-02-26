@@ -33,6 +33,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     
     private val _inputText = MutableStateFlow("")
     val inputText: StateFlow<String> = _inputText.asStateFlow()
+
+    private val _attachedImages = MutableStateFlow<List<String>>(emptyList())
+    val attachedImages: StateFlow<List<String>> = _attachedImages.asStateFlow()
     
     val conversations: StateFlow<List<Conversation>> = repository.getAllConversations()
         .stateIn(
@@ -83,6 +86,42 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun updateInputText(text: String) {
         _inputText.value = text
     }
+
+    fun addAttachment(uri: android.net.Uri, context: android.content.Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val imagesDir = java.io.File(context.filesDir, "images")
+                if (!imagesDir.exists()) imagesDir.mkdirs()
+                
+                // Create a unique file name
+                val fileName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.jpg"
+                val file = java.io.File(imagesDir, fileName)
+                
+                val outputStream = java.io.FileOutputStream(file)
+                inputStream?.copyTo(outputStream)
+                inputStream?.close()
+                outputStream.close()
+                
+                val currentList = _attachedImages.value.toMutableList()
+                currentList.add(file.absolutePath)
+                _attachedImages.value = currentList
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun removeAttachment(path: String) {
+        val currentList = _attachedImages.value.toMutableList()
+        if (currentList.remove(path)) {
+            _attachedImages.value = currentList
+            // Optionally delete the file if it was just a temp attachment?
+            // But we might want to keep it if it's already saved in a message?
+            // Here we are removing from the *input* attachment list, so we can probably delete it if it's not referenced elsewhere.
+            // But for simplicity, we just remove from list. The file remains.
+        }
+    }
     
     private val _toolCallInProgress = MutableStateFlow(false)
     val toolCallInProgress: StateFlow<Boolean> = _toolCallInProgress.asStateFlow()
@@ -91,8 +130,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     val currentToolType: StateFlow<ToolType?> = _currentToolType.asStateFlow()
 
     fun sendMessage(content: String, selectedTool: Tool? = null) {
-        // Prevent sending empty messages
-        if (content.isBlank()) return
+        // Prevent sending empty messages unless there are attachments
+        if (content.isBlank() && _attachedImages.value.isEmpty()) return
         
         viewModelScope.launch {
             _isLoading.value = true
@@ -113,11 +152,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
+                val imagesToSend = _attachedImages.value.toList()
                 _inputText.value = ""
+                _attachedImages.value = emptyList()
                 
                 repository.sendMessage(
                     conversationId,
                     content,
+                    imagesToSend,
                     selectedTool,
                     onToolCallStart = { type ->
                         _currentToolType.value = type

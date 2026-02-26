@@ -13,4 +13,21 @@ class Converters {
     fun dateToTimestamp(date: Date?): Long? {
         return date?.time
     }
+
+    @TypeConverter
+    fun fromStringList(value: String?): List<String> {
+        if (value.isNullOrBlank()) return emptyList()
+        return try {
+            val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
+            com.google.gson.Gson().fromJson(value, type)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    @TypeConverter
+    fun toStringList(list: List<String>?): String {
+        if (list == null) return "[]"
+        return com.google.gson.Gson().toJson(list)
+    }
 }

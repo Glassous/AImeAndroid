@@ -12,7 +12,18 @@ import java.io.IOException
 // OpenAI Chat Completions standard message format
 data class OpenAiChatMessage(
     val role: String,
-    val content: String
+    val content: Any // String or List<OpenAiContentPart>
+)
+
+data class OpenAiContentPart(
+    val type: String,
+    val text: String? = null,
+    @SerializedName("image_url") val imageUrl: OpenAiImageUrl? = null
+)
+
+data class OpenAiImageUrl(
+    val url: String,
+    val detail: String? = "auto"
 )
 
 // Tool function parameter definition

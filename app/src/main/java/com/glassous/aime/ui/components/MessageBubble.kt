@@ -19,6 +19,9 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.animateContentSize
 import com.glassous.aime.data.ChatMessage
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.draw.clip
 
 // 供全局提供/获取弹窗时的背景模糊状态
 val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
@@ -107,6 +110,11 @@ fun MessageBubble(
                     Column(
                         modifier = Modifier.padding(12.dp)
                     ) {
+                        if (message.imagePaths.isNotEmpty()) {
+                            MessageImages(message.imagePaths)
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+
                         val textColor = when {
                             message.isError -> MaterialTheme.colorScheme.onErrorContainer
                             message.isFromUser -> MaterialTheme.colorScheme.onPrimaryContainer
@@ -181,6 +189,13 @@ fun MessageBubble(
                         .widthIn(max = maxBubbleWidth)
                         .testTag("bubble-${message.id}")
                 ) {
+                    // Display images for non-bubble mode too
+                    if (message.imagePaths.isNotEmpty()) {
+                        Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
+                            MessageImages(message.imagePaths)
+                        }
+                    }
+
                     val textColor = MaterialTheme.colorScheme.onSurface
                     val textSizeSp = chatFontSize
                     // 为了与截图风格更接近，增加左右留白与分段
@@ -355,5 +370,53 @@ fun MessageBubble(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun MessageImages(imagePaths: List<String>) {
+    if (imagePaths.isEmpty()) return
+    
+    val imageCount = imagePaths.size
+    if (imageCount == 1) {
+         AsyncImage(
+             model = imagePaths.first(),
+             contentDescription = null,
+             modifier = Modifier
+                 .fillMaxWidth()
+                 .heightIn(max = 300.dp)
+                 .clip(RoundedCornerShape(12.dp)),
+             contentScale = ContentScale.Fit
+         )
+    } else {
+         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+              val leftImages = imagePaths.filterIndexed { index, _ -> index % 2 == 0 }
+              val rightImages = imagePaths.filterIndexed { index, _ -> index % 2 != 0 }
+              
+              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                  leftImages.forEach { path ->
+                      AsyncImage(
+                          model = path,
+                          contentDescription = null,
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clip(RoundedCornerShape(8.dp)),
+                          contentScale = ContentScale.FillWidth
+                      )
+                  }
+              }
+              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                  rightImages.forEach { path ->
+                      AsyncImage(
+                          model = path,
+                          contentDescription = null,
+                          modifier = Modifier
+                              .fillMaxWidth()
+                              .clip(RoundedCornerShape(8.dp)),
+                          contentScale = ContentScale.FillWidth
+                      )
+                  }
+              }
+         }
     }
 }
