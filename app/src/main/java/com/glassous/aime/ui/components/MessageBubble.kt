@@ -53,7 +53,9 @@ fun MessageBubble(
     // 新增：链接点击回调
     onLinkClick: ((String) -> Unit)? = null,
     // 新增：搜索结果回调
-    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null
+    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null,
+    // 新增：是否处于分享模式
+    isShareMode: Boolean = false
 ) {
     var showDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf(false) }
@@ -127,26 +129,28 @@ fun MessageBubble(
                             textColor = textColor,
                             textSizeSp = textSizeSp,
                             isStreaming = isStreaming,
-                            onLongClick = { showDialog = true },
+                            onLongClick = { if (!isShareMode) showDialog = true },
                             onHtmlPreview = onHtmlPreview,
                             onHtmlPreviewSource = onHtmlPreviewSource,
                             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                             forceExpanded = forceExpandReply,
                             enableTypewriterEffect = enableTypewriterEffect,
-                            onLinkClick = onLinkClick
+                            onLinkClick = onLinkClick,
+                            isShareMode = isShareMode
                         )
                         } else {
                             StreamingMarkdownRenderer(
                                 markdown = message.content,
                                 textColor = textColor,
                                 textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true },
+                                onLongClick = { if (!isShareMode) showDialog = true },
                                 isStreaming = isStreaming,
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick
+                                onLinkClick = onLinkClick,
+                                isShareMode = isShareMode
                             )
                         }
 
@@ -199,7 +203,7 @@ fun MessageBubble(
                                 textColor = textColor,
                                 textSizeSp = textSizeSp,
                                 isStreaming = isStreaming,
-                                onLongClick = { showDialog = true },
+                                onLongClick = { if (!isShareMode) showDialog = true },
                                 modifier = Modifier.fillMaxWidth(),
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
@@ -207,7 +211,8 @@ fun MessageBubble(
                                 forceExpanded = forceExpandReply,
                                 enableTypewriterEffect = enableTypewriterEffect,
                                 onLinkClick = onLinkClick,
-                                onShowSearchResults = onShowSearchResults
+                                onShowSearchResults = onShowSearchResults,
+                                isShareMode = isShareMode
                             )
                         } else {
                             // 根据是否为AI回复且启用打字机效果来选择渲染组件
@@ -215,13 +220,14 @@ fun MessageBubble(
                                 markdown = message.content,
                                 textColor = textColor,
                                 textSizeSp = textSizeSp,
-                                onLongClick = { showDialog = true },
+                                onLongClick = { if (!isShareMode) showDialog = true },
                                 isStreaming = isStreaming,
                                 onHtmlPreview = onHtmlPreview,
                                 onHtmlPreviewSource = onHtmlPreviewSource,
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick
+                                onLinkClick = onLinkClick,
+                                isShareMode = isShareMode
                             )
                         }
                     }

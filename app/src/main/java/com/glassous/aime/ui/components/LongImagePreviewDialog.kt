@@ -176,7 +176,8 @@ fun LongImagePreviewContent(
                                                     replyBubbleEnabled = true, // 强制展开深度思考区域
                                                     chatFontSize = chatFontSize,
                                                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                                    forceExpandReply = true // 添加参数强制展开
+                                                    forceExpandReply = true, // 添加参数强制展开
+                                                    isShareMode = true // New parameter
                                                 )
                                                 Spacer(modifier = Modifier.height(8.dp))
                                             }

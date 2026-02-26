@@ -18,7 +18,8 @@ fun StreamingMarkdownRenderer(
     useCardStyleForHtmlCode: Boolean = false,
     enableTypewriterEffect: Boolean = true,
     onCitationClick: ((String) -> Unit)? = null,
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    isShareMode: Boolean = false // Added new parameter
 ) {
     Column(modifier = modifier) {
         MarkdownRenderer(
@@ -26,15 +27,16 @@ fun StreamingMarkdownRenderer(
             textColor = textColor,
             textSizeSp = textSizeSp,
             onLongClick = onLongClick,
-            enableTables = !isStreaming,
-            enableCodeBlocks = !isStreaming,
-            enableLatex = !isStreaming,
+            enableTables = true, // Always enable tables to prevent layout shift
+            enableCodeBlocks = true, // Always enable code blocks
+            enableLatex = true, // Always enable latex
             onHtmlPreview = onHtmlPreview,
             onHtmlPreviewSource = onHtmlPreviewSource,
             useCardStyleForHtmlCode = useCardStyleForHtmlCode,
             isStreaming = isStreaming && enableTypewriterEffect,
             onCitationClick = onCitationClick,
-            onLinkClick = onLinkClick
+            onLinkClick = onLinkClick,
+            isShareMode = isShareMode
         )
     }
 }

@@ -36,7 +36,8 @@ fun ExpandableReplyBox(
     forceExpanded: Boolean = false, // 新增：强制展开参数
     enableTypewriterEffect: Boolean = false,
     onLinkClick: ((String) -> Unit)? = null,
-    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null
+    onShowSearchResults: ((List<SearchResult>) -> Unit)? = null,
+    isShareMode: Boolean = false
 ) {
     // 定义解析结果变量
     var firstThought by remember { mutableStateOf<String?>(null) }
@@ -201,7 +202,8 @@ fun ExpandableReplyBox(
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
                     onLinkClick = onLinkClick,
-                    forceExpanded = forceExpanded
+                    forceExpanded = forceExpanded,
+                    isShareMode = isShareMode
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -212,7 +214,7 @@ fun ExpandableReplyBox(
                 SearchResultsCard(
                     resultCount = searchResultsList.size,
                     status = statusText,
-                    onClick = { if (searchResultsList.isNotEmpty()) showSearchBottomSheet = true },
+                    onClick = { if (searchResultsList.isNotEmpty() && !isShareMode) showSearchBottomSheet = true },
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -232,7 +234,8 @@ fun ExpandableReplyBox(
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
                     onLinkClick = onLinkClick,
-                    forceExpanded = forceExpanded
+                    forceExpanded = forceExpanded,
+                    isShareMode = isShareMode
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -251,7 +254,7 @@ fun ExpandableReplyBox(
                     enableTypewriterEffect = enableTypewriterEffect,
                     onLinkClick = onLinkClick,
                     onCitationClick = { id ->
-                        if (isSearchMode) {
+                        if (isSearchMode && !isShareMode) {
                             val url = citationUrls[id]
                             if (url != null) {
                                 try {
@@ -268,7 +271,8 @@ fun ExpandableReplyBox(
                                 showSearchBottomSheet = true
                             }
                         }
-                    }
+                    },
+                    isShareMode = isShareMode
                 )
             } else if (!isStreaming && firstThought == null && searchResults == null && secondThought == null) {
                 // 既没有思考也没有正式回复的异常情况
@@ -300,7 +304,8 @@ private fun ExpandableThoughtBlock(
     useCardStyleForHtmlCode: Boolean,
     enableTypewriterEffect: Boolean,
     onLinkClick: ((String) -> Unit)?,
-    forceExpanded: Boolean
+    forceExpanded: Boolean,
+    isShareMode: Boolean = false // Added default value
 ) {
     // 初始状态控制：
     // 如果是流式输出且内容还在生成（isStreaming=true），强制展开。
@@ -325,7 +330,7 @@ private fun ExpandableThoughtBlock(
     }
 
     Surface(
-        onClick = { expanded = !expanded },
+        onClick = { if (!isShareMode) expanded = !expanded },
         shape = MaterialTheme.shapes.small,
         color = Color.Transparent,
         modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp)
@@ -364,10 +369,16 @@ private fun ExpandableThoughtBlock(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = null
-                ) { expanded = false }
+                .let {
+                    if (!isShareMode) {
+                        it.clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { expanded = false }
+                    } else {
+                        it
+                    }
+                }
                 .padding(start = 8.dp, end = 8.dp, bottom = 12.dp)
         ) {
             // 思考内容使用略淡的颜色渲染，字体稍小
@@ -383,7 +394,8 @@ private fun ExpandableThoughtBlock(
                 onHtmlPreviewSource = onHtmlPreviewSource,
                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                 isStreaming = isStreaming && enableTypewriterEffect,
-                onLinkClick = onLinkClick
+                onLinkClick = onLinkClick,
+                isShareMode = isShareMode
             )
 
             if (isStreaming) {

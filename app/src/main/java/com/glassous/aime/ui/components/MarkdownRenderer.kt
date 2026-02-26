@@ -59,7 +59,8 @@ fun MarkdownRenderer(
     useCardStyleForHtmlCode: Boolean = false,
     isStreaming: Boolean = false,
     onCitationClick: ((String) -> Unit)? = null,
-    onLinkClick: ((String) -> Unit)? = null
+    onLinkClick: ((String) -> Unit)? = null,
+    isShareMode: Boolean = false // New parameter
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
     val displayMarkdown = remember(markdown) {
@@ -323,7 +324,8 @@ fun MarkdownRenderer(
                         markwon = markwon,
                         textColor = textColor,
                         textSizeSp = textSizeSp,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        isShareMode = isShareMode
                     )
                 }
                 BlockType.MUSIC -> {
@@ -514,7 +516,7 @@ private fun isTableSeparator(line: String): Boolean {
     return true
 }
 
-private fun preprocessText(input: String, enableLatex: Boolean): String {
+fun preprocessText(input: String, enableLatex: Boolean): String {
     val sb = StringBuilder()
     var i = 0
     var inInlineCode = false
