@@ -338,6 +338,9 @@ fun ChatScreen(
     // 新增：当前展示的搜索结果列表
     var currentSearchResults by remember { mutableStateOf<List<SearchResult>?>(null) }
 
+    // 新增：图片预览路径
+    var previewImagePath by remember { mutableStateOf<String?>(null) }
+
     // HTML预览侧边栏状态（平板模式）
     var showHtmlPreviewSideSheet by remember { mutableStateOf(false) }
     var htmlPreviewSideSheetCode by remember { mutableStateOf("") }
@@ -651,6 +654,7 @@ fun ChatScreen(
                             overlayAlpha = themePreferences.chatInputInnerAlpha.collectAsState(initial = 0.9f).value,
                             attachedImages = attachedImages,
                             onRemoveAttachment = { path -> chatViewModel.removeAttachment(path) },
+                            onImageClick = { path -> previewImagePath = path },
                             // 内嵌按钮配置
                             showScrollToBottomButton = currentMessages.isNotEmpty() && !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
                             onScrollToBottomClick = {
@@ -946,6 +950,9 @@ fun ChatScreen(
                                             selectedTool
                                         )
                                     }
+                                },
+                                onImageClick = { path ->
+                                    previewImagePath = path
                                 },
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
@@ -1337,6 +1344,14 @@ fun ChatScreen(
             url = currentUrl!!,
             onDismissRequest = { currentUrl = null },
             useCloudProxy = useCloudProxy
+        )
+    }
+
+    // 图片预览弹窗
+    if (previewImagePath != null) {
+        com.glassous.aime.ui.components.ImagePreviewPopup(
+            imagePath = previewImagePath!!,
+            onDismissRequest = { previewImagePath = null }
         )
     }
 

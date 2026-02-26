@@ -3,6 +3,7 @@ package com.glassous.aime.ui.components
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.MoreVert
@@ -23,6 +24,7 @@ import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.asPaddingValues
@@ -55,7 +57,8 @@ fun ChatInput(
     innerAlpha: Float = 0.9f,
     // 新增：附件预览
     attachedImages: List<String> = emptyList(),
-    onRemoveAttachment: (String) -> Unit = {}
+    onRemoveAttachment: (String) -> Unit = {},
+    onImageClick: (String) -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
     // 固定发送按钮高度为输入框初始高度（硬编码）
@@ -93,23 +96,26 @@ fun ChatInput(
                                 contentDescription = "预览图片",
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clip(RoundedCornerShape(8.dp)),
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { onImageClick(path) },
                                 contentScale = ContentScale.Crop
                             )
                             
                             // 删除按钮
-                            IconButton(
-                                onClick = { onRemoveAttachment(path) },
+                            Box(
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(20.dp)
-                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
+                                    .padding(4.dp)
+                                    .size(16.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                    .clickable { onRemoveAttachment(path) },
+                                contentAlignment = Alignment.Center
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
                                     contentDescription = "删除",
                                     tint = Color.White,
-                                    modifier = Modifier.size(16.dp)
+                                    modifier = Modifier.size(12.dp)
                                 )
                             }
                         }
