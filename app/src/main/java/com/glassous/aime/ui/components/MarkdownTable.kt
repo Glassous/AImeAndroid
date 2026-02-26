@@ -161,7 +161,8 @@ fun MarkdownTable(
                                         
                                         // If at start, disable scroll initially (assume potential drawer gesture)
                                         // If at edges, also disable scroll
-                                        if (isAtStart || x < edgeZoneWidthPx || x > width - edgeZoneWidthPx) {
+                                        // FIX: Only disable if at start AND in edge zone, to allow scrolling from center
+                                        if ((isAtStart && x < edgeZoneWidthPx) || x > width - edgeZoneWidthPx) {
                                             isScrollEnabled = false
                                         } else {
                                             isScrollEnabled = true
