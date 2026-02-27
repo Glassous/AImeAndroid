@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.Icon
@@ -67,7 +68,8 @@ import kotlin.math.max
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.LocalOverscrollConfiguration
 import androidx.compose.runtime.CompositionLocalProvider
-    import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -96,6 +98,16 @@ fun MarkdownTable(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    var isCopied by remember { mutableStateOf(false) }
+
+    // Reset copy state after 5 seconds
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            kotlinx.coroutines.delay(5000)
+            isCopied = false
+        }
+    }
+
     val configuration = androidx.compose.ui.platform.LocalConfiguration.current
     
     val tableData = remember(markdown) { parseMarkdownTable(markdown) }
@@ -336,14 +348,14 @@ fun MarkdownTable(
                             onClick = {
                                 val csv = parseMarkdownTableToCsv(markdown)
                                 clipboardManager.setText(AnnotatedString(csv))
-                                Toast.makeText(context, "表格已复制为 CSV", Toast.LENGTH_SHORT).show()
+                                isCopied = true
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy CSV",
-                                tint = MaterialTheme.colorScheme.primary,
+                                imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = if (isCopied) "Copied" else "Copy CSV",
+                                tint = if (isCopied) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

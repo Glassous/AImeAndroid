@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.CircularProgressIndicator
@@ -72,6 +73,15 @@ fun MarkdownMermaid(
     val interactionSource = remember { MutableInteractionSource() }
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+    var isCopied by remember { mutableStateOf(false) }
+
+    // Reset copy state after 5 seconds
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            kotlinx.coroutines.delay(5000)
+            isCopied = false
+        }
+    }
     
     // Size constraints logic
     // val configuration = LocalConfiguration.current
@@ -320,14 +330,14 @@ fun MarkdownMermaid(
                         IconButton(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(mermaidCode))
-                                Toast.makeText(context, "Mermaid 代码已复制", Toast.LENGTH_SHORT).show()
+                                isCopied = true
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copy Mermaid Code",
-                                tint = MaterialTheme.colorScheme.primary,
+                                imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                contentDescription = if (isCopied) "Copied" else "Copy Mermaid Code",
+                                tint = if (isCopied) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(20.dp)
                             )
                         }

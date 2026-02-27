@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
@@ -54,6 +55,16 @@ fun MarkdownCodeBlock(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val density = LocalDensity.current
+    var isCopied by remember { mutableStateOf(false) }
+    
+    // Reset copy state after 5 seconds
+    LaunchedEffect(isCopied) {
+        if (isCopied) {
+            kotlinx.coroutines.delay(5000)
+            isCopied = false
+        }
+    }
+    
     val edgeZoneWidth = 24.dp // Width of the edge zone where scroll is disabled to allow drawer gesture
     
     // Logic from CodeBlockWithCopy to detect languages
@@ -365,14 +376,14 @@ fun MarkdownCodeBlock(
                             IconButton(
                                 onClick = {
                                     clipboardManager.setText(AnnotatedString(code))
-                                    Toast.makeText(context, "已复制", Toast.LENGTH_SHORT).show()
+                                    isCopied = true
                                 },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.ContentCopy,
-                                    contentDescription = "Copy Code",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    imageVector = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
+                                    contentDescription = if (isCopied) "Copied" else "Copy Code",
+                                    tint = if (isCopied) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
