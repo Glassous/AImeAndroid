@@ -41,7 +41,7 @@ class ToolPreferences(private val context: Context) {
         .map { preferences ->
             ToolType.values().filter { tool ->
                 val key = booleanPreferencesKey("tool_visibility_${tool.name}")
-                preferences[key] ?: (tool != ToolType.IMAGE_GENERATION && tool != ToolType.OPENAI_IMAGE_GENERATION) // Default to true except for image gen
+                preferences[key] ?: (tool != ToolType.IMAGE_GENERATION) // Default to true except for image gen
             }.map { it.name }.toSet()
         }
 
@@ -122,7 +122,7 @@ class ToolPreferences(private val context: Context) {
         val key = booleanPreferencesKey("tool_visibility_$toolName")
         return context.dataStore.data
             .map { preferences ->
-                preferences[key] ?: (toolName != "IMAGE_GENERATION" && toolName != "OPENAI_IMAGE_GENERATION") // Default to true except for image gen
+                preferences[key] ?: (toolName != "IMAGE_GENERATION") // Default to true except for image gen
             }
     }
 

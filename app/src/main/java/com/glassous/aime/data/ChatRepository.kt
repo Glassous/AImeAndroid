@@ -198,7 +198,7 @@ class ChatRepository(
             var webAnalysisToolUsed = false
 
             // Client-side handling for Image Generation
-            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION) {
                 // Save user message first
                 val userMsg = ChatMessage(
                     conversationId = conversationId,
@@ -764,7 +764,7 @@ class ChatRepository(
             val userMessage = history[prevUserIndex].content
 
             // Client-side handling for Image Generation in Regenerate
-            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION) {
                 handleImageGeneration(
                     conversationId = conversationId,
                     prompt = userMessage,
@@ -1357,7 +1357,7 @@ class ChatRepository(
             val userMessage = history[prevUserIndex].content
 
             // Client-side handling for Image Generation in Retry
-            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION) {
                 handleImageGeneration(
                     conversationId = conversationId,
                     prompt = userMessage,
@@ -1537,7 +1537,7 @@ class ChatRepository(
             chatDao.deleteMessagesAfterExclusive(conversationId, target.timestamp)
 
             // Client-side handling for Image Generation in Edit
-            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION) {
                 handleImageGeneration(
                     conversationId = conversationId,
                     prompt = trimmed,
@@ -2015,7 +2015,7 @@ class ChatRepository(
     suspend fun handleImageGeneration(
         conversationId: Long,
         prompt: String,
-        selectedTool: Tool,
+        selectedTool: com.glassous.aime.data.model.Tool,
         aspectRatio: String,
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null,
@@ -2026,23 +2026,22 @@ class ChatRepository(
             val toolType = selectedTool.type
             onToolCallStart?.invoke(toolType)
             
-            val baseUrl: String
-            val apiKey: String
-            val modelName: String
-            
-            if (toolType == ToolType.OPENAI_IMAGE_GENERATION) {
-                baseUrl = toolPreferences.openaiImageGenBaseUrl.first()
-                apiKey = toolPreferences.openaiImageGenApiKey.first()
-                val prefModel = toolPreferences.openaiImageGenModel.first()
-                val prefModelName = toolPreferences.openaiImageGenModelName.first()
-                modelName = if (prefModel.isNotBlank()) prefModel else if (prefModelName.isNotBlank()) prefModelName else "image-model"
-            } else {
-                baseUrl = toolPreferences.imageGenBaseUrl.first()
-                apiKey = toolPreferences.imageGenApiKey.first()
-                val prefModel = toolPreferences.imageGenModel.first()
-                val prefModelName = toolPreferences.imageGenModelName.first()
-                modelName = if (prefModel.isNotBlank()) prefModel else if (prefModelName.isNotBlank()) prefModelName else "image-model"
-            }
+            // 尝试从旧的 OPENAI 键和新的通用键中获取配置，优先使用非空的
+            val baseUrl1 = toolPreferences.openaiImageGenBaseUrl.first()
+            val apiKey1 = toolPreferences.openaiImageGenApiKey.first()
+            val model1 = toolPreferences.openaiImageGenModel.first()
+            val modelName1 = toolPreferences.openaiImageGenModelName.first()
+
+            val baseUrl2 = toolPreferences.imageGenBaseUrl.first()
+            val apiKey2 = toolPreferences.imageGenApiKey.first()
+            val model2 = toolPreferences.imageGenModel.first()
+            val modelName2 = toolPreferences.imageGenModelName.first()
+
+            val baseUrl = baseUrl1.ifBlank { baseUrl2 }
+            val apiKey = apiKey1.ifBlank { apiKey2 }
+            val prefModel = model1.ifBlank { model2 }
+            val prefModelName = modelName1.ifBlank { modelName2 }
+            val modelName = if (prefModel.isNotBlank()) prefModel else if (prefModelName.isNotBlank()) prefModelName else "image-model"
 
             if (baseUrl.isBlank()) {
                 throw IllegalStateException("请在工具配置中设置 Endpoint URL")

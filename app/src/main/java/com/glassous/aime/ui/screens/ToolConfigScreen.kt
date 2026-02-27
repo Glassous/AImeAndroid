@@ -160,7 +160,7 @@ fun ToolConfigScreen(
                         }
                     },
                     hasMoreSettings = toolType == ToolType.WEB_SEARCH || toolType == ToolType.MUSIC_SEARCH || 
-                                     toolType == ToolType.IMAGE_GENERATION || toolType == ToolType.OPENAI_IMAGE_GENERATION
+                                     toolType == ToolType.IMAGE_GENERATION
                 ) {
                     if (toolType == ToolType.WEB_SEARCH) {
                         Column(modifier = Modifier.padding(top = 8.dp)) {
@@ -437,49 +437,6 @@ fun ToolConfigScreen(
                                 value = imageGenModelName,
                                 onValueChange = { 
                                     scope.launch { application.toolPreferences.setImageGenModelName(it) } 
-                                },
-                                label = { Text("Model 外显名称") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                        }
-                    } else if (toolType == ToolType.OPENAI_IMAGE_GENERATION) {
-                        Column(modifier = Modifier.padding(top = 8.dp)) {
-                            OutlinedTextField(
-                                value = openaiImageGenBaseUrl,
-                                onValueChange = { 
-                                    scope.launch { application.toolPreferences.setOpenaiImageGenBaseUrl(it) } 
-                                },
-                                label = { Text("Endpoint URL") },
-                                placeholder = { Text("https://api.example.com/v1/images/generations") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = openaiImageGenApiKey,
-                                onValueChange = { 
-                                    scope.launch { application.toolPreferences.setOpenaiImageGenApiKey(it) } 
-                                },
-                                label = { Text("API Key") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = openaiImageGenModel,
-                                onValueChange = { 
-                                    scope.launch { application.toolPreferences.setOpenaiImageGenModel(it) } 
-                                },
-                                label = { Text("Model 字段") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedTextField(
-                                value = openaiImageGenModelName,
-                                onValueChange = { 
-                                    scope.launch { application.toolPreferences.setOpenaiImageGenModelName(it) } 
                                 },
                                 label = { Text("Model 外显名称") },
                                 modifier = Modifier.fillMaxWidth(),

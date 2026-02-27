@@ -147,16 +147,13 @@ fun ChatScreen(
     val openaiImageGenModel by application.toolPreferences.openaiImageGenModel.collectAsState(initial = "")
     val openaiImageGenBaseUrl by application.toolPreferences.openaiImageGenBaseUrl.collectAsState(initial = "")
     
-    val isImageGenTool = selectedTool?.type == com.glassous.aime.data.model.ToolType.IMAGE_GENERATION || 
-                        selectedTool?.type == com.glassous.aime.data.model.ToolType.OPENAI_IMAGE_GENERATION
+    val isImageGenTool = selectedTool?.type == com.glassous.aime.data.model.ToolType.IMAGE_GENERATION
 
     val displayModelName = when {
         isImageGenTool -> {
-            if (selectedTool?.type == com.glassous.aime.data.model.ToolType.OPENAI_IMAGE_GENERATION) {
-                if (openaiImageGenModelName.isNotBlank()) openaiImageGenModelName else if (openaiImageGenModel.isNotBlank()) openaiImageGenModel else "图片生成模型"
-            } else {
-                if (imageGenModelName.isNotBlank()) imageGenModelName else if (imageGenModel.isNotBlank()) imageGenModel else "图片生成模型"
-            }
+            if (imageGenModelName.isNotBlank()) imageGenModelName else if (imageGenModel.isNotBlank()) imageGenModel 
+            else if (openaiImageGenModelName.isNotBlank()) openaiImageGenModelName else if (openaiImageGenModel.isNotBlank()) openaiImageGenModel 
+            else "图片生成模型"
         }
         else -> selectedModelDisplayName
     }

@@ -38,14 +38,9 @@ enum class ToolType(
         description = "查询指定城市的未来几天天气与空气质量"
     ),
     IMAGE_GENERATION(
-        displayName = "图片生成 (接口 1)",
-        icon = Icons.Default.Image,
-        description = "根据描述生成图片（支持自定义格式）"
-    ),
-    OPENAI_IMAGE_GENERATION(
         displayName = "图片生成",
-        icon = Icons.Default.AutoAwesome,
-        description = "根据描述生成图片（支持通用标准接口）"
+        icon = Icons.Default.Image,
+        description = "根据描述生成图片（支持通用标准及自定义接口）"
     );
     
     companion object {
