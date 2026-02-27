@@ -117,7 +117,7 @@ fun MessageBubble(
                         modifier = Modifier.padding(12.dp)
                     ) {
                         if (message.imagePaths.isNotEmpty() || (isStreaming && message.metadata?.startsWith("aspect_ratio:") == true)) {
-                            MessageImages(message, isStreaming, onImageClick)
+                            MessageImages(message, isStreaming, onImageClick, isShareMode)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
@@ -198,7 +198,7 @@ fun MessageBubble(
                     // Display images for non-bubble mode too
                     if (message.imagePaths.isNotEmpty() || (isStreaming && message.metadata?.startsWith("aspect_ratio:") == true)) {
                         Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                            MessageImages(message, isStreaming, onImageClick)
+                            MessageImages(message, isStreaming, onImageClick, isShareMode)
                         }
                     }
 
@@ -384,7 +384,8 @@ fun MessageBubble(
 fun MessageImages(
     message: ChatMessage,
     isStreaming: Boolean,
-    onImageClick: ((String) -> Unit)? = null
+    onImageClick: ((String) -> Unit)? = null,
+    isShareMode: Boolean = false
 ) {
     val imagePaths = message.imagePaths
     val isImageGen = message.metadata?.startsWith("aspect_ratio:") == true
@@ -419,63 +420,91 @@ fun MessageImages(
     if (imagePaths.isEmpty()) return
     
     val imageCount = imagePaths.size
+    
+    // Only use MessageImageCard for AI messages (replies)
+    val useImageCard = !message.isFromUser && !message.isError && !isStreaming
+    
     if (imageCount == 1) {
-        Box(
-            modifier = Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.CenterStart
-        ) {
-            AsyncImage(
-                model = imagePaths.first(),
-                contentDescription = null,
-                modifier = Modifier
-                    .wrapContentWidth()
-                    .heightIn(max = 400.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .clickable { onImageClick?.invoke(imagePaths.first()) },
-                contentScale = ContentScale.Inside
+        if (useImageCard) {
+            MessageImageCard(
+                imagePath = imagePaths.first(),
+                isShareMode = isShareMode,
+                message = message
             )
+        } else {
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                AsyncImage(
+                    model = imagePaths.first(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .heightIn(max = 400.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable { onImageClick?.invoke(imagePaths.first()) },
+                    contentScale = ContentScale.Inside
+                )
+            }
         }
     } else {
-         Row(
-             modifier = Modifier.fillMaxWidth(), 
-             horizontalArrangement = Arrangement.Start
-         ) {
-              val leftImages = imagePaths.filterIndexed { index, _ -> index % 2 == 0 }
-              val rightImages = imagePaths.filterIndexed { index, _ -> index % 2 != 0 }
-              
-              Column(
-                  modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
-                  verticalArrangement = Arrangement.spacedBy(4.dp)
-              ) {
-                  leftImages.forEach { path ->
-                      AsyncImage(
-                          model = path,
-                          contentDescription = null,
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .clip(RoundedCornerShape(8.dp))
-                              .clickable { onImageClick?.invoke(path) },
-                          contentScale = ContentScale.FillWidth
-                      )
+        // For multiple images, if it's from AI, maybe use a list of cards or keep the grid
+        // Given the requirement "Similar to tables and code blocks", a card per image makes sense
+        // but it might be too tall. Let's see how other AI apps do it.
+        // Actually, if we use cards, we can just list them.
+        if (useImageCard) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                imagePaths.forEach { path ->
+                    MessageImageCard(
+                        imagePath = path,
+                        isShareMode = isShareMode,
+                        message = message
+                    )
+                }
+            }
+        } else {
+             Row(
+                 modifier = Modifier.fillMaxWidth(), 
+                 horizontalArrangement = Arrangement.Start
+             ) {
+                  val leftImages = imagePaths.filterIndexed { index, _ -> index % 2 == 0 }
+                  val rightImages = imagePaths.filterIndexed { index, _ -> index % 2 != 0 }
+                  
+                  Column(
+                      modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
+                      verticalArrangement = Arrangement.spacedBy(4.dp)
+                  ) {
+                      leftImages.forEach { path ->
+                          AsyncImage(
+                              model = path,
+                              contentDescription = null,
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .clip(RoundedCornerShape(8.dp))
+                                  .clickable { onImageClick?.invoke(path) },
+                              contentScale = ContentScale.FillWidth
+                          )
+                      }
                   }
-              }
-              Spacer(modifier = Modifier.width(4.dp))
-              Column(
-                  modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
-                  verticalArrangement = Arrangement.spacedBy(4.dp)
-              ) {
-                  rightImages.forEach { path ->
-                      AsyncImage(
-                          model = path,
-                          contentDescription = null,
-                          modifier = Modifier
-                              .fillMaxWidth()
-                              .clip(RoundedCornerShape(8.dp))
-                              .clickable { onImageClick?.invoke(path) },
-                          contentScale = ContentScale.FillWidth
-                      )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Column(
+                      modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
+                      verticalArrangement = Arrangement.spacedBy(4.dp)
+                  ) {
+                      rightImages.forEach { path ->
+                          AsyncImage(
+                              model = path,
+                              contentDescription = null,
+                              modifier = Modifier
+                                  .fillMaxWidth()
+                                  .clip(RoundedCornerShape(8.dp))
+                                  .clickable { onImageClick?.invoke(path) },
+                              contentScale = ContentScale.FillWidth
+                          )
+                      }
                   }
-              }
-         }
+             }
+        }
     }
 }
