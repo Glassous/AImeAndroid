@@ -394,7 +394,8 @@ fun MarkdownCodeBlock(
             LongImagePreviewBottomSheet(
                 messages = listOf(dummyMessage),
                 onDismiss = { showShareSheet = false },
-                showLinkButton = false
+                showLinkButton = false,
+                isSingleItemShare = true
             )
         }
     }

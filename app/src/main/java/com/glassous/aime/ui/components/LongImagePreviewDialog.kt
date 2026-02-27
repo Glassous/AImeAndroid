@@ -68,7 +68,8 @@ fun LongImagePreviewBottomSheet(
     isSharing: Boolean = false,
     sharedUrl: String? = null,
     onShareLink: () -> Unit = {},
-    showLinkButton: Boolean = true
+    showLinkButton: Boolean = true,
+    isSingleItemShare: Boolean = false // New parameter to distinguish single item vs conversation
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -100,7 +101,8 @@ fun LongImagePreviewBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(max = screenHeight * 0.9f),
-            isSideSheet = false
+            isSideSheet = false,
+            isSingleItemShare = isSingleItemShare
         )
     }
 }
@@ -117,7 +119,8 @@ fun LongImagePreviewContent(
     onShareLink: () -> Unit,
     showLinkButton: Boolean,
     modifier: Modifier = Modifier,
-    isSideSheet: Boolean = false
+    isSideSheet: Boolean = false,
+    isSingleItemShare: Boolean = false // New parameter
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -175,7 +178,13 @@ fun LongImagePreviewContent(
                                             Surface(color = MaterialTheme.colorScheme.surface) {
                                                 Column(
                                                     modifier = Modifier
-                                                        .wrapContentWidth(unbounded = true) // Allow content to be wider than screen
+                                                        .let { 
+                                                            if (isSingleItemShare) {
+                                                                it.wrapContentWidth(unbounded = true)
+                                                            } else {
+                                                                it.fillMaxWidth()
+                                                            }
+                                                        }
                                                         .padding(16.dp)
                                                 ) {
                                                     messages.forEach { msg ->
@@ -234,13 +243,23 @@ fun LongImagePreviewContent(
                             update = { view ->
                                 captureView = view
                             },
-                            modifier = Modifier.wrapContentWidth(unbounded = true) // Let AndroidView measure as wide as needed
+                            modifier = Modifier.let { 
+                                if (isSingleItemShare) {
+                                    it.wrapContentWidth(unbounded = true)
+                                } else {
+                                    it.fillMaxWidth()
+                                }
+                            }
                         )
                     }
                 ) { measurables, constraints ->
-                    // Measure with infinite width constraints to find natural width
-                    val looseConstraints = constraints.copy(maxWidth = Constraints.Infinity)
-                    val placeable = measurables[0].measure(looseConstraints)
+                    // Measure with infinite width constraints to find natural width if single item
+                    val measureConstraints = if (isSingleItemShare) {
+                        constraints.copy(maxWidth = Constraints.Infinity)
+                    } else {
+                        constraints
+                    }
+                    val placeable = measurables[0].measure(measureConstraints)
                     
                     val contentWidth = placeable.width
                     val availableWidth = constraints.maxWidth
