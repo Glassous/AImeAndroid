@@ -16,6 +16,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 import kotlinx.serialization.json.Json
+import java.io.File
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import java.io.ByteArrayOutputStream
 
 object SupabaseShareRepository {
 
@@ -43,11 +48,24 @@ object SupabaseShareRepository {
     suspend fun uploadConversation(title: String, model: String, messages: List<ChatMessage>): String {
         return withContext(Dispatchers.IO) {
             val dtoList = messages
-                .filter { !it.isError && it.content.isNotBlank() }
+                .filter { !it.isError && (it.content.isNotBlank() || it.imagePaths.isNotEmpty()) }
                 .map { message ->
+                    var content = message.content
+                    if (message.imagePaths.isNotEmpty()) {
+                        val imageTags = message.imagePaths.mapNotNull { path ->
+                            encodeImageToBase64(path)?.let { base64 ->
+                                "<img src=\"data:image/jpeg;base64,$base64\"/>"
+                            }
+                        }.joinToString("\n")
+                        
+                        if (imageTags.isNotBlank()) {
+                            content = if (content.isBlank()) imageTags else "$content\n$imageTags"
+                        }
+                    }
+
                     SharedMessageDto(
                         role = if (message.isFromUser) "user" else "model",
-                        content = message.content
+                        content = content
                     )
                 }
 
@@ -66,6 +84,43 @@ object SupabaseShareRepository {
 
             val baseUrl = BuildConfig.SHARE_BASE_URL.trimEnd('/')
             "$baseUrl/${result.id}"
+        }
+    }
+
+    private fun encodeImageToBase64(path: String): String? {
+        return try {
+            val file = File(path)
+            if (!file.exists()) return null
+            
+            val options = BitmapFactory.Options()
+            options.inJustDecodeBounds = true
+            BitmapFactory.decodeFile(path, options)
+            
+            val maxDim = 1024
+            var scale = 1
+            if (options.outWidth > maxDim || options.outHeight > maxDim) {
+                val widthRatio = Math.round(options.outWidth.toFloat() / maxDim.toFloat())
+                val heightRatio = Math.round(options.outHeight.toFloat() / maxDim.toFloat())
+                scale = if (widthRatio < heightRatio) widthRatio else heightRatio
+            }
+            
+            val decodeOptions = BitmapFactory.Options()
+            decodeOptions.inSampleSize = scale
+            
+            val bitmap = BitmapFactory.decodeFile(path, decodeOptions) ?: return null
+            
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val bytes = outputStream.toByteArray()
+            
+            if (!bitmap.isRecycled) {
+                bitmap.recycle()
+            }
+            
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 }

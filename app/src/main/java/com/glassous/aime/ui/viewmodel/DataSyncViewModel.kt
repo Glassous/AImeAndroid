@@ -444,14 +444,18 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
 
                 // 4. Create Messages
                 data.messages.forEachIndexed { index, msgDto ->
+                    // Parse base64 images from content
+                    val (cleanContent, imagePaths) = parseAndSaveImages(msgDto.content)
+
                     // Add slight delay to timestamp to preserve order
                     val msgTime = Date(now.time + index * 100)
                     val chatMsg = ChatMessage(
                         conversationId = convId,
-                        content = msgDto.content,
+                        content = cleanContent,
                         isFromUser = msgDto.role == "user",
                         timestamp = msgTime,
-                        modelDisplayName = if (msgDto.role != "user") data.model else null
+                        modelDisplayName = if (msgDto.role != "user") data.model else null,
+                        imagePaths = imagePaths
                     )
                     chatDao.insertMessage(chatMsg)
                 }
@@ -462,6 +466,38 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                 onResult(false, "导入失败: ${e.message}")
             }
         }
+    }
+
+    private fun parseAndSaveImages(content: String): Pair<String, List<String>> {
+        val imagePaths = mutableListOf<String>()
+        // Regex to match <img src="data:image/jpeg;base64,..."/>
+        val imgRegex = "<img src=\"data:image/\\w+;base64,([^\"]+)\".*?/>".toRegex()
+        
+        val matches = imgRegex.findAll(content)
+        matches.forEach { match ->
+            val base64 = match.groupValues[1]
+            try {
+                val imageBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                val imagesDir = java.io.File(app.filesDir, "images")
+                if (!imagesDir.exists()) imagesDir.mkdirs()
+                
+                val fileName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.jpg"
+                val file = java.io.File(imagesDir, fileName)
+                
+                java.io.FileOutputStream(file).use { output ->
+                    output.write(imageBytes)
+                }
+                
+                imagePaths.add(file.absolutePath)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+        
+        // Remove all img tags from content and trim whitespace
+        val cleanContent = imgRegex.replace(content, "").trim()
+        
+        return Pair(cleanContent, imagePaths)
     }
 
     private fun parseUuidFromInput(input: String): String? {
