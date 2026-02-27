@@ -8,6 +8,8 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okio.BufferedSource
 import java.io.IOException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 // OpenAI Chat Completions standard message format
 data class OpenAiChatMessage(
@@ -98,6 +100,37 @@ data class ChatCompletionsChunkChoice(
 
 data class ChatCompletionsChunk(
     val choices: List<ChatCompletionsChunkChoice>?
+)
+
+// Image Generation models
+data class ImageGenerationRequest(
+    val prompt: String,
+    val model: String? = null,
+    val n: Int? = 1,
+    val size: String? = "1024x1024",
+    @SerializedName("response_format") val responseFormat: String? = "url"
+)
+
+data class ImageGenerationResponse(
+    val created: Long?,
+    val data: Any? // Can be List<ImageData> or a custom Map/Object
+)
+
+/**
+ * 支持用户提供的非标准生图响应格式
+ */
+data class CustomImageGenerationResponse(
+    val data: CustomImageData?
+)
+
+data class CustomImageData(
+    @SerializedName("image_urls") val imageUrls: List<String>?
+)
+
+data class ImageData(
+    val url: String? = null,
+    @SerializedName("b64_json") val b64Json: String? = null,
+    @SerializedName("revised_prompt") val revisedPrompt: String? = null
 )
 
 // Error response models (OpenAI-style)
@@ -341,5 +374,91 @@ class OpenAiService(
             response.close()
         }
         return finalText.toString()
+    }
+
+    suspend fun generateImage(
+        baseUrl: String,
+        apiKey: String,
+        prompt: String,
+        model: String? = null,
+        size: String? = "1024x1024",
+        useCloudProxy: Boolean = false,
+        proxyUrl: String? = null
+    ): List<ImageData> {
+        val gson = Gson()
+        val json = gson.toJson(ImageGenerationRequest(
+            prompt = prompt,
+            model = model,
+            size = size
+        ))
+        val body = json.toRequestBody("application/json".toMediaType())
+
+        val endpoint = baseUrl.trim()
+
+        val requestBuilder = Request.Builder()
+            .post(body)
+
+        if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
+            requestBuilder.url(proxyUrl)
+                .addHeader("x-target-url", endpoint)
+                .addHeader("x-target-api-key", apiKey)
+        } else {
+            requestBuilder.url(endpoint)
+                .addHeader("Authorization", "Bearer $apiKey")
+        }
+
+        val request = requestBuilder.build()
+        
+        // 使用更长的超时时间（生图通常较慢）
+        val imageClient = client.newBuilder()
+            .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
+            .build()
+
+        val response = withContext(Dispatchers.IO) { imageClient.newCall(request).execute() }
+        if (!response.isSuccessful) {
+            val raw = response.body?.string()
+            response.close()
+            throw IOException("Image generation failed: ${response.code} ${response.message} - $raw")
+        }
+
+        val respBody = response.body?.string() ?: ""
+        response.close()
+
+        // 1. 尝试解析 OpenAI 标准格式
+        try {
+            val type = object : com.google.gson.reflect.TypeToken<Map<String, Any?>>() {}.type
+            val rawMap: Map<String, Any?> = gson.fromJson(respBody, type)
+            
+            // 如果 data 是个列表，按标准格式解析
+            if (rawMap["data"] is List<*>) {
+                val parsed = gson.fromJson(respBody, ImageGenerationResponse::class.java)
+                val dataList = parsed?.data
+                if (dataList is List<*>) {
+                    // 转回 ImageData 列表
+                    return dataList.map { 
+                        val item = it as? Map<*, *>
+                        ImageData(
+                            url = item?.get("url") as? String,
+                            revisedPrompt = item?.get("revised_prompt") as? String
+                        )
+                    }
+                }
+            }
+            
+            // 2. 尝试解析用户提供的自定义格式 (data.image_urls)
+            val customParsed = gson.fromJson(respBody, CustomImageGenerationResponse::class.java)
+            val urls = customParsed?.data?.imageUrls
+            if (!urls.isNullOrEmpty()) {
+                return urls.map { ImageData(url = it) }
+            }
+            
+        } catch (e: Exception) {
+            // 解析失败，记录原始数据以便排查
+            throw IOException("Failed to parse image response: ${e.message}. Raw body: $respBody")
+        }
+
+        return emptyList()
     }
 }

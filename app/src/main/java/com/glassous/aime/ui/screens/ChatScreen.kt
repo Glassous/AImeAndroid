@@ -140,6 +140,27 @@ fun ChatScreen(
     val toolCallInProgress by chatViewModel.toolCallInProgress.collectAsState()
     val currentToolType by chatViewModel.currentToolType.collectAsState()
 
+    val selectedAspectRatio by chatViewModel.selectedAspectRatio.collectAsState()
+    val imageGenModelName by application.toolPreferences.imageGenModelName.collectAsState(initial = "")
+    val imageGenModel by application.toolPreferences.imageGenModel.collectAsState(initial = "")
+    val openaiImageGenModelName by application.toolPreferences.openaiImageGenModelName.collectAsState(initial = "")
+    val openaiImageGenModel by application.toolPreferences.openaiImageGenModel.collectAsState(initial = "")
+    val openaiImageGenBaseUrl by application.toolPreferences.openaiImageGenBaseUrl.collectAsState(initial = "")
+    
+    val isImageGenTool = selectedTool?.type == com.glassous.aime.data.model.ToolType.IMAGE_GENERATION || 
+                        selectedTool?.type == com.glassous.aime.data.model.ToolType.OPENAI_IMAGE_GENERATION
+
+    val displayModelName = when {
+        isImageGenTool -> {
+            if (selectedTool?.type == com.glassous.aime.data.model.ToolType.OPENAI_IMAGE_GENERATION) {
+                if (openaiImageGenModelName.isNotBlank()) openaiImageGenModelName else if (openaiImageGenModel.isNotBlank()) openaiImageGenModel else "图片生成模型"
+            } else {
+                if (imageGenModelName.isNotBlank()) imageGenModelName else if (imageGenModel.isNotBlank()) imageGenModel else "图片生成模型"
+            }
+        }
+        else -> selectedModelDisplayName
+    }
+
     // 附件相关状态
     var showAttachmentSelectionSheet by rememberSaveable { mutableStateOf(false) }
     val attachedImages by chatViewModel.attachedImages.collectAsState()
@@ -570,7 +591,7 @@ fun ChatScreen(
                                         )
                                     ) {
                                         Text(
-                                            text = selectedModelDisplayName,
+                                            text = displayModelName,
                                             style = MaterialTheme.typography.titleLarge
                                         )
                                     }
@@ -606,6 +627,31 @@ fun ChatScreen(
                 },
                 bottomBar = {
                     Column(modifier = Modifier.fillMaxWidth()) {
+                        // 比例选择器
+                        if (isImageGenTool) {
+                            val ratios = listOf("1:1", "16:9", "4:3", "9:16", "3:4")
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ratios.forEach { ratio ->
+                                    val isSelected = selectedAspectRatio == ratio
+                                    FilterChip(
+                                        selected = isSelected,
+                                        onClick = { chatViewModel.updateAspectRatio(ratio) },
+                                        label = { Text(ratio) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                            selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                                        ),
+                                        border = if (isSelected) null else FilterChipDefaults.filterChipBorder(enabled = true, selected = false)
+                                    )
+                                }
+                            }
+                        }
+
                         // 网页分析工具提示
                         if (selectedTool?.type == com.glassous.aime.data.model.ToolType.WEB_ANALYSIS) {
                             Surface(

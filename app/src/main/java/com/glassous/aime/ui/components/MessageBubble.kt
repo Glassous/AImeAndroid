@@ -9,6 +9,8 @@ import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -18,6 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import com.glassous.aime.data.ChatMessage
 import coil.compose.AsyncImage
@@ -29,7 +32,7 @@ val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
     mutableStateOf(false)
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MessageBubble(
     message: ChatMessage,
@@ -113,8 +116,8 @@ fun MessageBubble(
                     Column(
                         modifier = Modifier.padding(12.dp)
                     ) {
-                        if (message.imagePaths.isNotEmpty()) {
-                            MessageImages(message.imagePaths, onImageClick)
+                        if (message.imagePaths.isNotEmpty() || (isStreaming && message.metadata?.startsWith("aspect_ratio:") == true)) {
+                            MessageImages(message, isStreaming, onImageClick)
                             Spacer(modifier = Modifier.height(8.dp))
                         }
 
@@ -193,9 +196,9 @@ fun MessageBubble(
                         .testTag("bubble-${message.id}")
                 ) {
                     // Display images for non-bubble mode too
-                    if (message.imagePaths.isNotEmpty()) {
+                    if (message.imagePaths.isNotEmpty() || (isStreaming && message.metadata?.startsWith("aspect_ratio:") == true)) {
                         Box(modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)) {
-                            MessageImages(message.imagePaths, onImageClick)
+                            MessageImages(message, isStreaming, onImageClick)
                         }
                     }
 
@@ -376,28 +379,74 @@ fun MessageBubble(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun MessageImages(imagePaths: List<String>, onImageClick: ((String) -> Unit)? = null) {
+fun MessageImages(
+    message: ChatMessage,
+    isStreaming: Boolean,
+    onImageClick: ((String) -> Unit)? = null
+) {
+    val imagePaths = message.imagePaths
+    val isImageGen = message.metadata?.startsWith("aspect_ratio:") == true
+    val aspectRatioStr = message.metadata?.substringAfter("aspect_ratio:", "1:1") ?: "1:1"
+    val aspectRatio = when (aspectRatioStr) {
+        "1:1" -> 1f
+        "16:9" -> 16f / 9f
+        "9:16" -> 9f / 16f
+        "4:3" -> 4f / 3f
+        "3:4" -> 3f / 4f
+        else -> 1f
+    }
+
+    if (imagePaths.isEmpty() && isStreaming && isImageGen) {
+        // Show loading placeholder with aspect ratio
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(aspectRatio)
+                .heightIn(max = 400.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularWavyProgressIndicator(
+                modifier = Modifier.size(48.dp)
+            )
+        }
+        return
+    }
+
     if (imagePaths.isEmpty()) return
     
     val imageCount = imagePaths.size
     if (imageCount == 1) {
-         AsyncImage(
-             model = imagePaths.first(),
-             contentDescription = null,
-             modifier = Modifier
-                 .fillMaxWidth()
-                 .heightIn(max = 300.dp)
-                 .clip(RoundedCornerShape(12.dp))
-                 .clickable { onImageClick?.invoke(imagePaths.first()) },
-             contentScale = ContentScale.Fit
-         )
+        Box(
+            modifier = Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            AsyncImage(
+                model = imagePaths.first(),
+                contentDescription = null,
+                modifier = Modifier
+                    .wrapContentWidth()
+                    .heightIn(max = 400.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onImageClick?.invoke(imagePaths.first()) },
+                contentScale = ContentScale.Inside
+            )
+        }
     } else {
-         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+         Row(
+             modifier = Modifier.fillMaxWidth(), 
+             horizontalArrangement = Arrangement.Start
+         ) {
               val leftImages = imagePaths.filterIndexed { index, _ -> index % 2 == 0 }
               val rightImages = imagePaths.filterIndexed { index, _ -> index % 2 != 0 }
               
-              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Column(
+                  modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
+                  verticalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
                   leftImages.forEach { path ->
                       AsyncImage(
                           model = path,
@@ -410,7 +459,11 @@ fun MessageImages(imagePaths: List<String>, onImageClick: ((String) -> Unit)? = 
                       )
                   }
               }
-              Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+              Spacer(modifier = Modifier.width(4.dp))
+              Column(
+                  modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
+                  verticalArrangement = Arrangement.spacedBy(4.dp)
+              ) {
                   rightImages.forEach { path ->
                       AsyncImage(
                           model = path,

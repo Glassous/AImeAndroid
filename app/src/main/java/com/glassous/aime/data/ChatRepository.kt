@@ -20,6 +20,7 @@ import com.google.gson.Gson
 import java.util.Date
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.io.IOException
 import com.google.gson.reflect.TypeToken
 import com.google.gson.stream.JsonReader
 import java.io.StringReader
@@ -28,6 +29,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okio.buffer
+import okio.sink
 
 
 class ChatRepository(
@@ -184,12 +189,36 @@ class ChatRepository(
         message: String,
         imagePaths: List<String> = emptyList(),
         selectedTool: Tool? = null,
+        aspectRatio: String = "1:1",
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<ChatMessage> {
         return try {
             var processedMessage = message
             var webAnalysisToolUsed = false
+
+            // Client-side handling for Image Generation
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+                // Save user message first
+                val userMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = message,
+                    isFromUser = true,
+                    timestamp = Date(),
+                    imagePaths = imagePaths
+                )
+                chatDao.insertMessage(userMsg)
+                updateConversationAfterMessage(conversationId, message)
+
+                return handleImageGeneration(
+                    conversationId = conversationId,
+                    prompt = message,
+                    selectedTool = selectedTool,
+                    aspectRatio = aspectRatio,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd
+                )
+            }
 
             // Client-side handling for Web Analysis
             if (selectedTool?.type == ToolType.WEB_ANALYSIS && imagePaths.isEmpty()) {
@@ -703,6 +732,7 @@ class ChatRepository(
         conversationId: Long,
         assistantMessageId: Long,
         selectedTool: Tool? = null,
+        aspectRatio: String = "1:1",
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
@@ -727,15 +757,24 @@ class ChatRepository(
                 if (lastValidUserIndex != -1) {
                     prevUserIndex = lastValidUserIndex
                 } else {
-                    // 仍然找不到任何用户消息，提示错误
-                    chatDao.updateMessage(
-                        target.copy(
-                            content = "无法重新生成：缺少用户消息。",
-                            isError = true
-                        )
-                    )
                     return Result.failure(IllegalStateException("No user messages in conversation"))
                 }
+            }
+
+            val userMessage = history[prevUserIndex].content
+
+            // Client-side handling for Image Generation in Regenerate
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+                handleImageGeneration(
+                    conversationId = conversationId,
+                    prompt = userMessage,
+                    selectedTool = selectedTool,
+                    aspectRatio = aspectRatio,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingAssistantMessageId = assistantMessageId
+                )
+                return Result.success(Unit)
             }
 
             // 解析模型配置
@@ -1285,6 +1324,7 @@ class ChatRepository(
         conversationId: Long,
         failedMessageId: Long,
         selectedTool: Tool? = null,
+        aspectRatio: String = "1:1",
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
@@ -1294,7 +1334,8 @@ class ChatRepository(
             if (targetIndex == -1) return Result.failure(IllegalArgumentException("Message not found"))
             val target = history[targetIndex]
             if (target.isFromUser) return Result.failure(IllegalArgumentException("Cannot retry user message"))
-            if (!target.isError) return Result.failure(IllegalArgumentException("Message is not an error"))
+            // We can retry if it's an error OR if it's a placeholder that didn't finish (like "正在生成图片...")
+            // if (!target.isError) return Result.failure(IllegalArgumentException("Message is not an error"))
 
             // 找到前一条用户消息
             var prevUserIndex = -1
@@ -1309,21 +1350,28 @@ class ChatRepository(
                 if (lastValidUserIndex != -1) {
                     prevUserIndex = lastValidUserIndex
                 } else {
-                    chatDao.updateMessage(
-                        target.copy(
-                            content = "无法重新发送：缺少用户消息。",
-                            isError = true
-                        )
-                    )
                     return Result.failure(IllegalStateException("No user messages in conversation"))
                 }
             }
 
+            val userMessage = history[prevUserIndex].content
+
+            // Client-side handling for Image Generation in Retry
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+                handleImageGeneration(
+                    conversationId = conversationId,
+                    prompt = userMessage,
+                    selectedTool = selectedTool,
+                    aspectRatio = aspectRatio,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingAssistantMessageId = failedMessageId
+                )
+                return Result.success(Unit)
+            }
+
             // 删除失败的消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
-
-            // 获取用户消息内容
-            val userMessage = history[prevUserIndex].content
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -1469,6 +1517,7 @@ class ChatRepository(
         userMessageId: Long,
         newContent: String,
         selectedTool: Tool? = null,
+        aspectRatio: String = "1:1",
         onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
         onToolCallEnd: (() -> Unit)? = null
     ): Result<Unit> {
@@ -1484,8 +1533,21 @@ class ChatRepository(
             val updatedUser = target.copy(content = trimmed)
             chatDao.updateMessage(updatedUser)
 
-            // 删除其后的所有消息（保证重新生成上下文正确），保留当前用户消息本身
+            // 删除其后的所有消息
             chatDao.deleteMessagesAfterExclusive(conversationId, target.timestamp)
+
+            // Client-side handling for Image Generation in Edit
+            if (selectedTool?.type == ToolType.IMAGE_GENERATION || selectedTool?.type == ToolType.OPENAI_IMAGE_GENERATION) {
+                handleImageGeneration(
+                    conversationId = conversationId,
+                    prompt = trimmed,
+                    selectedTool = selectedTool,
+                    aspectRatio = aspectRatio,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd
+                )
+                return Result.success(Unit)
+            }
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -1950,6 +2012,153 @@ class ChatRepository(
     /**
      * 过滤掉 <think> 标签及其内容
      */
+    suspend fun handleImageGeneration(
+        conversationId: Long,
+        prompt: String,
+        selectedTool: Tool,
+        aspectRatio: String,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null,
+        existingAssistantMessageId: Long? = null
+    ): Result<ChatMessage> {
+        var assistantMsg: ChatMessage? = null
+        try {
+            val toolType = selectedTool.type
+            onToolCallStart?.invoke(toolType)
+            
+            val baseUrl: String
+            val apiKey: String
+            val modelName: String
+            
+            if (toolType == ToolType.OPENAI_IMAGE_GENERATION) {
+                baseUrl = toolPreferences.openaiImageGenBaseUrl.first()
+                apiKey = toolPreferences.openaiImageGenApiKey.first()
+                val prefModel = toolPreferences.openaiImageGenModel.first()
+                val prefModelName = toolPreferences.openaiImageGenModelName.first()
+                modelName = if (prefModel.isNotBlank()) prefModel else if (prefModelName.isNotBlank()) prefModelName else "image-model"
+            } else {
+                baseUrl = toolPreferences.imageGenBaseUrl.first()
+                apiKey = toolPreferences.imageGenApiKey.first()
+                val prefModel = toolPreferences.imageGenModel.first()
+                val prefModelName = toolPreferences.imageGenModelName.first()
+                modelName = if (prefModel.isNotBlank()) prefModel else if (prefModelName.isNotBlank()) prefModelName else "image-model"
+            }
+
+            if (baseUrl.isBlank()) {
+                throw IllegalStateException("请在工具配置中设置 Endpoint URL")
+            }
+
+            if (apiKey.isBlank()) {
+                throw IllegalStateException("请在工具配置中设置 API Key")
+            }
+
+            // Get or Insert assistant placeholder
+            assistantMsg = if (existingAssistantMessageId != null) {
+                chatDao.getMessageById(existingAssistantMessageId)
+            } else {
+                val newMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = "正在生成图片...",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    modelDisplayName = modelName,
+                    metadata = "aspect_ratio:$aspectRatio"
+                )
+                val id = chatDao.insertMessage(newMsg)
+                newMsg.copy(id = id)
+            }
+
+            // Update existing message if needed
+            if (assistantMsg != null && assistantMsg.id != 0L) {
+                assistantMsg = assistantMsg.copy(
+                    content = "正在生成图片...",
+                    isError = false,
+                    metadata = "aspect_ratio:$aspectRatio",
+                    modelDisplayName = modelName
+                )
+                chatDao.updateMessage(assistantMsg)
+            } else if (assistantMsg == null) {
+                 // Fallback if existing message not found
+                 val newMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = "正在生成图片...",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    modelDisplayName = modelName,
+                    metadata = "aspect_ratio:$aspectRatio"
+                )
+                val id = chatDao.insertMessage(newMsg)
+                assistantMsg = newMsg.copy(id = id)
+            }
+
+            // Map aspect ratio to size
+            val size = when (aspectRatio) {
+                "1:1" -> "1024x1024"
+                "16:9" -> "1792x1024"
+                "9:16" -> "1024x1792"
+                "4:3" -> "1024x1024" 
+                "3:4" -> "1024x1024"
+                else -> "1024x1024"
+            }
+
+            val useCloudProxy = modelPreferences.useCloudProxy.first()
+            val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
+
+            val images = openAiService.generateImage(
+                baseUrl = baseUrl,
+                apiKey = apiKey,
+                prompt = prompt,
+                model = modelName,
+                size = size,
+                useCloudProxy = useCloudProxy,
+                proxyUrl = proxyUrl
+            )
+
+            if (images.isNotEmpty()) {
+                val localPaths = images.mapNotNull { imageData ->
+                    imageData.url?.let { downloadAndSaveImage(it) } ?: imageData.url
+                }
+                
+                if (localPaths.isNotEmpty()) {
+                    val finalMsg = assistantMsg!!.copy(
+                        content = images[0].revisedPrompt ?: "",
+                        imagePaths = localPaths,
+                        isError = false
+                    )
+                    chatDao.updateMessage(finalMsg)
+                    return Result.success(finalMsg)
+                }
+            }
+            throw IOException("未获取到生成的图片链接")
+        } catch (e: Exception) {
+            val errorDetails = e.toString()
+            val errorMessage = "图片生成失败: ${e.message ?: "未知错误"}\n\n详细信息: $errorDetails"
+            
+            val finalErrorMsg = (assistantMsg ?: ChatMessage(
+                conversationId = conversationId,
+                content = errorMessage,
+                isFromUser = false,
+                timestamp = Date(),
+                isError = true,
+                errorDetails = errorDetails
+            )).copy(
+                content = errorMessage,
+                isError = true,
+                errorDetails = errorDetails
+            )
+            
+            if (finalErrorMsg.id != 0L) {
+                chatDao.updateMessage(finalErrorMsg)
+            } else {
+                chatDao.insertMessage(finalErrorMsg)
+            }
+            
+            return Result.failure(e)
+        } finally {
+            onToolCallEnd?.invoke()
+        }
+    }
+
     private fun filterThinkTags(text: String): String {
         // 使用正则表达式移除 <think>...</think> 标签及其内容
         return text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
@@ -2061,6 +2270,34 @@ class ChatRepository(
         } catch (e: Exception) {
             e.printStackTrace()
             null
+        }
+    }
+
+    private suspend fun downloadAndSaveImage(url: String): String? {
+        return withContext(Dispatchers.IO) {
+            try {
+                val client = OkHttpClient()
+                val request = Request.Builder().url(url).build()
+                val response = client.newCall(request).execute()
+                if (!response.isSuccessful) return@withContext null
+                
+                val imagesDir = java.io.File(context.filesDir, "images")
+                if (!imagesDir.exists()) imagesDir.mkdirs()
+                
+                val fileName = "gen_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.jpg"
+                val file = java.io.File(imagesDir, fileName)
+                
+                val source = response.body?.source() ?: return@withContext null
+                val sink = file.sink().buffer()
+                sink.writeAll(source)
+                sink.close()
+                response.close()
+                
+                file.absolutePath
+            } catch (e: Exception) {
+                e.printStackTrace()
+                null
+            }
         }
     }
 }

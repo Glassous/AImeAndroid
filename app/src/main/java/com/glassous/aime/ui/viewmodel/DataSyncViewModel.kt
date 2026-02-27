@@ -117,7 +117,15 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     tavilyUseProxy = toolPreferences.tavilyUseProxy.first(),
                     musicSearchSource = toolPreferences.musicSearchSource.first(),
                     musicSearchResultCount = toolPreferences.musicSearchResultCount.first(),
-                    toolVisibilities = ToolType.getAllTools().associate { it.name to toolPreferences.getToolVisibility(it.name).first() }
+                    toolVisibilities = ToolType.getAllTools().associate { it.name to toolPreferences.getToolVisibility(it.name).first() },
+                    imageGenBaseUrl = toolPreferences.imageGenBaseUrl.first(),
+                    imageGenApiKey = toolPreferences.imageGenApiKey.first(),
+                    imageGenModel = toolPreferences.imageGenModel.first(),
+                    imageGenModelName = toolPreferences.imageGenModelName.first(),
+                    openaiImageGenApiKey = toolPreferences.openaiImageGenApiKey.first(),
+                    openaiImageGenModel = toolPreferences.openaiImageGenModel.first(),
+                    openaiImageGenModelName = toolPreferences.openaiImageGenModelName.first(),
+                    openaiImageGenBaseUrl = toolPreferences.openaiImageGenBaseUrl.first()
                 )
 
                 val titleGenerationSettings = TitleGenerationSettings(
@@ -157,7 +165,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                             timestamp = m.timestamp.time,
                             isError = m.isError,
                             modelDisplayName = m.modelDisplayName,
-                            imagePaths = relativeImagePaths.ifEmpty { null }
+                            imagePaths = relativeImagePaths.ifEmpty { null },
+                            metadata = m.metadata
                         )
                     }
                     backupConversations.add(
@@ -360,6 +369,14 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                         tool.tavilyUseProxy?.let { toolPreferences.setTavilyUseProxy(it) }
                         tool.musicSearchSource?.let { toolPreferences.setMusicSearchSource(it) }
                         tool.musicSearchResultCount?.let { toolPreferences.setMusicSearchResultCount(it) }
+                        tool.imageGenBaseUrl?.let { toolPreferences.setImageGenBaseUrl(it) }
+                        tool.imageGenApiKey?.let { toolPreferences.setImageGenApiKey(it) }
+                        tool.imageGenModel?.let { toolPreferences.setImageGenModel(it) }
+                        tool.imageGenModelName?.let { toolPreferences.setImageGenModelName(it) }
+                        tool.openaiImageGenApiKey?.let { toolPreferences.setOpenaiImageGenApiKey(it) }
+                        tool.openaiImageGenModel?.let { toolPreferences.setOpenaiImageGenModel(it) }
+                        tool.openaiImageGenModelName?.let { toolPreferences.setOpenaiImageGenModelName(it) }
+                        tool.openaiImageGenBaseUrl?.let { toolPreferences.setOpenaiImageGenBaseUrl(it) }
                         tool.toolVisibilities?.forEach { (name, visible) ->
                             toolPreferences.setToolVisibility(name, visible)
                         }
@@ -398,7 +415,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                                 timestamp = Date(bm.timestamp),
                                 isError = bm.isError ?: false,
                                 modelDisplayName = bm.modelDisplayName,
-                                imagePaths = restoredImagePaths
+                                imagePaths = restoredImagePaths,
+                                metadata = bm.metadata
                             )
                         )
                     }

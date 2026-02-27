@@ -24,6 +24,16 @@ class ToolPreferences(private val context: Context) {
         val TAVILY_USE_PROXY = booleanPreferencesKey("tavily_use_proxy")
         val MUSIC_SEARCH_SOURCE = stringPreferencesKey("music_search_source")
         val MUSIC_SEARCH_RESULT_COUNT = intPreferencesKey("music_search_result_count")
+        
+        // Image Generation
+        val IMAGE_GEN_BASE_URL = stringPreferencesKey("image_gen_base_url")
+        val IMAGE_GEN_API_KEY = stringPreferencesKey("image_gen_api_key")
+        val IMAGE_GEN_MODEL = stringPreferencesKey("image_gen_model")
+        val IMAGE_GEN_MODEL_NAME = stringPreferencesKey("image_gen_model_name")
+        val OPENAI_IMAGE_GEN_API_KEY = stringPreferencesKey("openai_image_gen_api_key")
+        val OPENAI_IMAGE_GEN_MODEL = stringPreferencesKey("openai_image_gen_model")
+        val OPENAI_IMAGE_GEN_MODEL_NAME = stringPreferencesKey("openai_image_gen_model_name")
+        val OPENAI_IMAGE_GEN_BASE_URL = stringPreferencesKey("openai_image_gen_base_url")
     }
 
     // Get all visible tool names
@@ -31,7 +41,7 @@ class ToolPreferences(private val context: Context) {
         .map { preferences ->
             ToolType.values().filter { tool ->
                 val key = booleanPreferencesKey("tool_visibility_${tool.name}")
-                preferences[key] ?: true // Default to true
+                preferences[key] ?: (tool != ToolType.IMAGE_GENERATION && tool != ToolType.OPENAI_IMAGE_GENERATION) // Default to true except for image gen
             }.map { it.name }.toSet()
         }
 
@@ -67,11 +77,52 @@ class ToolPreferences(private val context: Context) {
             preferences[MUSIC_SEARCH_RESULT_COUNT] ?: 5
         }
 
+    // Image Gen flows
+    val imageGenBaseUrl: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[IMAGE_GEN_BASE_URL] ?: ""
+        }
+
+    val imageGenApiKey: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[IMAGE_GEN_API_KEY] ?: ""
+        }
+
+    val imageGenModel: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[IMAGE_GEN_MODEL] ?: ""
+        }
+
+    val imageGenModelName: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[IMAGE_GEN_MODEL_NAME] ?: ""
+        }
+
+    val openaiImageGenApiKey: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OPENAI_IMAGE_GEN_API_KEY] ?: ""
+        }
+    
+    val openaiImageGenModel: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OPENAI_IMAGE_GEN_MODEL] ?: ""
+        }
+
+    val openaiImageGenModelName: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OPENAI_IMAGE_GEN_MODEL_NAME] ?: ""
+        }
+
+    val openaiImageGenBaseUrl: Flow<String> = context.dataStore.data
+        .map { preferences ->
+            preferences[OPENAI_IMAGE_GEN_BASE_URL] ?: ""
+        }
+
     fun getToolVisibility(toolName: String): Flow<Boolean> {
         val key = booleanPreferencesKey("tool_visibility_$toolName")
         return context.dataStore.data
             .map { preferences ->
-                preferences[key] ?: true // Default to true (visible)
+                preferences[key] ?: (toolName != "IMAGE_GENERATION" && toolName != "OPENAI_IMAGE_GENERATION") // Default to true except for image gen
             }
     }
 
@@ -120,6 +171,54 @@ class ToolPreferences(private val context: Context) {
     suspend fun setMusicSearchResultCount(count: Int) {
         context.dataStore.edit { preferences ->
             preferences[MUSIC_SEARCH_RESULT_COUNT] = count
+        }
+    }
+
+    suspend fun setImageGenBaseUrl(baseUrl: String) {
+        context.dataStore.edit { preferences ->
+            preferences[IMAGE_GEN_BASE_URL] = baseUrl
+        }
+    }
+
+    suspend fun setImageGenApiKey(apiKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[IMAGE_GEN_API_KEY] = apiKey
+        }
+    }
+
+    suspend fun setImageGenModel(model: String) {
+        context.dataStore.edit { preferences ->
+            preferences[IMAGE_GEN_MODEL] = model
+        }
+    }
+
+    suspend fun setImageGenModelName(modelName: String) {
+        context.dataStore.edit { preferences ->
+            preferences[IMAGE_GEN_MODEL_NAME] = modelName
+        }
+    }
+
+    suspend fun setOpenaiImageGenApiKey(apiKey: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OPENAI_IMAGE_GEN_API_KEY] = apiKey
+        }
+    }
+
+    suspend fun setOpenaiImageGenModel(model: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OPENAI_IMAGE_GEN_MODEL] = model
+        }
+    }
+
+    suspend fun setOpenaiImageGenModelName(modelName: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OPENAI_IMAGE_GEN_MODEL_NAME] = modelName
+        }
+    }
+
+    suspend fun setOpenaiImageGenBaseUrl(baseUrl: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OPENAI_IMAGE_GEN_BASE_URL] = baseUrl
         }
     }
 }

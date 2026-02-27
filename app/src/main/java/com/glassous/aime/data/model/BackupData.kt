@@ -32,7 +32,15 @@ data class ToolSettings(
     @SerializedName("tavilyUseProxy") val tavilyUseProxy: Boolean? = null,
     @SerializedName("musicSearchSource") val musicSearchSource: String? = null,
     @SerializedName("musicSearchResultCount") val musicSearchResultCount: Int? = null,
-    @SerializedName("toolVisibilities") val toolVisibilities: Map<String, Boolean>? = null
+    @SerializedName("toolVisibilities") val toolVisibilities: Map<String, Boolean>? = null,
+    @SerializedName("imageGenBaseUrl") val imageGenBaseUrl: String? = null,
+    @SerializedName("imageGenApiKey") val imageGenApiKey: String? = null,
+    @SerializedName("imageGenModel") val imageGenModel: String? = null,
+    @SerializedName("imageGenModelName") val imageGenModelName: String? = null,
+    @SerializedName("openaiImageGenApiKey") val openaiImageGenApiKey: String? = null,
+    @SerializedName("openaiImageGenModel") val openaiImageGenModel: String? = null,
+    @SerializedName("openaiImageGenModelName") val openaiImageGenModelName: String? = null,
+    @SerializedName("openaiImageGenBaseUrl") val openaiImageGenBaseUrl: String? = null
 )
 
 data class TitleGenerationSettings(
@@ -96,5 +104,6 @@ data class BackupMessage(
     @SerializedName("timestamp") val timestamp: Long,
     @SerializedName("isError") val isError: Boolean?,
     @SerializedName("modelDisplayName") val modelDisplayName: String? = null,
-    @SerializedName("imagePaths") val imagePaths: List<String>? = null
+    @SerializedName("imagePaths") val imagePaths: List<String>? = null,
+    @SerializedName("metadata") val metadata: String? = null
 )

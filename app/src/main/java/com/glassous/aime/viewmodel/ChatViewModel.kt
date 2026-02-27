@@ -36,6 +36,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _attachedImages = MutableStateFlow<List<String>>(emptyList())
     val attachedImages: StateFlow<List<String>> = _attachedImages.asStateFlow()
+
+    private val _selectedAspectRatio = MutableStateFlow("1:1")
+    val selectedAspectRatio: StateFlow<String> = _selectedAspectRatio.asStateFlow()
+
+    fun updateAspectRatio(ratio: String) {
+        _selectedAspectRatio.value = ratio
+    }
     
     val conversations: StateFlow<List<Conversation>> = repository.getAllConversations()
         .stateIn(
@@ -153,6 +160,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 }
                 
                 val imagesToSend = _attachedImages.value.toList()
+                val currentAspectRatio = _selectedAspectRatio.value
                 _inputText.value = ""
                 _attachedImages.value = emptyList()
                 
@@ -161,6 +169,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     content,
                     imagesToSend,
                     selectedTool,
+                    aspectRatio = currentAspectRatio,
                     onToolCallStart = { type ->
                         _currentToolType.value = type
                         _toolCallInProgress.value = true
@@ -188,10 +197,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val msg = repository.getMessageById(messageId)
                 if (msg != null && !msg.isFromUser) {
+                    val currentAspectRatio = _selectedAspectRatio.value
                     repository.regenerateFromAssistant(
                         msg.conversationId,
                         msg.id,
                         selectedTool,
+                        aspectRatio = currentAspectRatio,
                         onToolCallStart = { type ->
                             _currentToolType.value = type
                             _toolCallInProgress.value = true
@@ -220,12 +231,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = true
         viewModelScope.launch {
             try {
+                val currentAspectRatio = _selectedAspectRatio.value
                 withContext(Dispatchers.IO) {
                      repository.editUserMessageAndResend(
                         conversationId = conversationId,
                         userMessageId = userMessageId,
                         newContent = newContent,
                         selectedTool = selectedTool,
+                        aspectRatio = currentAspectRatio,
                         onToolCallStart = { type ->
                             _toolCallInProgress.value = true
                             _currentToolType.value = type
@@ -253,11 +266,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = true
         viewModelScope.launch {
             try {
+                val currentAspectRatio = _selectedAspectRatio.value
                 withContext(Dispatchers.IO) {
                     repository.retryFailedMessage(
                         conversationId = conversationId,
                         failedMessageId = failedMessageId,
                         selectedTool = selectedTool,
+                        aspectRatio = currentAspectRatio,
                         onToolCallStart = { type ->
                             _toolCallInProgress.value = true
                             _currentToolType.value = type

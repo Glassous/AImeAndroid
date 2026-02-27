@@ -18,7 +18,8 @@ data class ChatMessage(
     val isDeleted: Boolean = false,
     val deletedAt: Date? = null,
     val errorDetails: String? = null,
-    val imagePaths: List<String> = emptyList()
+    val imagePaths: List<String> = emptyList(),
+    val metadata: String? = null // For extra data like aspect ratio
 )
 
 @Entity(tableName = "conversations")
