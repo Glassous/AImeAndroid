@@ -344,9 +344,12 @@ class ChatRepository(
             
             val isMessageIncluded = history.any { it.id == insertedId }
             if (!isMessageIncluded) {
+                // Filter out <file_url> tags from content sent to AI to avoid tag leak
+                val contentForAi = processedMessage.replace(Regex("<file_url.*?>"), "").trim()
+                
                 val userMsg = ChatMessage(
                     conversationId = conversationId,
-                    content = processedMessage,
+                    content = contentForAi,
                     isFromUser = true,
                     timestamp = Date(),
                     imagePaths = imagePaths
@@ -2245,12 +2248,40 @@ class ChatRepository(
     }
 
     private fun toOpenAiMessage(message: ChatMessage): OpenAiChatMessage {
+        // Filter out <file_url> tags from content if present to avoid tag leak to AI
+        val filteredContent = if (message.content.contains("<file_url")) {
+            message.content.replace(Regex("<file_url.*?>"), "").trim()
+        } else {
+            message.content
+        }
+
         val content: Any = if (message.imagePaths.isNotEmpty()) {
             val parts = mutableListOf<OpenAiContentPart>()
-            if (message.content.isNotBlank()) {
-                parts.add(OpenAiContentPart(type = "text", text = message.content))
+            if (filteredContent.isNotBlank()) {
+                parts.add(OpenAiContentPart(type = "text", text = filteredContent))
             }
             message.imagePaths.forEach { path ->
+                if (path.startsWith("url:")) {
+                    // Handle URL attachments: url:type:actual_url
+                    val urlParts = path.split(":", limit = 3)
+                    if (urlParts.size == 3) {
+                        val type = urlParts[1]
+                        val actualUrl = urlParts[2]
+                        when (type) {
+                            "image_url" -> parts.add(OpenAiContentPart(type = "image_url", imageUrl = OpenAiImageUrl(url = actualUrl)))
+                            "video_url" -> {
+                                // For YouTube, we send it as a video_url if supported by provider
+                                // or handle specifically if needed. For now follow requested format.
+                                parts.add(OpenAiContentPart(type = "video_url", videoUrl = OpenAiVideoUrl(url = actualUrl)))
+                            }
+                            "pdf_url" -> {
+                                parts.add(OpenAiContentPart(type = "file", imageUrl = OpenAiImageUrl(url = actualUrl)))
+                            }
+                        }
+                    }
+                    return@forEach
+                }
+
                 val lowerPath = path.lowercase()
                 if (lowerPath.endsWith(".mp4") || lowerPath.endsWith(".mov") || lowerPath.endsWith(".webm")) {
                     val file = java.io.File(path)
@@ -2351,7 +2382,7 @@ class ChatRepository(
         }
         return OpenAiChatMessage(
             role = if (message.isFromUser) "user" else "assistant",
-            content = content
+            content = if (message.imagePaths.isNotEmpty()) content else filteredContent
         )
     }
 

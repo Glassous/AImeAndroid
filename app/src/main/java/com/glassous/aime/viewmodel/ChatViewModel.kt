@@ -158,6 +158,45 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addLinkAttachment(url: String, context: android.content.Context) {
+        val trimmedUrl = url.trim()
+        if (trimmedUrl.isBlank()) return
+
+        val type = when {
+            // YouTube check
+            trimmedUrl.contains("youtube.com/watch", ignoreCase = true) || 
+            trimmedUrl.contains("youtu.be/", ignoreCase = true) -> "video_url"
+            
+            // Image extensions
+            trimmedUrl.endsWith(".png", ignoreCase = true) || 
+            trimmedUrl.endsWith(".jpg", ignoreCase = true) || 
+            trimmedUrl.endsWith(".jpeg", ignoreCase = true) || 
+            trimmedUrl.endsWith(".webp", ignoreCase = true) || 
+            trimmedUrl.endsWith(".gif", ignoreCase = true) -> "image_url"
+            
+            // Video extensions
+            trimmedUrl.endsWith(".mp4", ignoreCase = true) || 
+            trimmedUrl.endsWith(".mpeg", ignoreCase = true) || 
+            trimmedUrl.endsWith(".mov", ignoreCase = true) || 
+            trimmedUrl.endsWith(".webm", ignoreCase = true) -> "video_url"
+            
+            // PDF extension
+            trimmedUrl.endsWith(".pdf", ignoreCase = true) -> "pdf_url"
+            
+            else -> null
+        }
+
+        if (type != null) {
+            val currentList = _attachedImages.value.toMutableList()
+            // Use a prefix to distinguish URL attachments from local paths
+            currentList.add("url:${type}:${trimmedUrl}")
+            _attachedImages.value = currentList
+        } else {
+            // Show toast or error? For now just ignore as requested "格式不支持则无法加入待定区域"
+            android.widget.Toast.makeText(context, "不支持的链接格式", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // Deprecated: helper for backward compatibility if needed, but we will update callers
     fun addAttachment(uri: android.net.Uri, context: android.content.Context, isVideo: Boolean) {
         addAttachment(uri, context, if (isVideo) "video" else "image")
@@ -203,8 +242,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
-                val imagesToSend = _attachedImages.value.filter { !it.contains("/txt_") }.toList()
+                val imagesToSend = _attachedImages.value.filter { !it.contains("/txt_") && !it.startsWith("url:") }.toList()
                 val textFiles = _attachedImages.value.filter { it.contains("/txt_") }
+                val urlFiles = _attachedImages.value.filter { it.startsWith("url:") }
                 
                 var finalContent = content
                 textFiles.forEach { path ->
@@ -220,15 +260,32 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                         e.printStackTrace()
                     }
                 }
+
+                urlFiles.forEachIndexed { index, path ->
+                    // url:type:actual_url
+                    val urlParts = path.split(":", limit = 3)
+                    if (urlParts.size == 3) {
+                        val actualUrl = urlParts[2]
+                        finalContent += "\n\n<file_url index=\"${index + 1}\" url=\"$actualUrl\" />"
+                    }
+                }
                 
                 val currentAspectRatio = _selectedAspectRatio.value
                 _inputText.value = ""
                 _attachedImages.value = emptyList()
                 
+                // CRITICAL: Filter out URL attachments from being sent to the AI backend via imagePaths
+                // The URL info is already included in finalContent as <file_url> tags
+                // And repository.sendMessage will handle the actual content parts
+                val localAttachments = imagesToSend
+                
+                // Add all URL attachments (including non-image ones) to a separate list or handle in repository
+                val allAttachmentsForBackend = localAttachments + urlFiles
+                
                 repository.sendMessage(
                     conversationId,
                     finalContent,
-                    imagesToSend,
+                    allAttachmentsForBackend,
                     selectedTool,
                     aspectRatio = currentAspectRatio,
                     onToolCallStart = { type ->

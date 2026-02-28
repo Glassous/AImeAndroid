@@ -37,6 +37,9 @@ fun ExpandableReplyBox(
     enableTypewriterEffect: Boolean = false,
     onLinkClick: ((String) -> Unit)? = null,
     onShowSearchResults: ((List<SearchResult>) -> Unit)? = null,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
+    onUrlPreview: ((String) -> Unit)? = null,
     isShareMode: Boolean = false
 ) {
     // 定义解析结果变量
@@ -202,6 +205,9 @@ fun ExpandableReplyBox(
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
                     onLinkClick = onLinkClick,
+                    onImageClick = onImageClick,
+                    onVideoClick = onVideoClick,
+                    onUrlPreview = onUrlPreview,
                     forceExpanded = forceExpanded,
                     isShareMode = isShareMode
                 )
@@ -234,6 +240,9 @@ fun ExpandableReplyBox(
                     useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                     enableTypewriterEffect = enableTypewriterEffect,
                     onLinkClick = onLinkClick,
+                    onImageClick = onImageClick,
+                    onVideoClick = onVideoClick,
+                    onUrlPreview = onUrlPreview,
                     forceExpanded = forceExpanded,
                     isShareMode = isShareMode
                 )
@@ -241,40 +250,43 @@ fun ExpandableReplyBox(
             }
 
             // 4. 正式回复
-            if (!officialText.isNullOrEmpty()) {
-                StreamingMarkdownRenderer(
-                    markdown = officialText!!,
-                    textColor = textColor,
-                    textSizeSp = textSizeSp,
-                    onLongClick = onLongClick,
-                    isStreaming = isStreaming,
-                    onHtmlPreview = onHtmlPreview,
-                    onHtmlPreviewSource = onHtmlPreviewSource,
-                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                    enableTypewriterEffect = enableTypewriterEffect,
-                    onLinkClick = onLinkClick,
-                    onCitationClick = { id ->
-                        if (isSearchMode && !isShareMode) {
-                            val url = citationUrls[id]
-                            if (url != null) {
-                                try {
-                                    if (onLinkClick != null) {
-                                        onLinkClick.invoke(url)
-                                    } else {
-                                        uriHandler.openUri(url)
-                                    }
-                                } catch (e: Exception) {
-                                    // 无法打开链接，fallback到展开详情
-                                    showSearchBottomSheet = true
-                                }
+    if (!officialText.isNullOrEmpty()) {
+        StreamingMarkdownRenderer(
+            markdown = officialText!!,
+            textColor = textColor,
+            textSizeSp = textSizeSp,
+            onLongClick = onLongClick,
+            isStreaming = isStreaming,
+            onHtmlPreview = onHtmlPreview,
+            onHtmlPreviewSource = onHtmlPreviewSource,
+            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+            enableTypewriterEffect = enableTypewriterEffect,
+            onLinkClick = onLinkClick,
+            onImageClick = onImageClick,
+            onVideoClick = onVideoClick,
+            onUrlPreview = onUrlPreview,
+            onCitationClick = { id ->
+                if (isSearchMode && !isShareMode) {
+                    val url = citationUrls[id]
+                    if (url != null) {
+                        try {
+                            if (onLinkClick != null) {
+                                onLinkClick.invoke(url)
                             } else {
-                                showSearchBottomSheet = true
+                                uriHandler.openUri(url)
                             }
+                        } catch (e: Exception) {
+                            // 无法打开链接，fallback到展开详情
+                            showSearchBottomSheet = true
                         }
-                    },
-                    isShareMode = isShareMode
-                )
-            } else if (!isStreaming && firstThought == null && searchResults == null && secondThought == null) {
+                    } else {
+                        showSearchBottomSheet = true
+                    }
+                }
+            },
+            isShareMode = isShareMode
+        )
+    } else if (!isStreaming && firstThought == null && searchResults == null && secondThought == null) {
                 // 既没有思考也没有正式回复的异常情况
                 Text(
                     text = "等待回复…",
@@ -304,6 +316,9 @@ private fun ExpandableThoughtBlock(
     useCardStyleForHtmlCode: Boolean,
     enableTypewriterEffect: Boolean,
     onLinkClick: ((String) -> Unit)?,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
+    onUrlPreview: ((String) -> Unit)? = null,
     forceExpanded: Boolean,
     isShareMode: Boolean = false // Added default value
 ) {
@@ -395,6 +410,9 @@ private fun ExpandableThoughtBlock(
                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                 isStreaming = isStreaming && enableTypewriterEffect,
                 onLinkClick = onLinkClick,
+                onImageClick = onImageClick,
+                onVideoClick = onVideoClick,
+                onUrlPreview = onUrlPreview,
                 isShareMode = isShareMode
             )
 

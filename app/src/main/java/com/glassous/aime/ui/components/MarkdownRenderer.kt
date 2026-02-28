@@ -30,7 +30,12 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.font.FontWeight
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
@@ -44,11 +49,13 @@ data class MarkdownBlock(
     val content: String,
     val language: String? = null,
     val musicList: List<MusicInfo>? = null,
-    val fileName: String? = null
+    val fileName: String? = null,
+    val index: Int? = null,
+    val url: String? = null
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC, FILE_CARD
+    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC, FILE_CARD, FILE_URL_CARD
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -138,6 +145,89 @@ fun MarkdownFileCard(
 }
 
 @Composable
+fun MarkdownFileUrlCard(
+    index: Int,
+    url: String,
+    textColor: androidx.compose.ui.graphics.Color,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
+    onUrlPreview: ((String) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    val isImage = url.lowercase().let { 
+        it.endsWith(".png") || it.endsWith(".jpg") || it.endsWith(".jpeg") || it.endsWith(".webp") || it.endsWith(".gif") 
+    }
+    val isVideo = url.lowercase().let {
+        it.endsWith(".mp4") || it.endsWith(".mpeg") || it.endsWith(".mov") || it.endsWith(".webm")
+    }
+    val isYouTube = url.contains("youtube.com/watch", ignoreCase = true) || url.contains("youtu.be/", ignoreCase = true)
+    val isPdf = url.lowercase().endsWith(".pdf")
+
+    Card(
+        onClick = {
+            when {
+                isImage -> onImageClick?.invoke(url)
+                isVideo -> onVideoClick?.invoke(url)
+                isYouTube -> onUrlPreview?.invoke(url)
+                isPdf -> { /* Do nothing for PDF as requested */ }
+                else -> onUrlPreview?.invoke(url)
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                shape = androidx.compose.foundation.shape.CircleShape,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(
+                        text = index.toString(),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Icon(
+                imageVector = when {
+                    isImage -> Icons.Default.Image
+                    isVideo -> Icons.Default.PlayCircleOutline
+                    isYouTube -> Icons.Default.PlayCircleOutline
+                    isPdf -> Icons.Default.PictureAsPdf
+                    else -> Icons.Default.Link
+                },
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(20.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Text(
+                text = url,
+                style = MaterialTheme.typography.bodySmall,
+                color = textColor,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
 fun MarkdownRenderer(
     markdown: String,
     textColor: androidx.compose.ui.graphics.Color,
@@ -153,6 +243,9 @@ fun MarkdownRenderer(
     isStreaming: Boolean = false,
     onCitationClick: ((String) -> Unit)? = null,
     onLinkClick: ((String) -> Unit)? = null,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
+    onUrlPreview: ((String) -> Unit)? = null,
     isShareMode: Boolean = false // New parameter
 ) {
     // 【修改开始】对 <think> 标签进行转义，防止被作为 HTML 标签隐藏
@@ -439,6 +532,23 @@ fun MarkdownRenderer(
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
                 }
+                BlockType.FILE_URL_CARD -> {
+                    MarkdownFileUrlCard(
+                        index = block.index ?: 0,
+                        url = block.url ?: "",
+                        textColor = textColor,
+                        onImageClick = { url ->
+                            // Map URL to path-like format for preview if needed
+                            // Or handle directly. In ChatScreen, onImageClick handles paths.
+                            onImageClick?.invoke(url)
+                        },
+                        onVideoClick = { url ->
+                            onVideoClick?.invoke(url)
+                        },
+                        onUrlPreview = onUrlPreview,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
             }
         }
     }
@@ -455,7 +565,10 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     // Group 6: File block (full match)
     // Group 7: File name
     // Group 8: File content
-    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)|(<file name=\"(.*?)\">([\\s\\S]*?)</file>)", Pattern.MULTILINE)
+    // Group 9: File URL block (full match)
+    // Group 10: Index
+    // Group 11: URL
+    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)|(<file name=\"(.*?)\">([\\s\\S]*?)</file>)|(<file_url index=\"(.*?)\" url=\"(.*?)\" />)", Pattern.MULTILINE)
     val matcher = combinedPattern.matcher(markdown)
 
     var lastEnd = 0
@@ -516,8 +629,14 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 val fileContent = matcher.group(8) ?: ""
                 blocks.add(MarkdownBlock(BlockType.FILE_CARD, fileContent, fileName = fileName))
             }
+            matcher.group(9) != null -> {
+                // It's a File URL Block
+                val index = matcher.group(10)?.toIntOrNull() ?: 0
+                val url = matcher.group(11) ?: ""
+                blocks.add(MarkdownBlock(BlockType.FILE_URL_CARD, "", index = index, url = url))
+            }
         }
-
+        
         lastEnd = matcher.end()
     }
 

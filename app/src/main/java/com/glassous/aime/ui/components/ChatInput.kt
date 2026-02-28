@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
 
@@ -96,19 +97,23 @@ fun ChatInput(
                         Box(
                             modifier = Modifier.size(72.dp)
                         ) {
-                            val isVideo = path.endsWith(".mp4", ignoreCase = true)
-                            val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
-                            val isPdf = path.endsWith(".pdf", ignoreCase = true)
-                            val isText = path.contains("/txt_", ignoreCase = true)
+                            val isUrl = path.startsWith("url:")
+                            val urlType = if (isUrl) path.split(":")[1] else ""
+                            val actualPath = if (isUrl) path.substringAfterLast(":") else path
                             
-                            if (isAudio || isPdf || isText) {
+                            val isVideo = actualPath.endsWith(".mp4", ignoreCase = true) || urlType == "video_url"
+                            val isAudio = actualPath.endsWith(".m4a", ignoreCase = true) || actualPath.endsWith(".mp3", ignoreCase = true) || actualPath.endsWith(".wav", ignoreCase = true)
+                            val isPdf = actualPath.endsWith(".pdf", ignoreCase = true) || urlType == "pdf_url"
+                            val isText = actualPath.contains("/txt_", ignoreCase = true)
+                            
+                            if (isAudio || isPdf || isText || isUrl) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.secondaryContainer)
                                         .clickable { 
-                                            if (!isPdf && !isText) onImageClick(path) 
+                                            if (!isPdf && !isText && !isUrl) onImageClick(path) 
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
@@ -116,11 +121,14 @@ fun ChatInput(
                                         imageVector = when {
                                             isPdf -> Icons.Default.PictureAsPdf
                                             isAudio -> Icons.Default.AudioFile
+                                            isUrl && urlType == "image_url" -> Icons.Default.Image
+                                            isUrl && urlType == "video_url" -> Icons.Default.PlayCircleOutline
                                             else -> Icons.Default.Description
                                         },
                                         contentDescription = when {
                                             isPdf -> "PDF"
                                             isAudio -> "Audio"
+                                            isUrl -> "URL"
                                             else -> "Text"
                                         },
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer
@@ -129,9 +137,10 @@ fun ChatInput(
                                     val label = when {
                                         isPdf -> "PDF"
                                         isText -> {
-                                            val ext = path.substringAfterLast(".", "").uppercase()
+                                            val ext = actualPath.substringAfterLast(".", "").uppercase()
                                             if (ext.isNotEmpty() && ext != "TXT") ext else "TXT"
                                         }
+                                        isUrl -> "URL"
                                         else -> null
                                     }
                                     if (label != null) {

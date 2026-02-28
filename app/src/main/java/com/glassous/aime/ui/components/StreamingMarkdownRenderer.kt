@@ -19,6 +19,9 @@ fun StreamingMarkdownRenderer(
     enableTypewriterEffect: Boolean = true,
     onCitationClick: ((String) -> Unit)? = null,
     onLinkClick: ((String) -> Unit)? = null,
+    onImageClick: ((String) -> Unit)? = null,
+    onVideoClick: ((String) -> Unit)? = null,
+    onUrlPreview: ((String) -> Unit)? = null,
     isShareMode: Boolean = false // Added new parameter
 ) {
     Column(modifier = modifier) {
@@ -36,6 +39,9 @@ fun StreamingMarkdownRenderer(
             isStreaming = isStreaming && enableTypewriterEffect,
             onCitationClick = onCitationClick,
             onLinkClick = onLinkClick,
+            onImageClick = onImageClick,
+            onVideoClick = onVideoClick,
+            onUrlPreview = onUrlPreview,
             isShareMode = isShareMode
         )
     }

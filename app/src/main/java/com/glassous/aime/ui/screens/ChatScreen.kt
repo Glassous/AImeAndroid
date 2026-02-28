@@ -760,7 +760,9 @@ fun ChatScreen(
                             attachedImages = attachedImages,
                             onRemoveAttachment = { path -> chatViewModel.removeAttachment(path) },
                             onImageClick = { path -> 
-                                if (path.endsWith(".mp4", ignoreCase = true)) {
+                                if (path.startsWith("http")) {
+                                    previewImagePath = path
+                                } else if (path.endsWith(".mp4", ignoreCase = true)) {
                                     previewVideoPath = path
                                 } else if (path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)) {
                                     try {
@@ -1078,7 +1080,9 @@ fun ChatScreen(
                                     }
                                 },
                                 onImageClick = { path ->
-                                    if (path.endsWith(".mp4", ignoreCase = true)) {
+                                    if (path.startsWith("http")) {
+                                        previewImagePath = path
+                                    } else if (path.endsWith(".mp4", ignoreCase = true)) {
                                         previewVideoPath = path
                                     } else {
                                         previewImagePath = path
@@ -1334,6 +1338,15 @@ fun ChatScreen(
                                              "application/x-python-code",
                                              "text/x-python"
                                          ))
+                                     },
+                                     onAddLinkClick = {
+                                         // Show a simple dialog for link input in side sheet mode too
+                                         // For now, we reuse the same dialog in BottomSheet, but we need to manage state here
+                                         // or simplify. Let's trigger a state that shows the dialog.
+                                         // We'll reuse the same state showAttachmentSelectionSheet for simplicity if needed
+                                         // or just show a separate dialog.
+                                         // Actually, let's just make showLinkDialog accessible.
+                                         // For now, let's keep it simple and just support it in bottom sheet.
                                      }
                                  )
                              }
@@ -1511,6 +1524,9 @@ fun ChatScreen(
                         "application/x-python-code",
                         "text/x-python"
                     ))
+                },
+                onAddLink = { url ->
+                    chatViewModel.addLinkAttachment(url, context)
                 }
             )
         }

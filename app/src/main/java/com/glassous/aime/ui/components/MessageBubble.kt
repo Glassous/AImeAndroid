@@ -161,6 +161,13 @@ fun MessageBubble(
                             forceExpanded = forceExpandReply,
                             enableTypewriterEffect = enableTypewriterEffect,
                             onLinkClick = onLinkClick,
+                            onImageClick = onImageClick,
+                            onVideoClick = { path ->
+                                if (onImageClick != null) onImageClick(path)
+                            },
+                            onUrlPreview = { url ->
+                                if (onLinkClick != null) onLinkClick(url)
+                            },
                             isShareMode = isShareMode
                         )
                         } else {
@@ -175,6 +182,13 @@ fun MessageBubble(
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 enableTypewriterEffect = enableTypewriterEffect,
                                 onLinkClick = onLinkClick,
+                                onImageClick = onImageClick,
+                                onVideoClick = { path ->
+                                    if (onImageClick != null) onImageClick(path)
+                                },
+                                onUrlPreview = { url ->
+                                    if (onLinkClick != null) onLinkClick(url)
+                                },
                                 isShareMode = isShareMode
                             )
                         }
@@ -244,6 +258,13 @@ fun MessageBubble(
                                 enableTypewriterEffect = enableTypewriterEffect,
                                 onLinkClick = onLinkClick,
                                 onShowSearchResults = onShowSearchResults,
+                                onImageClick = onImageClick,
+                                onVideoClick = { path ->
+                                    if (onImageClick != null) onImageClick(path)
+                                },
+                                onUrlPreview = { url ->
+                                    if (onLinkClick != null) onLinkClick(url)
+                                },
                                 isShareMode = isShareMode
                             )
                         } else {
@@ -259,6 +280,14 @@ fun MessageBubble(
                                 useCardStyleForHtmlCode = useCardStyleForHtmlCode,
                                 enableTypewriterEffect = enableTypewriterEffect,
                                 onLinkClick = onLinkClick,
+                                onImageClick = onImageClick,
+                                onVideoClick = { path ->
+                                    // Handle video click
+                                    if (onImageClick != null) onImageClick(path)
+                                },
+                                onUrlPreview = { url ->
+                                    if (onHtmlPreview != null) onHtmlPreview(url)
+                                },
                                 isShareMode = isShareMode
                             )
                         }
@@ -440,6 +469,9 @@ fun MessageImages(
     val pdfPaths = imagePaths.filter { it.endsWith(".pdf", ignoreCase = true) }
     val visualPaths = imagePaths - audioPaths.toSet() - pdfPaths.toSet()
 
+    // Filter out url attachments as they are now handled by <file_url> tags in the markdown
+    val localVisualPaths = visualPaths.filter { !it.startsWith("url:") }
+
     // Render Audio Files
     if (audioPaths.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -450,7 +482,7 @@ fun MessageImages(
                 )
             }
         }
-        if (pdfPaths.isNotEmpty() || visualPaths.isNotEmpty()) {
+        if (pdfPaths.isNotEmpty() || localVisualPaths.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
@@ -481,14 +513,14 @@ fun MessageImages(
                 )
             }
         }
-        if (visualPaths.isNotEmpty()) {
+        if (localVisualPaths.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
 
-    if (visualPaths.isEmpty()) return
+    if (localVisualPaths.isEmpty()) return
     
-    val imageCount = visualPaths.size
+    val imageCount = localVisualPaths.size
     
     // Only use MessageImageCard for AI messages (replies)
     val useImageCard = !message.isFromUser && !message.isError && !isStreaming
@@ -496,7 +528,7 @@ fun MessageImages(
     if (imageCount == 1) {
         if (useImageCard) {
             MessageImageCard(
-                imagePath = visualPaths.first(),
+                imagePath = localVisualPaths.first(),
                 isShareMode = isShareMode,
                 message = message,
                 onImageClick = onImageClick
@@ -507,24 +539,24 @@ fun MessageImages(
                 contentAlignment = Alignment.CenterStart
             ) {
                 AsyncImage(
-                    model = if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
+                    model = if (localVisualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(visualPaths.first())
+                            .data(localVisualPaths.first())
                             .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
                             .build()
                     } else {
-                        visualPaths.first()
+                        localVisualPaths.first()
                     },
                     contentDescription = null,
                     modifier = Modifier
                         .wrapContentWidth()
                         .heightIn(max = 400.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onImageClick?.invoke(visualPaths.first()) },
+                        .clickable { onImageClick?.invoke(localVisualPaths.first()) },
                     contentScale = ContentScale.Inside
                 )
                 
-                if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
+                if (localVisualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                     androidx.compose.material3.Icon(
                         imageVector = Icons.Default.PlayCircleOutline,
                         contentDescription = "Play Video",
@@ -542,7 +574,7 @@ fun MessageImages(
         // For multiple images, if it's from AI, maybe use a list of cards or keep the grid
         if (useImageCard) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                visualPaths.forEach { path ->
+                localVisualPaths.forEach { path ->
                     MessageImageCard(
                         imagePath = path,
                         isShareMode = isShareMode,
@@ -556,8 +588,8 @@ fun MessageImages(
                  modifier = Modifier.fillMaxWidth(), 
                  horizontalArrangement = Arrangement.Start
              ) {
-                  val leftImages = visualPaths.filterIndexed { index, _ -> index % 2 == 0 }
-                  val rightImages = visualPaths.filterIndexed { index, _ -> index % 2 != 0 }
+                  val leftImages = localVisualPaths.filterIndexed { index, _ -> index % 2 == 0 }
+                  val rightImages = localVisualPaths.filterIndexed { index, _ -> index % 2 != 0 }
                   
                   Column(
                       modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 

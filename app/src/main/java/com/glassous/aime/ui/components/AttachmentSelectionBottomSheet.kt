@@ -14,12 +14,14 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -27,9 +29,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -47,10 +55,49 @@ fun AttachmentSelectionBottomSheet(
     onPickAudio: () -> Unit,
     onRecordAudio: () -> Unit,
     onPickPdf: () -> Unit,
-    onPickTextFile: () -> Unit
+    onPickTextFile: () -> Unit,
+    onAddLink: (String) -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
+    var showLinkDialog by remember { mutableStateOf(false) }
+    var linkUrl by remember { mutableStateOf("") }
     
+    if (showLinkDialog) {
+        AlertDialog(
+            onDismissRequest = { showLinkDialog = false },
+            title = { Text("添加外部链接") },
+            text = {
+                OutlinedTextField(
+                    value = linkUrl,
+                    onValueChange = { linkUrl = it },
+                    label = { Text("链接地址") },
+                    placeholder = { Text("https://...") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (linkUrl.isNotBlank()) {
+                            onAddLink(linkUrl)
+                            linkUrl = ""
+                            showLinkDialog = false
+                            onDismiss()
+                        }
+                    }
+                ) {
+                    Text("添加")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLinkDialog = false }) {
+                    Text("取消")
+                }
+            }
+        )
+    }
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = bottomSheetState,
@@ -66,7 +113,8 @@ fun AttachmentSelectionBottomSheet(
             onPickAudio = onPickAudio,
             onRecordAudio = onRecordAudio,
             onPickPdf = onPickPdf,
-            onPickTextFile = onPickTextFile
+            onPickTextFile = onPickTextFile,
+            onAddLinkClick = { showLinkDialog = true }
         )
     }
 }
@@ -81,7 +129,8 @@ fun AttachmentSelectionContent(
     onPickAudio: () -> Unit,
     onRecordAudio: () -> Unit,
     onPickPdf: () -> Unit,
-    onPickTextFile: () -> Unit
+    onPickTextFile: () -> Unit,
+    onAddLinkClick: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
@@ -203,6 +252,17 @@ fun AttachmentSelectionContent(
                     }
                 )
             }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.Link,
+                    text = "链接",
+                    subtitle = "支持图片、视频、PDF，YouTube链接(Gemini专属)",
+                    onClick = onAddLinkClick
+                )
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
     }
@@ -212,6 +272,7 @@ fun AttachmentSelectionContent(
 fun AttachmentOptionItem(
     icon: ImageVector,
     text: String,
+    subtitle: String? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -225,7 +286,16 @@ fun AttachmentOptionItem(
         ) {
             Icon(imageVector = icon, contentDescription = null, modifier = Modifier.size(24.dp))
             Spacer(modifier = Modifier.width(16.dp))
-            Text(text = text, style = MaterialTheme.typography.bodyLarge)
+            Column {
+                Text(text = text, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+                if (subtitle != null) {
+                    Text(
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
