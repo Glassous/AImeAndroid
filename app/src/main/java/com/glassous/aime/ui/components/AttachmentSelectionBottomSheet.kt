@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -35,7 +37,9 @@ import androidx.compose.ui.unit.dp
 fun AttachmentSelectionBottomSheet(
     onDismiss: () -> Unit,
     onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit
+    onTakePhoto: () -> Unit,
+    onPickVideo: () -> Unit,
+    onTakeVideo: () -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     
@@ -48,7 +52,9 @@ fun AttachmentSelectionBottomSheet(
         AttachmentSelectionContent(
             onDismiss = onDismiss,
             onPickImage = onPickImage,
-            onTakePhoto = onTakePhoto
+            onTakePhoto = onTakePhoto,
+            onPickVideo = onPickVideo,
+            onTakeVideo = onTakeVideo
         )
     }
 }
@@ -57,7 +63,9 @@ fun AttachmentSelectionBottomSheet(
 fun AttachmentSelectionContent(
     onDismiss: () -> Unit,
     onPickImage: () -> Unit,
-    onTakePhoto: () -> Unit
+    onTakePhoto: () -> Unit,
+    onPickVideo: () -> Unit,
+    onTakeVideo: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
@@ -97,6 +105,32 @@ fun AttachmentSelectionContent(
                     text = "拍摄照片",
                     onClick = {
                         onTakePhoto()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.VideoLibrary,
+                    text = "本地视频",
+                    onClick = {
+                        onPickVideo()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.Videocam,
+                    text = "录制视频",
+                    onClick = {
+                        onTakeVideo()
                         onDismiss()
                     }
                 )

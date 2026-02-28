@@ -37,6 +37,8 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 
+import androidx.compose.material.icons.filled.PlayCircleOutline
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ChatInput(
@@ -92,7 +94,14 @@ fun ChatInput(
                             modifier = Modifier.size(72.dp)
                         ) {
                             AsyncImage(
-                                model = path,
+                                model = if (path.endsWith(".mp4", ignoreCase = true)) {
+                                    coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                        .data(path)
+                                        .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                        .build()
+                                } else {
+                                    path
+                                },
                                 contentDescription = "预览图片",
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -100,6 +109,19 @@ fun ChatInput(
                                     .clickable { onImageClick(path) },
                                 contentScale = ContentScale.Crop
                             )
+                            
+                            if (path.endsWith(".mp4", ignoreCase = true)) {
+                                Icon(
+                                    imageVector = Icons.Default.PlayCircleOutline,
+                                    contentDescription = "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .align(Alignment.Center)
+                                        .size(24.dp)
+                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                        .padding(4.dp)
+                                )
+                            }
                             
                             // 删除按钮
                             Box(

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -429,7 +430,8 @@ fun MessageImages(
             MessageImageCard(
                 imagePath = imagePaths.first(),
                 isShareMode = isShareMode,
-                message = message
+                message = message,
+                onImageClick = onImageClick
             )
         } else {
             Box(
@@ -437,7 +439,14 @@ fun MessageImages(
                 contentAlignment = Alignment.CenterStart
             ) {
                 AsyncImage(
-                    model = imagePaths.first(),
+                    model = if (imagePaths.first().endsWith(".mp4", ignoreCase = true)) {
+                        coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                            .data(imagePaths.first())
+                            .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                            .build()
+                    } else {
+                        imagePaths.first()
+                    },
                     contentDescription = null,
                     modifier = Modifier
                         .wrapContentWidth()
@@ -446,6 +455,19 @@ fun MessageImages(
                         .clickable { onImageClick?.invoke(imagePaths.first()) },
                     contentScale = ContentScale.Inside
                 )
+                
+                if (imagePaths.first().endsWith(".mp4", ignoreCase = true)) {
+                    androidx.compose.material3.Icon(
+                        imageVector = Icons.Default.PlayCircleOutline,
+                        contentDescription = "Play Video",
+                        tint = androidx.compose.ui.graphics.Color.White,
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(48.dp)
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                            .padding(8.dp)
+                    )
+                }
             }
         }
     } else {
@@ -459,7 +481,8 @@ fun MessageImages(
                     MessageImageCard(
                         imagePath = path,
                         isShareMode = isShareMode,
-                        message = message
+                        message = message,
+                        onImageClick = onImageClick
                     )
                 }
             }
@@ -477,7 +500,14 @@ fun MessageImages(
                   ) {
                       leftImages.forEach { path ->
                           AsyncImage(
-                              model = path,
+                              model = if (path.endsWith(".mp4", ignoreCase = true)) {
+                                  coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                      .data(path)
+                                      .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                      .build()
+                              } else {
+                                  path
+                              },
                               contentDescription = null,
                               modifier = Modifier
                                   .fillMaxWidth()
@@ -494,7 +524,14 @@ fun MessageImages(
                   ) {
                       rightImages.forEach { path ->
                           AsyncImage(
-                              model = path,
+                              model = if (path.endsWith(".mp4", ignoreCase = true)) {
+                                  coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                      .data(path)
+                                      .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                      .build()
+                              } else {
+                                  path
+                              },
                               contentDescription = null,
                               modifier = Modifier
                                   .fillMaxWidth()

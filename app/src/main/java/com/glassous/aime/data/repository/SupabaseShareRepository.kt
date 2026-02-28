@@ -22,6 +22,18 @@ import android.graphics.BitmapFactory
 import android.util.Base64
 import java.io.ByteArrayOutputStream
 
+import android.content.Context
+import android.net.Uri
+import com.abedelazizshe.lightcompressorlibrary.CompressionListener
+import com.abedelazizshe.lightcompressorlibrary.VideoCompressor
+import com.abedelazizshe.lightcompressorlibrary.VideoQuality
+import com.abedelazizshe.lightcompressorlibrary.config.Configuration
+import com.abedelazizshe.lightcompressorlibrary.config.SaveLocation
+import com.abedelazizshe.lightcompressorlibrary.config.SharedStorageConfiguration
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+
 object SupabaseShareRepository {
 
     private val supabase: SupabaseClient = createSupabaseClient(
@@ -45,21 +57,47 @@ object SupabaseShareRepository {
         }
     }
 
-    suspend fun uploadConversation(title: String, model: String, messages: List<ChatMessage>): String {
+    suspend fun uploadConversation(context: Context, title: String, model: String, messages: List<ChatMessage>): String {
         return withContext(Dispatchers.IO) {
+            var currentTotalSize = 0L
+            val maxTotalSize = 3 * 1024 * 1024L // 3MB limit
+
             val dtoList = messages
                 .filter { !it.isError && (it.content.isNotBlank() || it.imagePaths.isNotEmpty()) }
                 .map { message ->
                     var content = message.content
+                    currentTotalSize += content.length
+                    
+                    if (currentTotalSize > maxTotalSize) {
+                        throw Exception("分享内容总大小超过 3MB")
+                    }
+
                     if (message.imagePaths.isNotEmpty()) {
-                        val imageTags = message.imagePaths.mapNotNull { path ->
-                            encodeImageToBase64(path)?.let { base64 ->
-                                "<img src=\"data:image/jpeg;base64,$base64\"/>"
+                        val mediaTags = message.imagePaths.mapNotNull { path ->
+                            val base64 = if (path.endsWith(".mp4", ignoreCase = true)) {
+                                encodeVideoToBase64(context, path)
+                            } else {
+                                encodeImageToBase64(path)
+                            }
+
+                            if (base64 != null) {
+                                currentTotalSize += base64.length
+                                if (currentTotalSize > maxTotalSize) {
+                                    throw Exception("分享内容总大小超过 3MB")
+                                }
+
+                                if (path.endsWith(".mp4", ignoreCase = true)) {
+                                    "<video src=\"data:video/mp4;base64,$base64\" controls></video>"
+                                } else {
+                                    "<img src=\"data:image/jpeg;base64,$base64\"/>"
+                                }
+                            } else {
+                                null
                             }
                         }.joinToString("\n")
                         
-                        if (imageTags.isNotBlank()) {
-                            content = if (content.isBlank()) imageTags else "$content\n$imageTags"
+                        if (mediaTags.isNotBlank()) {
+                            content = if (content.isBlank()) mediaTags else "$content\n$mediaTags"
                         }
                     }
 
@@ -85,6 +123,80 @@ object SupabaseShareRepository {
             val baseUrl = BuildConfig.SHARE_BASE_URL.trimEnd('/')
             "$baseUrl/${result.id}"
         }
+    }
+
+    private suspend fun encodeVideoToBase64(context: Context, path: String): String? {
+        return try {
+            val file = File(path)
+            if (!file.exists()) return null
+            
+            // Check size. If > 3MB, try to compress to help reduce size.
+            val fileSizeInBytes = file.length()
+            val fileSizeInMB = fileSizeInBytes / (1024.0 * 1024.0)
+            
+            var videoFile = file
+            
+            if (fileSizeInMB > 3.0) {
+                // Compress
+                val compressedPath = compressVideo(context, path)
+                if (compressedPath != null) {
+                    videoFile = File(compressedPath)
+                }
+            }
+
+            val bytes = videoFile.readBytes()
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private suspend fun compressVideo(context: Context, path: String): String? = suspendCancellableCoroutine { continuation ->
+        val uris = listOf(Uri.fromFile(File(path)))
+        
+        VideoCompressor.start(
+            context = context,
+            uris = uris,
+            isStreamable = false,
+            sharedStorageConfiguration = SharedStorageConfiguration(
+                saveAt = SaveLocation.movies,
+                subFolderName = "AIme-Compress"
+            ),
+            listener = object : CompressionListener {
+                override fun onProgress(index: Int, percent: Float) {}
+
+                override fun onStart(index: Int) {}
+
+                override fun onSuccess(index: Int, size: Long, path: String?) {
+                    if (continuation.isActive) {
+                        continuation.resume(path)
+                    }
+                }
+
+                override fun onFailure(index: Int, failureMessage: String) {
+                    if (continuation.isActive) {
+                        continuation.resume(null)
+                    }
+                }
+
+                override fun onCancelled(index: Int) {
+                    if (continuation.isActive) {
+                        continuation.resume(null)
+                    }
+                }
+            },
+            configureWith = Configuration(
+                quality = VideoQuality.MEDIUM,
+                isMinBitrateCheckEnabled = true,
+                videoBitrateInMbps = 2,
+                disableAudio = false,
+                keepOriginalResolution = false,
+                videoNames = uris.map { uri -> 
+                    "compressed_${System.currentTimeMillis()}_${File(path).name}" 
+                }
+            )
+        )
     }
 
     private fun encodeImageToBase64(path: String): String? {

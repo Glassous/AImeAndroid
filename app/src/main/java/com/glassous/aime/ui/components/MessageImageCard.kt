@@ -10,11 +10,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -38,9 +40,11 @@ fun MessageImageCard(
     imagePath: String,
     modifier: Modifier = Modifier,
     isShareMode: Boolean = false,
-    message: ChatMessage? = null
+    message: ChatMessage? = null,
+    onImageClick: ((String) -> Unit)? = null
 ) {
     var isExpanded by remember { mutableStateOf(false) }
+    val isVideo = imagePath.endsWith(".mp4", ignoreCase = true)
     var showShareSheet by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val clipboardManager = LocalClipboardManager.current
@@ -83,7 +87,11 @@ fun MessageImageCard(
                             interactionSource = interactionSource,
                             indication = null
                         ) {
-                            isExpanded = !isExpanded
+                            if (isVideo) {
+                                onImageClick?.invoke(imagePath)
+                            } else {
+                                isExpanded = !isExpanded
+                            }
                         }
                     } else {
                         it
@@ -92,13 +100,32 @@ fun MessageImageCard(
             contentAlignment = Alignment.Center
         ) {
             AsyncImage(
-                model = imagePath,
+                model = if (isVideo) {
+                    coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(imagePath)
+                        .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                        .build()
+                } else {
+                    imagePath
+                },
                 contentDescription = null,
                 modifier = Modifier
                     .wrapContentWidth()
                     .heightIn(max = if (isShareMode) 1000.dp else 400.dp),
                 contentScale = ContentScale.Fit
             )
+
+            if (isVideo) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircleOutline,
+                    contentDescription = "Play Video",
+                    tint = Color.White,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                        .padding(8.dp)
+                )
+            }
         }
 
         // Bottom Bar (Only show if not in share mode and expanded)

@@ -80,7 +80,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isSharing.value = true
             try {
-                val url = com.glassous.aime.data.repository.SupabaseShareRepository.uploadConversation(title, model, messages)
+                val url = com.glassous.aime.data.repository.SupabaseShareRepository.uploadConversation(
+                    getApplication(), 
+                    title, 
+                    model, 
+                    messages
+                )
                 onSuccess(url)
             } catch (e: Exception) {
                 onError(e.message ?: "分享失败")
@@ -94,7 +99,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = text
     }
 
-    fun addAttachment(uri: android.net.Uri, context: android.content.Context) {
+    fun addAttachment(uri: android.net.Uri, context: android.content.Context, isVideo: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
@@ -102,7 +107,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (!imagesDir.exists()) imagesDir.mkdirs()
                 
                 // Create a unique file name
-                val fileName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.jpg"
+                val extension = if (isVideo) ".mp4" else ".jpg"
+                val prefix = if (isVideo) "vid_" else "img_"
+                val fileName = "${prefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
                 val file = java.io.File(imagesDir, fileName)
                 
                 val outputStream = java.io.FileOutputStream(file)

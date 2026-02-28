@@ -148,8 +148,12 @@ dependencies {
 
     // Image Loading (Coil)
     implementation("io.coil-kt:coil-compose:2.6.0")
+    implementation("io.coil-kt:coil-video:2.6.0")
 
     implementation("com.knuddels:jtokkit:1.1.0")
+
+    // Video Compression
+    implementation("com.github.AbedElazizShe:LightCompressor:1.3.2")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

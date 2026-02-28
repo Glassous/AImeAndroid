@@ -72,4 +72,46 @@ object ImageUtils {
             }
         }
     }
+
+    suspend fun saveVideoToGallery(context: Context, videoPath: String) {
+        withContext(Dispatchers.IO) {
+            try {
+                val file = java.io.File(videoPath)
+                if (!file.exists()) {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "视频文件不存在", Toast.LENGTH_SHORT).show()
+                    }
+                    return@withContext
+                }
+                
+                val filename = "AIme_Video_${System.currentTimeMillis()}.mp4"
+                val values = ContentValues().apply {
+                    put(MediaStore.Video.Media.DISPLAY_NAME, filename)
+                    put(MediaStore.Video.Media.MIME_TYPE, "video/mp4")
+                    put(MediaStore.Video.Media.RELATIVE_PATH, Environment.DIRECTORY_MOVIES + "/AIme")
+                }
+
+                val uri = context.contentResolver.insert(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, values)
+                if (uri != null) {
+                    context.contentResolver.openOutputStream(uri)?.use { out ->
+                        java.io.FileInputStream(file).use { input ->
+                            input.copyTo(out)
+                        }
+                    }
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "已保存到相册", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "保存失败", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "保存出错: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 }

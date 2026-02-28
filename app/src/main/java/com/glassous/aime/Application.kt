@@ -13,7 +13,12 @@ import com.glassous.aime.data.preferences.ModelPreferences
  
 
 
-class AIMeApplication : Application() {
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.decode.VideoFrameDecoder
+import coil.util.DebugLogger
+
+class AIMeApplication : Application(), ImageLoaderFactory {
     
     // Database instance
     val database by lazy { ChatDatabase.getDatabase(this) }
@@ -51,5 +56,14 @@ class AIMeApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+    }
+
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .components {
+                add(VideoFrameDecoder.Factory())
+            }
+            .crossfade(true)
+            .build()
     }
 }

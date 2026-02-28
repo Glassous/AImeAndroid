@@ -169,6 +169,14 @@ fun ChatScreen(
             chatViewModel.addAttachment(uri, context)
         }
     }
+
+    val videoPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia()
+    ) { uris ->
+        uris.forEach { uri ->
+            chatViewModel.addAttachment(uri, context, isVideo = true)
+        }
+    }
     
     var tempPhotoUri by remember { mutableStateOf<android.net.Uri?>(null) }
     val cameraLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
@@ -178,9 +186,30 @@ fun ChatScreen(
             chatViewModel.addAttachment(tempPhotoUri!!, context)
         }
     }
+
+    var tempVideoUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    val videoCaptureLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.CaptureVideo()
+    ) { success ->
+        if (success && tempVideoUri != null) {
+            chatViewModel.addAttachment(tempVideoUri!!, context, isVideo = true)
+        }
+    }
     
     fun createTempPictureUri(): android.net.Uri {
         val tempFile = java.io.File.createTempFile("camera_", ".jpg", context.cacheDir).apply {
+            createNewFile()
+            deleteOnExit()
+        }
+        return androidx.core.content.FileProvider.getUriForFile(
+            context, 
+            "${context.packageName}.fileprovider", 
+            tempFile
+        )
+    }
+
+    fun createTempVideoUri(): android.net.Uri {
+        val tempFile = java.io.File.createTempFile("video_", ".mp4", context.cacheDir).apply {
             createNewFile()
             deleteOnExit()
         }
@@ -358,6 +387,7 @@ fun ChatScreen(
 
     // 新增：图片预览路径
     var previewImagePath by remember { mutableStateOf<String?>(null) }
+    var previewVideoPath by remember { mutableStateOf<String?>(null) }
 
     // HTML预览侧边栏状态（平板模式）
     var showHtmlPreviewSideSheet by remember { mutableStateOf(false) }
@@ -697,7 +727,13 @@ fun ChatScreen(
                             overlayAlpha = themePreferences.chatInputInnerAlpha.collectAsState(initial = 0.9f).value,
                             attachedImages = attachedImages,
                             onRemoveAttachment = { path -> chatViewModel.removeAttachment(path) },
-                            onImageClick = { path -> previewImagePath = path },
+                            onImageClick = { path -> 
+                                if (path.endsWith(".mp4", ignoreCase = true)) {
+                                    previewVideoPath = path
+                                } else {
+                                    previewImagePath = path 
+                                }
+                            },
                             // 内嵌按钮配置
                             showScrollToBottomButton = currentMessages.isNotEmpty() && !(minimalMode && minimalModeConfig.hideScrollToBottomButton) && showScrollToBottomButton,
                             onScrollToBottomClick = {
@@ -995,7 +1031,11 @@ fun ChatScreen(
                                     }
                                 },
                                 onImageClick = { path ->
-                                    previewImagePath = path
+                                    if (path.endsWith(".mp4", ignoreCase = true)) {
+                                        previewVideoPath = path
+                                    } else {
+                                        previewImagePath = path
+                                    }
                                 },
                                 replyBubbleEnabled = replyBubbleEnabled,
                                 chatFontSize = chatFontSize,
@@ -1207,6 +1247,18 @@ fun ChatScreen(
                                          } catch (e: Exception) {
                                              // Handle error
                                          }
+                                     },
+                                     onPickVideo = {
+                                         videoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly))
+                                     },
+                                     onTakeVideo = {
+                                         try {
+                                             val uri = createTempVideoUri()
+                                             tempVideoUri = uri
+                                             videoCaptureLauncher.launch(uri)
+                                         } catch (e: Exception) {
+                                             // Handle error
+                                         }
                                      }
                                  )
                              }
@@ -1344,6 +1396,18 @@ fun ChatScreen(
                     } catch (e: Exception) {
                         // Handle error
                     }
+                },
+                onPickVideo = {
+                    videoPickerLauncher.launch(androidx.activity.result.PickVisualMediaRequest(androidx.activity.result.contract.ActivityResultContracts.PickVisualMedia.VideoOnly))
+                },
+                onTakeVideo = {
+                    try {
+                        val uri = createTempVideoUri()
+                        tempVideoUri = uri
+                        videoCaptureLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        // Handle error
+                    }
                 }
             )
         }
@@ -1395,6 +1459,14 @@ fun ChatScreen(
         com.glassous.aime.ui.components.ImagePreviewPopup(
             imagePath = previewImagePath!!,
             onDismissRequest = { previewImagePath = null }
+        )
+    }
+
+    // 视频预览弹窗
+    if (previewVideoPath != null) {
+        com.glassous.aime.ui.components.VideoPreviewPopup(
+            videoPath = previewVideoPath!!,
+            onDismissRequest = { previewVideoPath = null }
         )
     }
 

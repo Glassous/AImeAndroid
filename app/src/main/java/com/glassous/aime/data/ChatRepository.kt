@@ -2251,12 +2251,16 @@ class ChatRepository(
                 parts.add(OpenAiContentPart(type = "text", text = message.content))
             }
             message.imagePaths.forEach { path ->
-                val base64 = encodeImageToBase64(path)
-                if (base64 != null) {
-                    parts.add(OpenAiContentPart(
-                        type = "image_url",
-                        imageUrl = OpenAiImageUrl(url = "data:image/jpeg;base64,$base64")
-                    ))
+                if (path.endsWith(".mp4", ignoreCase = true)) {
+                    parts.add(OpenAiContentPart(type = "text", text = "\n[Video attached: ${java.io.File(path).name}]"))
+                } else {
+                    val base64 = encodeImageToBase64(path)
+                    if (base64 != null) {
+                        parts.add(OpenAiContentPart(
+                            type = "image_url",
+                            imageUrl = OpenAiImageUrl(url = "data:image/jpeg;base64,$base64")
+                        ))
+                    }
                 }
             }
             if (parts.isEmpty()) message.content else parts

@@ -488,16 +488,20 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
 
     private fun parseAndSaveImages(content: String): Pair<String, List<String>> {
         val imagePaths = mutableListOf<String>()
+        val imagesDir = java.io.File(app.filesDir, "images")
+        if (!imagesDir.exists()) imagesDir.mkdirs()
+
+        // 1. Process Images
         // Regex to match <img src="data:image/jpeg;base64,..."/>
         val imgRegex = "<img src=\"data:image/\\w+;base64,([^\"]+)\".*?/>".toRegex()
-        
-        val matches = imgRegex.findAll(content)
-        matches.forEach { match ->
+        val imgMatches = imgRegex.findAll(content)
+        imgMatches.forEach { match ->
             val base64 = match.groupValues[1]
             try {
                 val imageBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
-                val imagesDir = java.io.File(app.filesDir, "images")
-                if (!imagesDir.exists()) imagesDir.mkdirs()
+                
+                // Deduplication logic: Check if file with same content hash exists?
+                // For now, we just save it.
                 
                 val fileName = "img_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.jpg"
                 val file = java.io.File(imagesDir, fileName)
@@ -512,8 +516,32 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
             }
         }
         
-        // Remove all img tags from content and trim whitespace
-        val cleanContent = imgRegex.replace(content, "").trim()
+        // 2. Process Videos
+        // Regex to match <video src="data:video/mp4;base64,..." controls></video>
+        val videoRegex = "<video src=\"data:video/\\w+;base64,([^\"]+)\".*?></video>".toRegex()
+        val videoMatches = videoRegex.findAll(content)
+        videoMatches.forEach { match ->
+            val base64 = match.groupValues[1]
+            try {
+                val videoBytes = android.util.Base64.decode(base64, android.util.Base64.DEFAULT)
+                
+                val fileName = "vid_${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}.mp4"
+                val file = java.io.File(imagesDir, fileName)
+                
+                java.io.FileOutputStream(file).use { output ->
+                    output.write(videoBytes)
+                }
+                
+                imagePaths.add(file.absolutePath)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // Remove all img and video tags from content and trim whitespace
+        var cleanContent = imgRegex.replace(content, "")
+        cleanContent = videoRegex.replace(cleanContent, "")
+        cleanContent = cleanContent.trim()
         
         return Pair(cleanContent, imagePaths)
     }
