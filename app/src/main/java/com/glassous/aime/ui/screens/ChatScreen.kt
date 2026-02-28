@@ -211,6 +211,14 @@ fun ChatScreen(
             }
         }
     }
+
+    val pdfPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        uris.forEach { uri ->
+            chatViewModel.addAttachment(uri, context, "pdf")
+        }
+    }
     
     fun createTempPictureUri(): android.net.Uri {
         val tempFile = java.io.File.createTempFile("camera_", ".jpg", context.cacheDir).apply {
@@ -1301,6 +1309,9 @@ fun ChatScreen(
                                          } catch (e: Exception) {
                                              // Handle error or show toast
                                          }
+                                     },
+                                     onPickPdf = {
+                                         pdfPickerLauncher.launch("application/pdf")
                                      }
                                  )
                              }
@@ -1461,6 +1472,9 @@ fun ChatScreen(
                     } catch (e: Exception) {
                         // Handle error
                     }
+                },
+                onPickPdf = {
+                    pdfPickerLauncher.launch("application/pdf")
                 }
             )
         }

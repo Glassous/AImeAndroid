@@ -32,6 +32,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import com.glassous.aime.ui.utils.AudioPlayerManager
@@ -397,6 +398,7 @@ fun MessageImages(
     onImageClick: ((String) -> Unit)? = null,
     isShareMode: Boolean = false
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val imagePaths = message.imagePaths
     val isImageGen = message.metadata?.startsWith("aspect_ratio:") == true
     val aspectRatioStr = message.metadata?.substringAfter("aspect_ratio:", "1:1") ?: "1:1"
@@ -434,7 +436,8 @@ fun MessageImages(
         it.endsWith(".mp3", ignoreCase = true) || 
         it.endsWith(".wav", ignoreCase = true) 
     }
-    val visualPaths = imagePaths - audioPaths.toSet()
+    val pdfPaths = imagePaths.filter { it.endsWith(".pdf", ignoreCase = true) }
+    val visualPaths = imagePaths - audioPaths.toSet() - pdfPaths.toSet()
 
     // Render Audio Files
     if (audioPaths.isNotEmpty()) {
@@ -443,6 +446,37 @@ fun MessageImages(
                 MessageAudioCard(
                     path = path,
                     onPlay = { onImageClick?.invoke(path) }
+                )
+            }
+        }
+        if (pdfPaths.isNotEmpty() || visualPaths.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+
+    // Render PDF Files
+    if (pdfPaths.isNotEmpty()) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            pdfPaths.forEach { path ->
+                MessageFileCard(
+                    path = path,
+                    onClick = { 
+                        // PDF Click: Try to open via intent, don't show image preview
+                        try {
+                            val uri = androidx.core.content.FileProvider.getUriForFile(
+                                context,
+                                "${context.packageName}.fileprovider",
+                                java.io.File(path)
+                            )
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                setDataAndType(uri, "application/pdf")
+                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            // Toast or fallback
+                        }
+                    }
                 )
             }
         }
@@ -505,9 +539,6 @@ fun MessageImages(
         }
     } else {
         // For multiple images, if it's from AI, maybe use a list of cards or keep the grid
-        // Given the requirement "Similar to tables and code blocks", a card per image makes sense
-        // but it might be too tall. Let's see how other AI apps do it.
-        // Actually, if we use cards, we can just list them.
         if (useImageCard) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 visualPaths.forEach { path ->
@@ -637,9 +668,6 @@ fun MessageAudioCard(
                                 val position = (relative * duration).toLong()
                                 AudioPlayerManager.seekTo(position)
                             } else if (!isCurrent) {
-                                // If not playing this audio, maybe play it? Or do nothing?
-                                // User expects seek to work only when playing usually, or start playing at pos.
-                                // For simplicity, let's just play from start if not current.
                                 AudioPlayerManager.play(path)
                             }
                         }
@@ -656,6 +684,59 @@ fun MessageAudioCard(
                     trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun MessageFileCard(
+    path: String,
+    onClick: (String) -> Unit
+) {
+    val fileName = remember(path) {
+        val rawName = java.io.File(path).name
+        if (rawName.startsWith("pdf_")) {
+            // pdf_[originalName]_[timestamp]_[uuid].pdf
+            rawName.removePrefix("pdf_")
+                .substringBeforeLast("_") // Remove UUID
+                .substringBeforeLast("_") // Remove timestamp
+        } else {
+            rawName
+        }
+    }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable { onClick(path) },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.PictureAsPdf,
+                contentDescription = "PDF Document",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = fileName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }

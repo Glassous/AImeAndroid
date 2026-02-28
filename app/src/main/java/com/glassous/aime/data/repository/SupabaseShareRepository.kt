@@ -75,11 +75,13 @@ object SupabaseShareRepository {
                     if (message.imagePaths.isNotEmpty()) {
                         val mediaTags = message.imagePaths.mapNotNull { path ->
                             val isVideo = path.endsWith(".mp4", ignoreCase = true)
+                            val isPdf = path.endsWith(".pdf", ignoreCase = true)
                             val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
 
                             val base64 = when {
                                 isVideo -> encodeVideoToBase64(context, path)
                                 isAudio -> encodeAudioToBase64(context, path)
+                                isPdf -> encodePdfToBase64(path)
                                 else -> encodeImageToBase64(path)
                             }
 
@@ -95,6 +97,7 @@ object SupabaseShareRepository {
                                         val mimeType = if (path.endsWith(".mp3", ignoreCase = true)) "audio/mpeg" else "audio/mp4"
                                         "<audio src=\"data:$mimeType;base64,$base64\" controls></audio>"
                                     }
+                                    isPdf -> "<a href=\"data:application/pdf;base64,$base64\" download=\"document.pdf\">[PDF Document]</a>"
                                     else -> "<img src=\"data:image/jpeg;base64,$base64\"/>"
                                 }
                             } else {
@@ -256,6 +259,27 @@ object SupabaseShareRepository {
                 bitmap.recycle()
             }
             
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun encodePdfToBase64(path: String): String? {
+        return try {
+            val file = File(path)
+            if (!file.exists()) return null
+            
+            val fileSizeInBytes = file.length()
+            val fileSizeInMB = fileSizeInBytes / (1024.0 * 1024.0)
+            
+            // PDF sharing limit: 3MB, no compression
+            if (fileSizeInMB > 3.0) {
+                return null
+            }
+
+            val bytes = file.readBytes()
             Base64.encodeToString(bytes, Base64.NO_WRAP)
         } catch (e: Exception) {
             e.printStackTrace()

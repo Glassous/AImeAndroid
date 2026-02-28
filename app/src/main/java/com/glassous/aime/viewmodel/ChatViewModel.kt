@@ -102,6 +102,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     fun addAttachment(uri: android.net.Uri, context: android.content.Context, type: String = "image") {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                // Get original filename
+                var originalName = "document.pdf"
+                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst()) {
+                        originalName = cursor.getString(nameIndex)
+                    }
+                }
+
                 val inputStream = context.contentResolver.openInputStream(uri)
                 val imagesDir = java.io.File(context.filesDir, "images")
                 if (!imagesDir.exists()) imagesDir.mkdirs()
@@ -109,15 +118,19 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 // Create a unique file name
                 val extension = when (type) {
                     "video" -> ".mp4"
-                    "audio" -> ".m4a" // Default to m4a for audio, but player should handle most formats
+                    "audio" -> ".m4a"
+                    "pdf" -> ".pdf"
                     else -> ".jpg"
                 }
                 val prefix = when (type) {
                     "video" -> "vid_"
                     "audio" -> "aud_"
+                    "pdf" -> "pdf_${originalName}_" // Include original name in the saved path
                     else -> "img_"
                 }
-                val fileName = "${prefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
+                // Sanitize prefix to avoid illegal characters in path
+                val sanitizedPrefix = prefix.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                val fileName = "${sanitizedPrefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
                 val file = java.io.File(imagesDir, fileName)
                 
                 val outputStream = java.io.FileOutputStream(file)

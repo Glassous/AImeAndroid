@@ -2274,6 +2274,33 @@ class ChatRepository(
                             ))
                         }
                     }
+                } else if (lowerPath.endsWith(".pdf")) {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.length() > 50 * 1024 * 1024) {
+                        parts.add(OpenAiContentPart(
+                            type = "text",
+                            text = "\n[PDF too large (>50MB): ${file.name}]"
+                        ))
+                    } else {
+                        val base64 = encodeFileToBase64(path)
+                        if (base64 != null) {
+                            // Extract original filename from our saved path format
+                            val originalName = if (file.name.startsWith("pdf_")) {
+                                file.name.removePrefix("pdf_")
+                                    .substringBeforeLast("_") // Remove UUID
+                                    .substringBeforeLast("_") // Remove timestamp
+                            } else {
+                                file.name
+                            }
+                            parts.add(OpenAiContentPart(
+                                type = "file",
+                                file = OpenAiFile(
+                                    data = base64,
+                                    filename = originalName
+                                )
+                            ))
+                        }
+                    }
                 } else if (lowerPath.endsWith(".m4a") || lowerPath.endsWith(".mp3") || lowerPath.endsWith(".wav")) {
                     val file = java.io.File(path)
                     if (file.exists() && file.length() > 50 * 1024 * 1024) {

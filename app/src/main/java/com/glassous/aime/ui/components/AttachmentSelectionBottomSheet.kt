@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.BottomSheetDefaults
@@ -43,7 +44,8 @@ fun AttachmentSelectionBottomSheet(
     onPickVideo: () -> Unit,
     onTakeVideo: () -> Unit,
     onPickAudio: () -> Unit,
-    onRecordAudio: () -> Unit
+    onRecordAudio: () -> Unit,
+    onPickPdf: () -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     
@@ -60,7 +62,8 @@ fun AttachmentSelectionBottomSheet(
             onPickVideo = onPickVideo,
             onTakeVideo = onTakeVideo,
             onPickAudio = onPickAudio,
-            onRecordAudio = onRecordAudio
+            onRecordAudio = onRecordAudio,
+            onPickPdf = onPickPdf
         )
     }
 }
@@ -73,7 +76,8 @@ fun AttachmentSelectionContent(
     onPickVideo: () -> Unit,
     onTakeVideo: () -> Unit,
     onPickAudio: () -> Unit,
-    onRecordAudio: () -> Unit
+    onRecordAudio: () -> Unit,
+    onPickPdf: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
@@ -165,6 +169,19 @@ fun AttachmentSelectionContent(
                     text = "录制音频",
                     onClick = {
                         onRecordAudio()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.PictureAsPdf,
+                    text = "PDF文件",
+                    onClick = {
+                        onPickPdf()
                         onDismiss()
                     }
                 )

@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -96,21 +97,33 @@ fun ChatInput(
                         ) {
                             val isVideo = path.endsWith(".mp4", ignoreCase = true)
                             val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
+                            val isPdf = path.endsWith(".pdf", ignoreCase = true)
                             
-                            if (isAudio) {
+                            if (isAudio || isPdf) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.secondaryContainer)
-                                        .clickable { onImageClick(path) },
+                                        .clickable { 
+                                            if (!isPdf) onImageClick(path) 
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.AudioFile,
-                                        contentDescription = "Audio",
+                                        imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.AudioFile,
+                                        contentDescription = if (isPdf) "PDF" else "Audio",
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
+                                    
+                                    if (isPdf) {
+                                        Text(
+                                            text = "PDF",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)
+                                        )
+                                    }
                                 }
                             } else {
                                 AsyncImage(
