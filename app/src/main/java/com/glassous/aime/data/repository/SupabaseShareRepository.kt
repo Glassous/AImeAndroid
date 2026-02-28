@@ -74,10 +74,13 @@ object SupabaseShareRepository {
 
                     if (message.imagePaths.isNotEmpty()) {
                         val mediaTags = message.imagePaths.mapNotNull { path ->
-                            val base64 = if (path.endsWith(".mp4", ignoreCase = true)) {
-                                encodeVideoToBase64(context, path)
-                            } else {
-                                encodeImageToBase64(path)
+                            val isVideo = path.endsWith(".mp4", ignoreCase = true)
+                            val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
+
+                            val base64 = when {
+                                isVideo -> encodeVideoToBase64(context, path)
+                                isAudio -> encodeAudioToBase64(context, path)
+                                else -> encodeImageToBase64(path)
                             }
 
                             if (base64 != null) {
@@ -86,10 +89,13 @@ object SupabaseShareRepository {
                                     throw Exception("分享内容总大小超过 3MB")
                                 }
 
-                                if (path.endsWith(".mp4", ignoreCase = true)) {
-                                    "<video src=\"data:video/mp4;base64,$base64\" controls></video>"
-                                } else {
-                                    "<img src=\"data:image/jpeg;base64,$base64\"/>"
+                                when {
+                                    isVideo -> "<video src=\"data:video/mp4;base64,$base64\" controls></video>"
+                                    isAudio -> {
+                                        val mimeType = if (path.endsWith(".mp3", ignoreCase = true)) "audio/mpeg" else "audio/mp4"
+                                        "<audio src=\"data:$mimeType;base64,$base64\" controls></audio>"
+                                    }
+                                    else -> "<img src=\"data:image/jpeg;base64,$base64\"/>"
                                 }
                             } else {
                                 null
@@ -122,6 +128,27 @@ object SupabaseShareRepository {
 
             val baseUrl = BuildConfig.SHARE_BASE_URL.trimEnd('/')
             "$baseUrl/${result.id}"
+        }
+    }
+
+    private suspend fun encodeAudioToBase64(context: Context, path: String): String? {
+        return try {
+            val file = File(path)
+            if (!file.exists()) return null
+            
+            val fileSizeInBytes = file.length()
+            val fileSizeInMB = fileSizeInBytes / (1024.0 * 1024.0)
+            
+            // Audio compression is not implemented yet, so we just skip if too large
+            if (fileSizeInMB > 3.0) {
+                return null
+            }
+
+            val bytes = file.readBytes()
+            Base64.encodeToString(bytes, Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 

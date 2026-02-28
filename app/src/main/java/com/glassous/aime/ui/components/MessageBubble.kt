@@ -23,10 +23,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import com.glassous.aime.data.ChatMessage
 import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
+import androidx.compose.runtime.collectAsState
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import com.glassous.aime.ui.utils.AudioPlayerManager
 
 // 供全局提供/获取弹窗时的背景模糊状态
 val LocalDialogBlurState = staticCompositionLocalOf<MutableState<Boolean>> {
@@ -380,6 +388,7 @@ fun MessageBubble(
     }
 }
 
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MessageImages(
@@ -420,7 +429,31 @@ fun MessageImages(
 
     if (imagePaths.isEmpty()) return
     
-    val imageCount = imagePaths.size
+    val audioPaths = imagePaths.filter { 
+        it.endsWith(".m4a", ignoreCase = true) || 
+        it.endsWith(".mp3", ignoreCase = true) || 
+        it.endsWith(".wav", ignoreCase = true) 
+    }
+    val visualPaths = imagePaths - audioPaths.toSet()
+
+    // Render Audio Files
+    if (audioPaths.isNotEmpty()) {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            audioPaths.forEach { path ->
+                MessageAudioCard(
+                    path = path,
+                    onPlay = { onImageClick?.invoke(path) }
+                )
+            }
+        }
+        if (visualPaths.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+
+    if (visualPaths.isEmpty()) return
+    
+    val imageCount = visualPaths.size
     
     // Only use MessageImageCard for AI messages (replies)
     val useImageCard = !message.isFromUser && !message.isError && !isStreaming
@@ -428,7 +461,7 @@ fun MessageImages(
     if (imageCount == 1) {
         if (useImageCard) {
             MessageImageCard(
-                imagePath = imagePaths.first(),
+                imagePath = visualPaths.first(),
                 isShareMode = isShareMode,
                 message = message,
                 onImageClick = onImageClick
@@ -439,24 +472,24 @@ fun MessageImages(
                 contentAlignment = Alignment.CenterStart
             ) {
                 AsyncImage(
-                    model = if (imagePaths.first().endsWith(".mp4", ignoreCase = true)) {
+                    model = if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(imagePaths.first())
+                            .data(visualPaths.first())
                             .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
                             .build()
                     } else {
-                        imagePaths.first()
+                        visualPaths.first()
                     },
                     contentDescription = null,
                     modifier = Modifier
                         .wrapContentWidth()
                         .heightIn(max = 400.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onImageClick?.invoke(imagePaths.first()) },
+                        .clickable { onImageClick?.invoke(visualPaths.first()) },
                     contentScale = ContentScale.Inside
                 )
                 
-                if (imagePaths.first().endsWith(".mp4", ignoreCase = true)) {
+                if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                     androidx.compose.material3.Icon(
                         imageVector = Icons.Default.PlayCircleOutline,
                         contentDescription = "Play Video",
@@ -477,7 +510,7 @@ fun MessageImages(
         // Actually, if we use cards, we can just list them.
         if (useImageCard) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                imagePaths.forEach { path ->
+                visualPaths.forEach { path ->
                     MessageImageCard(
                         imagePath = path,
                         isShareMode = isShareMode,
@@ -491,8 +524,8 @@ fun MessageImages(
                  modifier = Modifier.fillMaxWidth(), 
                  horizontalArrangement = Arrangement.Start
              ) {
-                  val leftImages = imagePaths.filterIndexed { index, _ -> index % 2 == 0 }
-                  val rightImages = imagePaths.filterIndexed { index, _ -> index % 2 != 0 }
+                  val leftImages = visualPaths.filterIndexed { index, _ -> index % 2 == 0 }
+                  val rightImages = visualPaths.filterIndexed { index, _ -> index % 2 != 0 }
                   
                   Column(
                       modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 
@@ -542,6 +575,87 @@ fun MessageImages(
                       }
                   }
              }
+        }
+    }
+}
+
+@Composable
+fun MessageAudioCard(
+    path: String,
+    onPlay: (String) -> Unit
+) {
+    val currentPath by AudioPlayerManager.currentPath.collectAsState()
+    val isPlaying by AudioPlayerManager.isPlaying.collectAsState()
+    val progress by AudioPlayerManager.progress.collectAsState()
+    val duration by AudioPlayerManager.duration.collectAsState()
+    
+    val isCurrent = currentPath == path
+    val showPause = isCurrent && isPlaying
+    val currentProgress = if (isCurrent) progress else 0f
+
+    Card(
+        modifier = Modifier
+            .width(200.dp)
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(24.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 12.dp, vertical = 8.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { AudioPlayerManager.play(path) },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (showPause) "Pause" else "Play",
+                    tint = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .height(24.dp) // Touch target
+                    .pointerInput(isCurrent, duration) {
+                        detectTapGestures { offset ->
+                            if (isCurrent && duration > 0) {
+                                val relative = offset.x / size.width
+                                val position = (relative * duration).toLong()
+                                AudioPlayerManager.seekTo(position)
+                            } else if (!isCurrent) {
+                                // If not playing this audio, maybe play it? Or do nothing?
+                                // User expects seek to work only when playing usually, or start playing at pos.
+                                // For simplicity, let's just play from start if not current.
+                                AudioPlayerManager.play(path)
+                            }
+                        }
+                    },
+                contentAlignment = Alignment.CenterStart
+            ) {
+                LinearProgressIndicator(
+                    progress = { currentProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                )
+            }
         }
     }
 }

@@ -20,7 +20,13 @@ data class OpenAiChatMessage(
 data class OpenAiContentPart(
     val type: String,
     val text: String? = null,
-    @SerializedName("image_url") val imageUrl: OpenAiImageUrl? = null
+    @SerializedName("image_url") val imageUrl: OpenAiImageUrl? = null,
+    @SerializedName("input_audio") val inputAudio: OpenAiInputAudio? = null
+)
+
+data class OpenAiInputAudio(
+    val data: String,
+    val format: String
 )
 
 data class OpenAiImageUrl(

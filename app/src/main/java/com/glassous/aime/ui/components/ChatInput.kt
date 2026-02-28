@@ -37,6 +37,7 @@ import coil.compose.AsyncImage
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 
+import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.PlayCircleOutline
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -93,34 +94,54 @@ fun ChatInput(
                         Box(
                             modifier = Modifier.size(72.dp)
                         ) {
-                            AsyncImage(
-                                model = if (path.endsWith(".mp4", ignoreCase = true)) {
-                                    coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                                        .data(path)
-                                        .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
-                                        .build()
-                                } else {
-                                    path
-                                },
-                                contentDescription = "预览图片",
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { onImageClick(path) },
-                                contentScale = ContentScale.Crop
-                            )
+                            val isVideo = path.endsWith(".mp4", ignoreCase = true)
+                            val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
                             
-                            if (path.endsWith(".mp4", ignoreCase = true)) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayCircleOutline,
-                                    contentDescription = "Play",
-                                    tint = Color.White,
+                            if (isAudio) {
+                                Box(
                                     modifier = Modifier
-                                        .align(Alignment.Center)
-                                        .size(24.dp)
-                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                                        .padding(4.dp)
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.secondaryContainer)
+                                        .clickable { onImageClick(path) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.AudioFile,
+                                        contentDescription = "Audio",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                }
+                            } else {
+                                AsyncImage(
+                                    model = if (isVideo) {
+                                        coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                            .data(path)
+                                            .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                            .build()
+                                    } else {
+                                        path
+                                    },
+                                    contentDescription = "预览图片",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onImageClick(path) },
+                                    contentScale = ContentScale.Crop
                                 )
+                                
+                                if (isVideo) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircleOutline,
+                                        contentDescription = "Play",
+                                        tint = Color.White,
+                                        modifier = Modifier
+                                            .align(Alignment.Center)
+                                            .size(24.dp)
+                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                            .padding(4.dp)
+                                    )
+                                }
                             }
                             
                             // 删除按钮

@@ -195,6 +195,22 @@ fun ChatScreen(
             chatViewModel.addAttachment(tempVideoUri!!, context, isVideo = true)
         }
     }
+
+    val audioPickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let { chatViewModel.addAttachment(it, context, "audio") }
+    }
+
+    val audioCaptureLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            result.data?.data?.let { uri ->
+                chatViewModel.addAttachment(uri, context, "audio")
+            }
+        }
+    }
     
     fun createTempPictureUri(): android.net.Uri {
         val tempFile = java.io.File.createTempFile("camera_", ".jpg", context.cacheDir).apply {
@@ -730,6 +746,21 @@ fun ChatScreen(
                             onImageClick = { path -> 
                                 if (path.endsWith(".mp4", ignoreCase = true)) {
                                     previewVideoPath = path
+                                } else if (path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)) {
+                                    try {
+                                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context,
+                                            "${context.packageName}.fileprovider",
+                                            java.io.File(path)
+                                        )
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                            setDataAndType(uri, "audio/*")
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        }
+                                        context.startActivity(intent)
+                                    } catch (e: Exception) {
+                                        android.widget.Toast.makeText(context, "无法播放音频", android.widget.Toast.LENGTH_SHORT).show()
+                                    }
                                 } else {
                                     previewImagePath = path 
                                 }
@@ -1259,6 +1290,17 @@ fun ChatScreen(
                                          } catch (e: Exception) {
                                              // Handle error
                                          }
+                                     },
+                                     onPickAudio = {
+                                         audioPickerLauncher.launch("audio/*")
+                                     },
+                                     onRecordAudio = {
+                                         try {
+                                             val intent = android.content.Intent(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION)
+                                             audioCaptureLauncher.launch(intent)
+                                         } catch (e: Exception) {
+                                             // Handle error or show toast
+                                         }
                                      }
                                  )
                              }
@@ -1405,6 +1447,17 @@ fun ChatScreen(
                         val uri = createTempVideoUri()
                         tempVideoUri = uri
                         videoCaptureLauncher.launch(uri)
+                    } catch (e: Exception) {
+                        // Handle error
+                    }
+                },
+                onPickAudio = {
+                    audioPickerLauncher.launch("audio/*")
+                },
+                onRecordAudio = {
+                    try {
+                        val intent = android.content.Intent(android.provider.MediaStore.Audio.Media.RECORD_SOUND_ACTION)
+                        audioCaptureLauncher.launch(intent)
                     } catch (e: Exception) {
                         // Handle error
                     }

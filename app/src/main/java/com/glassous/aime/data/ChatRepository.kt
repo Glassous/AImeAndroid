@@ -2253,6 +2253,22 @@ class ChatRepository(
             message.imagePaths.forEach { path ->
                 if (path.endsWith(".mp4", ignoreCase = true)) {
                     parts.add(OpenAiContentPart(type = "text", text = "\n[Video attached: ${java.io.File(path).name}]"))
+                } else if (path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)) {
+                    val base64 = encodeFileToBase64(path)
+                    if (base64 != null) {
+                        val format = when {
+                            path.endsWith(".mp3", ignoreCase = true) -> "mp3"
+                            path.endsWith(".wav", ignoreCase = true) -> "wav"
+                            else -> "wav" // Default fallback
+                        }
+                        parts.add(OpenAiContentPart(
+                            type = "input_audio",
+                            inputAudio = OpenAiInputAudio(
+                                data = base64,
+                                format = format
+                            )
+                        ))
+                    }
                 } else {
                     val base64 = encodeImageToBase64(path)
                     if (base64 != null) {
@@ -2271,6 +2287,18 @@ class ChatRepository(
             role = if (message.isFromUser) "user" else "assistant",
             content = content
         )
+    }
+
+    private fun encodeFileToBase64(path: String): String? {
+        return try {
+            val file = java.io.File(path)
+            if (!file.exists()) return null
+            val bytes = file.readBytes()
+            android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 
     private fun encodeImageToBase64(path: String): String? {

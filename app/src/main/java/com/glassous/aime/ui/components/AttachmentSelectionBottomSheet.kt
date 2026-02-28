@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.BottomSheetDefaults
@@ -39,7 +41,9 @@ fun AttachmentSelectionBottomSheet(
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickVideo: () -> Unit,
-    onTakeVideo: () -> Unit
+    onTakeVideo: () -> Unit,
+    onPickAudio: () -> Unit,
+    onRecordAudio: () -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     
@@ -54,7 +58,9 @@ fun AttachmentSelectionBottomSheet(
             onPickImage = onPickImage,
             onTakePhoto = onTakePhoto,
             onPickVideo = onPickVideo,
-            onTakeVideo = onTakeVideo
+            onTakeVideo = onTakeVideo,
+            onPickAudio = onPickAudio,
+            onRecordAudio = onRecordAudio
         )
     }
 }
@@ -65,7 +71,9 @@ fun AttachmentSelectionContent(
     onPickImage: () -> Unit,
     onTakePhoto: () -> Unit,
     onPickVideo: () -> Unit,
-    onTakeVideo: () -> Unit
+    onTakeVideo: () -> Unit,
+    onPickAudio: () -> Unit,
+    onRecordAudio: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
@@ -131,6 +139,32 @@ fun AttachmentSelectionContent(
                     text = "录制视频",
                     onClick = {
                         onTakeVideo()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.AudioFile,
+                    text = "本地音频",
+                    onClick = {
+                        onPickAudio()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.Mic,
+                    text = "录制音频",
+                    onClick = {
+                        onRecordAudio()
                         onDismiss()
                     }
                 )

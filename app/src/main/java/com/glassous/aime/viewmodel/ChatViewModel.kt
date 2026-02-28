@@ -99,7 +99,7 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         _inputText.value = text
     }
 
-    fun addAttachment(uri: android.net.Uri, context: android.content.Context, isVideo: Boolean = false) {
+    fun addAttachment(uri: android.net.Uri, context: android.content.Context, type: String = "image") {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val inputStream = context.contentResolver.openInputStream(uri)
@@ -107,8 +107,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (!imagesDir.exists()) imagesDir.mkdirs()
                 
                 // Create a unique file name
-                val extension = if (isVideo) ".mp4" else ".jpg"
-                val prefix = if (isVideo) "vid_" else "img_"
+                val extension = when (type) {
+                    "video" -> ".mp4"
+                    "audio" -> ".m4a" // Default to m4a for audio, but player should handle most formats
+                    else -> ".jpg"
+                }
+                val prefix = when (type) {
+                    "video" -> "vid_"
+                    "audio" -> "aud_"
+                    else -> "img_"
+                }
                 val fileName = "${prefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
                 val file = java.io.File(imagesDir, fileName)
                 
@@ -124,6 +132,11 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 e.printStackTrace()
             }
         }
+    }
+
+    // Deprecated: helper for backward compatibility if needed, but we will update callers
+    fun addAttachment(uri: android.net.Uri, context: android.content.Context, isVideo: Boolean) {
+        addAttachment(uri, context, if (isVideo) "video" else "image")
     }
 
     fun removeAttachment(path: String) {
