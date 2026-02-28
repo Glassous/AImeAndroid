@@ -22,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -34,6 +35,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.font.FontWeight
 import io.noties.markwon.Markwon
@@ -202,14 +204,14 @@ fun MarkdownFileUrlCard(
             
             Icon(
                 imageVector = when {
+                    isYouTube -> Icons.Default.Subscriptions
                     isImage -> Icons.Default.Image
                     isVideo -> Icons.Default.PlayCircleOutline
-                    isYouTube -> Icons.Default.PlayCircleOutline
                     isPdf -> Icons.Default.PictureAsPdf
                     else -> Icons.Default.Link
                 },
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = if (isYouTube) Color(0xFFFF0000) else MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(20.dp)
             )
             
