@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Mic
@@ -45,7 +46,8 @@ fun AttachmentSelectionBottomSheet(
     onTakeVideo: () -> Unit,
     onPickAudio: () -> Unit,
     onRecordAudio: () -> Unit,
-    onPickPdf: () -> Unit
+    onPickPdf: () -> Unit,
+    onPickTextFile: () -> Unit
 ) {
     val bottomSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     
@@ -63,7 +65,8 @@ fun AttachmentSelectionBottomSheet(
             onTakeVideo = onTakeVideo,
             onPickAudio = onPickAudio,
             onRecordAudio = onRecordAudio,
-            onPickPdf = onPickPdf
+            onPickPdf = onPickPdf,
+            onPickTextFile = onPickTextFile
         )
     }
 }
@@ -77,7 +80,8 @@ fun AttachmentSelectionContent(
     onTakeVideo: () -> Unit,
     onPickAudio: () -> Unit,
     onRecordAudio: () -> Unit,
-    onPickPdf: () -> Unit
+    onPickPdf: () -> Unit,
+    onPickTextFile: () -> Unit
 ) {
     Column(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
@@ -182,6 +186,19 @@ fun AttachmentSelectionContent(
                     text = "PDF文件",
                     onClick = {
                         onPickPdf()
+                        onDismiss()
+                    }
+                )
+            }
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            item {
+                AttachmentOptionItem(
+                    icon = Icons.Default.Description,
+                    text = "纯文本文件",
+                    onClick = {
+                        onPickTextFile()
                         onDismiss()
                     }
                 )

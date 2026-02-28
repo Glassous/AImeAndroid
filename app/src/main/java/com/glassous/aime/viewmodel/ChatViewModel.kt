@@ -103,7 +103,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Get original filename
-                var originalName = "document.pdf"
+                var originalName = when (type) {
+                    "video" -> "video.mp4"
+                    "audio" -> "audio.m4a"
+                    "pdf" -> "document.pdf"
+                    "text" -> "file.txt"
+                    else -> "image.jpg"
+                }
                 context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
                     val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                     if (cursor.moveToFirst()) {
@@ -120,16 +126,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     "video" -> ".mp4"
                     "audio" -> ".m4a"
                     "pdf" -> ".pdf"
+                    "text" -> {
+                        val ext = originalName.substringAfterLast(".", "")
+                        if (ext.isNotEmpty()) ".$ext" else ".txt"
+                    }
                     else -> ".jpg"
                 }
                 val prefix = when (type) {
                     "video" -> "vid_"
                     "audio" -> "aud_"
                     "pdf" -> "pdf_${originalName}_" // Include original name in the saved path
+                    "text" -> "txt_${originalName}_" // Include original name in the saved path
                     else -> "img_"
                 }
-                // Sanitize prefix to avoid illegal characters in path
-                val sanitizedPrefix = prefix.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+                // Sanitize prefix to avoid illegal characters in path (allow Unicode/Chinese)
+                val sanitizedPrefix = prefix.replace(Regex("[\\\\/:*?\"<>|]"), "_")
                 val fileName = "${sanitizedPrefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
                 val file = java.io.File(imagesDir, fileName)
                 
@@ -192,14 +203,31 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
-                val imagesToSend = _attachedImages.value.toList()
+                val imagesToSend = _attachedImages.value.filter { !it.contains("/txt_") }.toList()
+                val textFiles = _attachedImages.value.filter { it.contains("/txt_") }
+                
+                var finalContent = content
+                textFiles.forEach { path ->
+                    try {
+                        val file = java.io.File(path)
+                        val fileName = file.name
+                            .substringAfter("txt_")
+                            .substringBeforeLast("_") // Remove UUID
+                            .substringBeforeLast("_") // Remove timestamp
+                        val textContent = file.readText()
+                        finalContent += "\n\n<file name=\"$fileName\">\n$textContent\n</file>"
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                
                 val currentAspectRatio = _selectedAspectRatio.value
                 _inputText.value = ""
                 _attachedImages.value = emptyList()
                 
                 repository.sendMessage(
                     conversationId,
-                    content,
+                    finalContent,
                     imagesToSend,
                     selectedTool,
                     aspectRatio = currentAspectRatio,

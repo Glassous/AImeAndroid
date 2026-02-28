@@ -17,6 +17,8 @@ import android.widget.TextView
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,6 +27,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.ui.Alignment
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
@@ -37,11 +43,98 @@ data class MarkdownBlock(
     val type: BlockType,
     val content: String,
     val language: String? = null,
-    val musicList: List<MusicInfo>? = null
+    val musicList: List<MusicInfo>? = null,
+    val fileName: String? = null
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC
+    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC, FILE_CARD
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MarkdownFileCard(
+    fileName: String,
+    content: String,
+    textColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    var showDialog by remember { mutableStateOf(false) }
+
+    Card(
+        onClick = { showDialog = true },
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+        ),
+        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Description,
+                contentDescription = "Text File",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            Text(
+                text = fileName,
+                style = MaterialTheme.typography.bodyMedium,
+                color = textColor,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+
+    if (showDialog) {
+        androidx.compose.material3.BasicAlertDialog(
+            onDismissRequest = { showDialog = false }
+        ) {
+            Surface(
+                shape = MaterialTheme.shapes.large,
+                color = MaterialTheme.colorScheme.surface,
+                tonalElevation = 6.dp,
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.8f)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = fileName,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(onClick = { showDialog = false }) {
+                            Icon(Icons.Default.Close, contentDescription = "Close")
+                        }
+                    }
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        val scrollState = androidx.compose.foundation.rememberScrollState()
+                        Text(
+                            text = content,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.verticalScroll(scrollState)
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -338,6 +431,14 @@ fun MarkdownRenderer(
                         )
                     }
                 }
+                BlockType.FILE_CARD -> {
+                    MarkdownFileCard(
+                        fileName = block.fileName ?: "file.txt",
+                        content = block.content,
+                        textColor = textColor,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
             }
         }
     }
@@ -345,13 +446,16 @@ fun MarkdownRenderer(
 
 fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
-    // Updated pattern to include <music> tags
+    // Updated pattern to include <music> and <file> tags
     // Group 1: Code block (full match)
     // Group 2: Code block language
     // Group 3: Code block content
     // Group 4: Music block (full match)
     // Group 5: Music block content
-    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)", Pattern.MULTILINE)
+    // Group 6: File block (full match)
+    // Group 7: File name
+    // Group 8: File content
+    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)|(<file name=\"(.*?)\">([\\s\\S]*?)</file>)", Pattern.MULTILINE)
     val matcher = combinedPattern.matcher(markdown)
 
     var lastEnd = 0
@@ -377,31 +481,40 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
         }
 
         // 2. Process current match
-        if (matcher.group(1) != null) {
-            // It's a Code Block
-            val language = matcher.group(2)
-            val code = matcher.group(3) ?: ""
-            
-            if (language.equals("mermaid", ignoreCase = true)) {
-                blocks.add(MarkdownBlock(BlockType.MERMAID, code, language))
-            } else {
-                blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
-            }
-        } else if (matcher.group(4) != null) {
-            // It's a Music Block
-            val musicContent = matcher.group(5) ?: ""
-            val musicInfo = parseMusicContent(musicContent)
-            
-            if (musicInfo != null) {
-                val lastBlock = blocks.lastOrNull()
-                if (lastBlock != null && lastBlock.type == BlockType.MUSIC) {
-                    // Merge with previous music block
-                    val newList = (lastBlock.musicList ?: emptyList()) + musicInfo
-                    blocks[blocks.lastIndex] = lastBlock.copy(musicList = newList)
+        when {
+            matcher.group(1) != null -> {
+                // It's a Code Block
+                val language = matcher.group(2)
+                val code = matcher.group(3) ?: ""
+                
+                if (language.equals("mermaid", ignoreCase = true)) {
+                    blocks.add(MarkdownBlock(BlockType.MERMAID, code, language))
                 } else {
-                    // New music block
-                    blocks.add(MarkdownBlock(BlockType.MUSIC, musicContent, null, listOf(musicInfo)))
+                    blocks.add(MarkdownBlock(BlockType.CODE_BLOCK, code, language))
                 }
+            }
+            matcher.group(4) != null -> {
+                // It's a Music Block
+                val musicContent = matcher.group(5) ?: ""
+                val musicInfo = parseMusicContent(musicContent)
+                
+                if (musicInfo != null) {
+                    val lastBlock = blocks.lastOrNull()
+                    if (lastBlock != null && lastBlock.type == BlockType.MUSIC) {
+                        // Merge with previous music block
+                        val newList = (lastBlock.musicList ?: emptyList()) + musicInfo
+                        blocks[blocks.lastIndex] = lastBlock.copy(musicList = newList)
+                    } else {
+                        // New music block
+                        blocks.add(MarkdownBlock(BlockType.MUSIC, musicContent, null, listOf(musicInfo)))
+                    }
+                }
+            }
+            matcher.group(6) != null -> {
+                // It's a File Block
+                val fileName = matcher.group(7) ?: "file.txt"
+                val fileContent = matcher.group(8) ?: ""
+                blocks.add(MarkdownBlock(BlockType.FILE_CARD, fileContent, fileName = fileName))
             }
         }
 

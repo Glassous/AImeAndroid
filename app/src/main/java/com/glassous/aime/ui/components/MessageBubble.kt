@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.filled.Description
 import com.glassous.aime.ui.utils.AudioPlayerManager
 
 // 供全局提供/获取弹窗时的背景模糊状态
@@ -695,13 +696,20 @@ fun MessageFileCard(
 ) {
     val fileName = remember(path) {
         val rawName = java.io.File(path).name
-        if (rawName.startsWith("pdf_")) {
-            // pdf_[originalName]_[timestamp]_[uuid].pdf
-            rawName.removePrefix("pdf_")
-                .substringBeforeLast("_") // Remove UUID
-                .substringBeforeLast("_") // Remove timestamp
-        } else {
-            rawName
+        when {
+            rawName.startsWith("pdf_") -> {
+                // pdf_[originalName]_[timestamp]_[uuid].pdf
+                rawName.removePrefix("pdf_")
+                    .substringBeforeLast("_") // Remove UUID
+                    .substringBeforeLast("_") // Remove timestamp
+            }
+            rawName.startsWith("txt_") -> {
+                // txt_[originalName]_[timestamp]_[uuid].txt
+                rawName.removePrefix("txt_")
+                    .substringBeforeLast("_") // Remove UUID
+                    .substringBeforeLast("_") // Remove timestamp
+            }
+            else -> rawName
         }
     }
     Card(
@@ -720,9 +728,10 @@ fun MessageFileCard(
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val isPdf = path.endsWith(".pdf", ignoreCase = true)
             Icon(
-                imageVector = Icons.Default.PictureAsPdf,
-                contentDescription = "PDF Document",
+                imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Description,
+                contentDescription = if (isPdf) "PDF Document" else "Text Document",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(32.dp)
             )

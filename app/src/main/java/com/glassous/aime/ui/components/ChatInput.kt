@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 
 import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
 
@@ -98,27 +99,44 @@ fun ChatInput(
                             val isVideo = path.endsWith(".mp4", ignoreCase = true)
                             val isAudio = path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)
                             val isPdf = path.endsWith(".pdf", ignoreCase = true)
+                            val isText = path.contains("/txt_", ignoreCase = true)
                             
-                            if (isAudio || isPdf) {
+                            if (isAudio || isPdf || isText) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
                                         .clip(RoundedCornerShape(8.dp))
                                         .background(MaterialTheme.colorScheme.secondaryContainer)
                                         .clickable { 
-                                            if (!isPdf) onImageClick(path) 
+                                            if (!isPdf && !isText) onImageClick(path) 
                                         },
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
-                                        imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.AudioFile,
-                                        contentDescription = if (isPdf) "PDF" else "Audio",
+                                        imageVector = when {
+                                            isPdf -> Icons.Default.PictureAsPdf
+                                            isAudio -> Icons.Default.AudioFile
+                                            else -> Icons.Default.Description
+                                        },
+                                        contentDescription = when {
+                                            isPdf -> "PDF"
+                                            isAudio -> "Audio"
+                                            else -> "Text"
+                                        },
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                     
-                                    if (isPdf) {
+                                    val label = when {
+                                        isPdf -> "PDF"
+                                        isText -> {
+                                            val ext = path.substringAfterLast(".", "").uppercase()
+                                            if (ext.isNotEmpty() && ext != "TXT") ext else "TXT"
+                                        }
+                                        else -> null
+                                    }
+                                    if (label != null) {
                                         Text(
-                                            text = "PDF",
+                                            text = label,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                                             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 4.dp)

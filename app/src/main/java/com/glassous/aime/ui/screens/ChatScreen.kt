@@ -219,6 +219,14 @@ fun ChatScreen(
             chatViewModel.addAttachment(uri, context, "pdf")
         }
     }
+
+    val textFilePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenMultipleDocuments()
+    ) { uris ->
+        uris.forEach { uri ->
+            chatViewModel.addAttachment(uri, context, "text")
+        }
+    }
     
     fun createTempPictureUri(): android.net.Uri {
         val tempFile = java.io.File.createTempFile("camera_", ".jpg", context.cacheDir).apply {
@@ -1312,6 +1320,20 @@ fun ChatScreen(
                                      },
                                      onPickPdf = {
                                          pdfPickerLauncher.launch("application/pdf")
+                                     },
+                                     onPickTextFile = {
+                                         textFilePickerLauncher.launch(arrayOf(
+                                             "text/*", 
+                                             "application/json", 
+                                             "application/xml", 
+                                             "application/javascript",
+                                             "application/x-javascript",
+                                             "application/sql",
+                                             "application/yaml",
+                                             "application/x-yaml",
+                                             "application/x-python-code",
+                                             "text/x-python"
+                                         ))
                                      }
                                  )
                              }
@@ -1475,6 +1497,20 @@ fun ChatScreen(
                 },
                 onPickPdf = {
                     pdfPickerLauncher.launch("application/pdf")
+                },
+                onPickTextFile = {
+                    textFilePickerLauncher.launch(arrayOf(
+                        "text/*", 
+                        "application/json", 
+                        "application/xml", 
+                        "application/javascript",
+                        "application/x-javascript",
+                        "application/sql",
+                        "application/yaml",
+                        "application/x-yaml",
+                        "application/x-python-code",
+                        "text/x-python"
+                    ))
                 }
             )
         }
