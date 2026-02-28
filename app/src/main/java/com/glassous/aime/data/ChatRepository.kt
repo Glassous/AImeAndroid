@@ -2251,30 +2251,69 @@ class ChatRepository(
                 parts.add(OpenAiContentPart(type = "text", text = message.content))
             }
             message.imagePaths.forEach { path ->
-                if (path.endsWith(".mp4", ignoreCase = true)) {
-                    parts.add(OpenAiContentPart(type = "text", text = "\n[Video attached: ${java.io.File(path).name}]"))
-                } else if (path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)) {
-                    val base64 = encodeFileToBase64(path)
-                    if (base64 != null) {
-                        val format = when {
-                            path.endsWith(".mp3", ignoreCase = true) -> "mp3"
-                            path.endsWith(".wav", ignoreCase = true) -> "wav"
-                            else -> "wav" // Default fallback
-                        }
+                val lowerPath = path.lowercase()
+                if (lowerPath.endsWith(".mp4") || lowerPath.endsWith(".mov") || lowerPath.endsWith(".webm")) {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.length() > 50 * 1024 * 1024) {
                         parts.add(OpenAiContentPart(
-                            type = "input_audio",
-                            inputAudio = OpenAiInputAudio(
-                                data = base64,
-                                format = format
-                            )
+                            type = "text",
+                            text = "\n[Video too large (>50MB): ${file.name}]"
                         ))
+                    } else {
+                        val base64 = encodeFileToBase64(path)
+                        if (base64 != null) {
+                            val mimeType = when {
+                                lowerPath.endsWith(".mp4") -> "video/mp4"
+                                lowerPath.endsWith(".mov") -> "video/quicktime"
+                                lowerPath.endsWith(".webm") -> "video/webm"
+                                else -> "video/mp4"
+                            }
+                            parts.add(OpenAiContentPart(
+                                type = "video_url",
+                                videoUrl = OpenAiVideoUrl(url = "data:$mimeType;base64,$base64")
+                            ))
+                        }
+                    }
+                } else if (lowerPath.endsWith(".m4a") || lowerPath.endsWith(".mp3") || lowerPath.endsWith(".wav")) {
+                    val file = java.io.File(path)
+                    if (file.exists() && file.length() > 50 * 1024 * 1024) {
+                        parts.add(OpenAiContentPart(
+                            type = "text",
+                            text = "\n[Audio too large (>50MB): ${file.name}]"
+                        ))
+                    } else {
+                        val base64 = encodeFileToBase64(path)
+                        if (base64 != null) {
+                            val format = when {
+                                lowerPath.endsWith(".mp3") -> "mp3"
+                                lowerPath.endsWith(".wav") -> "wav"
+                                else -> "wav" // Default fallback
+                            }
+                            parts.add(OpenAiContentPart(
+                                type = "input_audio",
+                                inputAudio = OpenAiInputAudio(
+                                    data = base64,
+                                    format = format
+                                )
+                            ))
+                        }
                     }
                 } else {
-                    val base64 = encodeImageToBase64(path)
+                    val base64 = if (lowerPath.endsWith(".gif")) {
+                        encodeFileToBase64(path)
+                    } else {
+                        encodeImageToBase64(path)
+                    }
                     if (base64 != null) {
+                        val mimeType = when {
+                            lowerPath.endsWith(".png") -> "image/png"
+                            lowerPath.endsWith(".webp") -> "image/webp"
+                            lowerPath.endsWith(".gif") -> "image/gif"
+                            else -> "image/jpeg"
+                        }
                         parts.add(OpenAiContentPart(
                             type = "image_url",
-                            imageUrl = OpenAiImageUrl(url = "data:image/jpeg;base64,$base64")
+                            imageUrl = OpenAiImageUrl(url = "data:$mimeType;base64,$base64")
                         ))
                     }
                 }
@@ -2332,7 +2371,12 @@ class ChatRepository(
             }
 
             val outputStream = java.io.ByteArrayOutputStream()
-            finalBitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, outputStream)
+            val format = when {
+                path.lowercase().endsWith(".png") -> android.graphics.Bitmap.CompressFormat.PNG
+                path.lowercase().endsWith(".webp") -> if (android.os.Build.VERSION.SDK_INT >= 30) android.graphics.Bitmap.CompressFormat.WEBP_LOSSLESS else android.graphics.Bitmap.CompressFormat.WEBP
+                else -> android.graphics.Bitmap.CompressFormat.JPEG
+            }
+            finalBitmap.compress(format, 80, outputStream)
             val bytes = outputStream.toByteArray()
             android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         } catch (e: Exception) {

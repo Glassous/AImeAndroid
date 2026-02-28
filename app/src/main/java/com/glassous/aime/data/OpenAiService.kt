@@ -21,7 +21,12 @@ data class OpenAiContentPart(
     val type: String,
     val text: String? = null,
     @SerializedName("image_url") val imageUrl: OpenAiImageUrl? = null,
-    @SerializedName("input_audio") val inputAudio: OpenAiInputAudio? = null
+    @SerializedName("input_audio") val inputAudio: OpenAiInputAudio? = null,
+    @SerializedName("video_url") val videoUrl: OpenAiVideoUrl? = null
+)
+
+data class OpenAiVideoUrl(
+    val url: String
 )
 
 data class OpenAiInputAudio(
@@ -175,14 +180,22 @@ class OpenAiService(
         onToolCall: suspend (ToolCall) -> Unit = {}
     ): String {
         val gson = Gson()
-        val json = gson.toJson(ChatCompletionsRequest(
+        val requestPayload = ChatCompletionsRequest(
             model = model, 
             messages = messages, 
             stream = true,
             tools = tools,
             toolChoice = toolChoice
-        ))
-        val body = json.toRequestBody("application/json".toMediaType())
+        )
+        
+        val body = object : okhttp3.RequestBody() {
+            override fun contentType() = "application/json".toMediaType()
+            override fun writeTo(sink: okio.BufferedSink) {
+                val writer = java.io.BufferedWriter(java.io.OutputStreamWriter(sink.outputStream(), java.nio.charset.StandardCharsets.UTF_8))
+                gson.toJson(requestPayload, writer)
+                writer.flush()
+            }
+        }
 
         val normalized = baseUrl.trimEnd('/')
         val endpoint = if (normalized.endsWith("/chat/completions")) {
