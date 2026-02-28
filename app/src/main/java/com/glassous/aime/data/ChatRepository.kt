@@ -705,18 +705,14 @@ class ChatRepository(
 
                 Result.success(finalUpdated)
             } catch (e: Exception) {
-                val errorMessage = when {
-                    e.message?.contains("HTTP 401") == true -> "认证失败：API Key 无效或已过期"
-                    e.message?.contains("HTTP 403") == true -> "访问被拒绝：没有权限访问该模型"
-                    e.message?.contains("HTTP 429") == true -> "请求过于频繁：已达到速率限制"
-                    e.message?.contains("HTTP 500") == true || e.message?.contains("HTTP 502") == true || 
-                    e.message?.contains("HTTP 503") == true -> "服务器错误：模型服务暂时不可用"
-                    e.message?.contains("timeout") == true -> "请求超时：网络连接超时"
-                    e.message?.contains("Connection") == true -> "网络错误：无法连接到服务器"
-                    else -> "生成失败：${e.message ?: "未知错误"}"
+                val errorMessage = getErrorMessage(e)
+                val finalContent = if (aggregated.isNotEmpty()) {
+                    aggregated.toString() + "\n\n" + errorMessage
+                } else {
+                    errorMessage
                 }
                 val errorUpdated = assistantMessage.copy(
-                    content = errorMessage,
+                    content = finalContent,
                     isError = true,
                     errorDetails = e.message
                 )
@@ -856,176 +852,192 @@ class ChatRepository(
             chatDao.updateMessage(assistantMessage)
 
             withContext(Dispatchers.IO) {
-                streamWithFallback(
-                    primaryGroup = group,
-                    primaryModel = model,
-                    messages = messagesWithBias,
-                    tools = tools,
-                    toolChoice = if (tools != null) "auto" else null,
-                    onDelta = { delta ->
-                        aggregated.append(delta)
-                        val currentTime = System.currentTimeMillis()
-                        if (currentTime - lastUpdateTime >= updateInterval) {
-                            val updated = assistantMessage.copy(content = aggregated.toString())
-                            chatDao.updateMessage(updated)
-                            lastUpdateTime = currentTime
-                        }
-                    },
-                    onToolCall = { toolCall ->
-                        if (toolCallHandled) return@streamWithFallback
-                        toolCallHandled = true
-
-                        // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
-                        // 通知UI具体的工具类型以正确显示图标
-                        when (toolCall.function?.name) {
-                            "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
-                            "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
-                            else -> {}
-                        }
-                        if (!preLabelAdded) {
-                            val pre = aggregated.toString().trim()
-                            if (pre.isNotEmpty()) {
-                                aggregated.setLength(0)
-                                aggregated.append("【前置回复】\n")
-                                aggregated.append(pre)
-                                aggregated.append("\n\n")
+                try {
+                    streamWithFallback(
+                        primaryGroup = group,
+                        primaryModel = model,
+                        messages = messagesWithBias,
+                        tools = tools,
+                        toolChoice = if (tools != null) "auto" else null,
+                        onDelta = { delta ->
+                            aggregated.append(delta)
+                            val currentTime = System.currentTimeMillis()
+                            if (currentTime - lastUpdateTime >= updateInterval) {
                                 val updated = assistantMessage.copy(content = aggregated.toString())
                                 chatDao.updateMessage(updated)
+                                lastUpdateTime = currentTime
                             }
-                            preLabelAdded = true
-                        }
-                        if (toolCall.function?.name == "web_search") {
-                            try {
-                                val arguments = toolCall.function.arguments
-                                val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
-                                val query = safeExtractQuery(arguments, userTextForIntent)
-                                
-                                if (query.isNotEmpty()) {
-                                    val searchResultCount = toolPreferences.webSearchResultCount.first()
-                                    val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl)
+                        },
+                        onToolCall = { toolCall ->
+                            if (toolCallHandled) return@streamWithFallback
+                            toolCallHandled = true
 
-                                    // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
-                                    if (searchResponse.results.isNotEmpty()) {
-                                        val linksMarkdown = searchResponse.results.mapIndexed { index, r ->
-                                            "${index + 1}. [${r.title}](${r.url})"
-                                        }.joinToString("\n")
-                                        aggregated.append("\n\n\n")
-                                        aggregated.append("<search>\n")
-                                        aggregated.append(linksMarkdown)
-                                        aggregated.append("\n</search>")
-                                        aggregated.append("\n\n\n")
+                            // 处理工具调用：切换UI状态为调用中，并将已流出的首段内容包装为“第一次回复”
+                            // 通知UI具体的工具类型以正确显示图标
+                            when (toolCall.function?.name) {
+                                "web_search" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEB_SEARCH)
+                                "city_weather" -> onToolCallStart?.invoke(com.glassous.aime.data.model.ToolType.WEATHER_QUERY)
+                                else -> {}
+                            }
+                            if (!preLabelAdded) {
+                                val pre = aggregated.toString().trim()
+                                if (pre.isNotEmpty()) {
+                                    aggregated.setLength(0)
+                                    aggregated.append("【前置回复】\n")
+                                    aggregated.append(pre)
+                                    aggregated.append("\n\n")
+                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                    chatDao.updateMessage(updated)
+                                }
+                                preLabelAdded = true
+                            }
+                            if (toolCall.function?.name == "web_search") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
+                                    val query = safeExtractQuery(arguments, userTextForIntent)
+                                    
+                                    if (query.isNotEmpty()) {
+                                        val searchResultCount = toolPreferences.webSearchResultCount.first()
+                                        val searchResponse = webSearchService.search(query, searchResultCount, useCloudProxy, proxyUrl)
+
+                                        // 在工具调用回复区域渲染搜索结果（Markdown：标题可点击跳转）
+                                        if (searchResponse.results.isNotEmpty()) {
+                                            val linksMarkdown = searchResponse.results.mapIndexed { index, r ->
+                                                "${index + 1}. [${r.title}](${r.url})"
+                                            }.joinToString("\n")
+                                            aggregated.append("\n\n\n")
+                                            aggregated.append("<search>\n")
+                                            aggregated.append(linksMarkdown)
+                                            aggregated.append("\n</search>")
+                                            aggregated.append("\n\n\n")
+                                            postLabelAdded = true
+                                            val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
+                                            chatDao.updateMessage(updatedBeforeOfficial)
+                                        }
+
+                                        // 将搜索结果传递给AI进行总结
+                                        val messagesWithSearch = contextMessages.toMutableList()
+                                        val searchResultsText = if (searchResponse.results.isNotEmpty()) {
+                                            val formatted = webSearchService.formatSearchResults(searchResponse)
+                                            "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
+                                        } else {
+                                            "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
+                                        }
+                                        messagesWithSearch.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = searchResultsText
+                                            )
+                                        )
+                                        
+                                        // 重新调用AI进行总结（不传递tools避免无限循环）
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
+                                            messages = messagesWithSearch,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
+                                            }
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    aggregated.append("\n\n搜索功能暂时不可用：${e.message}")
+                                }
+                            } else if (toolCall.function?.name == "city_weather") {
+                                try {
+                                    val arguments = toolCall.function.arguments
+                                    var lat: Double? = null
+                                    var lon: Double? = null
+                                    var cityArg: String? = null
+                                    
+                                    try {
+                                        val gson = Gson()
+                                        val type = object : TypeToken<Map<String, Any?>>() {}.type
+                                        val map: Map<String, Any?> = gson.fromJson(arguments, type)
+                                        lat = (map["latitude"] as? Number)?.toDouble()
+                                        lon = (map["longitude"] as? Number)?.toDouble()
+                                        cityArg = map["city"] as? String
+                                    } catch (e: Exception) {
+                                        // ignore
+                                    }
+                                    
+                                    val weatherResult = if (lat != null && lon != null) {
+                                        weatherService.query(lat, lon)
+                                    } else {
+                                        val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
+                                        val finalCity = if (!cityArg.isNullOrBlank()) cityArg else safeExtractCity(arguments, userTextForIntent)
+                                        if (finalCity.isNotEmpty()) weatherService.query(finalCity) else null
+                                    }
+                                    
+                                    if (weatherResult != null) {
+                                        // 插入工具调用结果（Markdown表格）到消息流中，位于前置回复和正式回复之间
+                                        val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
+                                        aggregated.append("\n\n\n") // 工具结果开始分隔
+                                        aggregated.append(weatherTable.trim())
+                                        aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
                                         postLabelAdded = true
                                         val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
                                         chatDao.updateMessage(updatedBeforeOfficial)
-                                    }
-
-                                    // 将搜索结果传递给AI进行总结
-                                    val messagesWithSearch = contextMessages.toMutableList()
-                                    val searchResultsText = if (searchResponse.results.isNotEmpty()) {
-                                        val formatted = webSearchService.formatSearchResults(searchResponse)
-                                        "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
-                                    } else {
-                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
-                                    }
-                                    messagesWithSearch.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = searchResultsText
+                                        val messagesWithWeather = contextMessages.toMutableList()
+                                        messagesWithWeather.add(
+                                            OpenAiChatMessage(
+                                                role = "system",
+                                                content = weatherService.format(weatherResult)
+                                            )
                                         )
-                                    )
-                                    
-                                    // 重新调用AI进行总结（不传递tools避免无限循环）
-                                    streamWithFallback(
-                                        primaryGroup = group,
-                                        primaryModel = model,
-                                        messages = messagesWithSearch,
-                                        tools = null,
-                                        toolChoice = null,
-                                        onDelta = { delta ->
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
-                                            if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = assistantMessage.copy(content = aggregated.toString())
-                                                chatDao.updateMessage(updated)
-                                                lastUpdateTime = currentTime
+                                        
+                                        streamWithFallback(
+                                            primaryGroup = group,
+                                            primaryModel = model,
+                                            messages = messagesWithWeather,
+                                            tools = null,
+                                            toolChoice = null,
+                                            onDelta = { delta ->
+                                                if (!postLabelAdded) {
+                                                    aggregated.append("\n\n\n")
+                                                    postLabelAdded = true
+                                                }
+                                                aggregated.append(delta)
+                                                val currentTime = System.currentTimeMillis()
+                                                if (currentTime - lastUpdateTime >= updateInterval) {
+                                                    val updated = assistantMessage.copy(content = aggregated.toString())
+                                                    chatDao.updateMessage(updated)
+                                                    lastUpdateTime = currentTime
+                                                }
                                             }
-                                        }
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n搜索功能暂时不可用：${e.message}")
-                            }
-                        } else if (toolCall.function?.name == "city_weather") {
-                            try {
-                                val arguments = toolCall.function.arguments
-                                var lat: Double? = null
-                                var lon: Double? = null
-                                var cityArg: String? = null
-                                
-                                try {
-                                    val gson = Gson()
-                                    val type = object : TypeToken<Map<String, Any?>>() {}.type
-                                    val map: Map<String, Any?> = gson.fromJson(arguments, type)
-                                    lat = (map["latitude"] as? Number)?.toDouble()
-                                    lon = (map["longitude"] as? Number)?.toDouble()
-                                    cityArg = map["city"] as? String
+                                        )
+                                    }
                                 } catch (e: Exception) {
-                                    // ignore
+                                    aggregated.append("\n\n天气功能暂时不可用：${e.message}")
                                 }
-                                
-                                val weatherResult = if (lat != null && lon != null) {
-                                    weatherService.query(lat, lon)
-                                } else {
-                                    val userTextForIntent = if (prevUserIndex != -1) history[prevUserIndex].content else ""
-                                    val finalCity = if (!cityArg.isNullOrBlank()) cityArg else safeExtractCity(arguments, userTextForIntent)
-                                    if (finalCity.isNotEmpty()) weatherService.query(finalCity) else null
-                                }
-                                
-                                if (weatherResult != null) {
-                                    // 插入工具调用结果（Markdown表格）到消息流中，位于前置回复和正式回复之间
-                                    val weatherTable = weatherService.formatAsMarkdownTable(weatherResult)
-                                    aggregated.append("\n\n\n") // 工具结果开始分隔
-                                    aggregated.append(weatherTable.trim())
-                                    aggregated.append("\n\n\n") // 工具结果结束分隔/正式回复起始分隔
-                                    postLabelAdded = true
-                                    val updatedBeforeOfficial = assistantMessage.copy(content = aggregated.toString())
-                                    chatDao.updateMessage(updatedBeforeOfficial)
-                                    val messagesWithWeather = contextMessages.toMutableList()
-                                    messagesWithWeather.add(
-                                        OpenAiChatMessage(
-                                            role = "system",
-                                            content = weatherService.format(weatherResult)
-                                        )
-                                    )
-                                    
-                                    streamWithFallback(
-                                        primaryGroup = group,
-                                        primaryModel = model,
-                                        messages = messagesWithWeather,
-                                        tools = null,
-                                        toolChoice = null,
-                                        onDelta = { delta ->
-                                            if (!postLabelAdded) {
-                                                aggregated.append("\n\n\n")
-                                                postLabelAdded = true
-                                            }
-                                            aggregated.append(delta)
-                                            val currentTime = System.currentTimeMillis()
-                                            if (currentTime - lastUpdateTime >= updateInterval) {
-                                                val updated = assistantMessage.copy(content = aggregated.toString())
-                                                chatDao.updateMessage(updated)
-                                                lastUpdateTime = currentTime
-                                            }
-                                        }
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                aggregated.append("\n\n天气功能暂时不可用：${e.message}")
                             }
+                            onToolCallEnd?.invoke()
                         }
-                        onToolCallEnd?.invoke()
+                    )
+                } catch (e: Exception) {
+                    val errorMessage = getErrorMessage(e)
+                    val finalContent = if (aggregated.isNotEmpty()) {
+                        aggregated.toString() + "\n\n" + errorMessage
+                    } else {
+                        errorMessage
                     }
-                )
+                    val errorUpdated = assistantMessage.copy(
+                        content = finalContent,
+                        isError = true,
+                        errorDetails = e.message
+                    )
+                    chatDao.updateMessage(errorUpdated)
+                    throw e
+                }
             }
 
             // 最终写入完整文本
@@ -1487,18 +1499,14 @@ class ChatRepository(
                     Result.success(Unit)
                 } catch (e: Exception) {
                     // 重试失败，保存详细错误信息
-                    val errorMessage = when {
-                        e.message?.contains("HTTP 401") == true -> "认证失败：API Key 无效或已过期"
-                        e.message?.contains("HTTP 403") == true -> "访问被拒绝：没有权限访问该模型"
-                        e.message?.contains("HTTP 429") == true -> "请求过于频繁：已达到速率限制"
-                        e.message?.contains("HTTP 500") == true || e.message?.contains("HTTP 502") == true || 
-                        e.message?.contains("HTTP 503") == true -> "服务器错误：模型服务暂时不可用"
-                        e.message?.contains("timeout") == true -> "请求超时：网络连接超时"
-                        e.message?.contains("Connection") == true -> "网络错误：无法连接到服务器"
-                        else -> "生成失败：${e.message ?: "未知错误"}"
+                    val errorMessage = getErrorMessage(e)
+                    val finalContent = if (aggregated.isNotEmpty()) {
+                        aggregated.toString() + "\n\n" + errorMessage
+                    } else {
+                        errorMessage
                     }
                     val errorUpdated = assistantMessage.copy(
-                        content = errorMessage,
+                        content = finalContent,
                         isError = true,
                         errorDetails = e.message
                     )
@@ -1636,7 +1644,8 @@ class ChatRepository(
             val tools = getTools(selectedTool)
 
             withContext(Dispatchers.IO) {
-                streamWithFallback(
+                try {
+                    streamWithFallback(
                     primaryGroup = group,
                     primaryModel = model,
                     messages = messagesWithBias,
@@ -1834,6 +1843,21 @@ class ChatRepository(
                         onToolCallEnd?.invoke()
                     }
                 )
+                } catch (e: Exception) {
+                    val errorMessage = getErrorMessage(e)
+                    val finalContent = if (aggregated.isNotEmpty()) {
+                        aggregated.toString() + "\n\n" + errorMessage
+                    } else {
+                        errorMessage
+                    }
+                    val errorUpdated = assistantMessage.copy(
+                        content = finalContent,
+                        isError = true,
+                        errorDetails = e.message
+                    )
+                    chatDao.updateMessage(errorUpdated)
+                    throw e
+                }
             }
 
             // 最终写入完整文本并刷新会话元数据
@@ -2204,6 +2228,19 @@ class ChatRepository(
             } catch (e: Exception) {
                 null
             }
+        }
+    }
+
+    private fun getErrorMessage(e: Exception): String {
+        return when {
+            e.message?.contains("HTTP 401") == true -> "认证失败：API Key 无效或已过期"
+            e.message?.contains("HTTP 403") == true -> "访问被拒绝：没有权限访问该模型"
+            e.message?.contains("HTTP 429") == true -> "请求过于频繁：已达到速率限制"
+            e.message?.contains("HTTP 500") == true || e.message?.contains("HTTP 502") == true || 
+            e.message?.contains("HTTP 503") == true -> "服务器错误：模型服务暂时不可用"
+            e.message?.contains("timeout") == true -> "请求超时：网络连接超时"
+            e.message?.contains("Connection") == true -> "网络错误：无法连接到服务器"
+            else -> "生成失败：${e.message ?: "未知错误"}"
         }
     }
 
