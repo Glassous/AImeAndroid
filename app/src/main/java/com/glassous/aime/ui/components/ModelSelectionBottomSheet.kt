@@ -152,7 +152,7 @@ fun ModelSelectionContent(
                         modifier = Modifier.padding(start = 8.dp)
                     )
                 } else {
-                    // 显示"选择模型"标题和当前模型
+                    // 显示"选择模型"标题
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -166,119 +166,16 @@ fun ModelSelectionContent(
                             fontWeight = FontWeight.Bold
                         )
                         
-                        // 右侧：工具调用显示 + 当前模型显示
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // 当前工具显示（非入口，仅展示）
-                            if (toolCallInProgress) {
-                                // 工具调用进行中：显示实际调用工具（根据当前工具类型）
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                    ),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = (currentToolType ?: ToolType.WEB_SEARCH).icon,
-                                            contentDescription = (currentToolType ?: ToolType.WEB_SEARCH).displayName,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = (currentToolType ?: ToolType.WEB_SEARCH).displayName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                            } else if (selectedTool != null) {
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                    ),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = selectedTool.icon,
-                                            contentDescription = selectedTool.displayName,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = selectedTool.displayName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                            } else if (autoProcessing || autoSelected) {
-                                // 自动使用工具进行中：显示自动徽标（齿轮+星星）
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-                                    ),
-                                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-                                    shape = MaterialTheme.shapes.small
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(horizontal = 10.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(modifier = Modifier.size(18.dp)) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Settings,
-                                                contentDescription = "自动使用工具",
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.align(Alignment.Center)
-                                            )
-                                            Icon(
-                                                imageVector = Icons.Filled.Star,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier
-                                                    .size(10.dp)
-                                                    .align(Alignment.TopEnd)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "自动使用工具",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                            }
-                            // 当前模型显示
-                            val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-                            selectedModel?.let { model ->
-                                Text(
-                                    text = model.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.padding(end = 16.dp)
-                                )
-                            }
+                        // 右侧：当前模型显示
+                        val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+                        selectedModel?.let { model ->
+                            Text(
+                                text = model.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(end = 16.dp)
+                            )
                         }
                     }
                 }
@@ -465,22 +362,6 @@ private fun GroupList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         contentPadding = PaddingValues(bottom = 16.dp)
     ) {
-        // 工具调用模块
-        if (showToolSelection) {
-            item {
-                ToolSelectionItem(
-                    onClick = onToolSelectionClick
-                )
-            }
-        }
-
-        // 附件上传模块
-        item {
-            AttachmentSelectionItem(
-                onClick = onAttachmentSelectionClick
-            )
-        }
-
         // 内置AIme模型
         item {
             ModelItem(
