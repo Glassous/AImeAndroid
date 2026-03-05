@@ -22,6 +22,16 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as AIMeApplication).repository
     private val chatDao = (application as AIMeApplication).database.chatDao()
     
+    // S3 Integration
+    private val s3Preferences = (application as AIMeApplication).s3Preferences
+    private val s3UploadRepository = (application as AIMeApplication).s3UploadRepository
+
+    private val _uploadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
+    val uploadProgress: StateFlow<Map<String, Float>> = _uploadProgress.asStateFlow()
+
+    private val _uploadingFiles = MutableStateFlow<Set<String>>(emptySet())
+    val uploadingFiles: StateFlow<Set<String>> = _uploadingFiles.asStateFlow()
+
     private val _currentConversationId = MutableStateFlow<Long?>(null)
     val currentConversationId: StateFlow<Long?> = _currentConversationId.asStateFlow()
     
@@ -100,58 +110,105 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun addAttachment(uri: android.net.Uri, context: android.content.Context, type: String = "image") {
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch {
             try {
-                // Get original filename
-                var originalName = when (type) {
-                    "video" -> "video.mp4"
-                    "audio" -> "audio.m4a"
-                    "pdf" -> "document.pdf"
-                    "text" -> "file.txt"
-                    else -> "image.jpg"
-                }
-                context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst()) {
-                        originalName = cursor.getString(nameIndex)
+                // Get s3 state first to decide if we need to track upload
+                val s3Enabled = s3Preferences.s3Enabled.first()
+                val isTextFile = type == "text"
+                val shouldUpload = s3Enabled && !isTextFile
+
+                // 1. Prepare file and metadata on IO dispatcher
+                val fileInfo = withContext(Dispatchers.IO) {
+                    var originalName = when (type) {
+                        "video" -> "video.mp4"
+                        "audio" -> "audio.m4a"
+                        "pdf" -> "document.pdf"
+                        "text" -> "file.txt"
+                        else -> "image.jpg"
                     }
+                    context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                        val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                        if (cursor.moveToFirst()) {
+                            val name = cursor.getString(nameIndex)
+                            if (!name.isNullOrBlank()) originalName = name
+                        }
+                    }
+
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val imagesDir = java.io.File(context.filesDir, "images")
+                    if (!imagesDir.exists()) imagesDir.mkdirs()
+                    
+                    val extension = when (type) {
+                        "video" -> ".mp4"
+                        "audio" -> ".m4a"
+                        "pdf" -> ".pdf"
+                        "text" -> {
+                            val ext = originalName.substringAfterLast(".", "")
+                            if (ext.isNotEmpty()) ".$ext" else ".txt"
+                        }
+                        else -> ".jpg"
+                    }
+                    val prefix = when (type) {
+                        "video" -> "vid_"
+                        "audio" -> "aud_"
+                        "pdf" -> "pdf_${originalName}_"
+                        "text" -> "txt_${originalName}_"
+                        else -> "img_"
+                    }
+                    val sanitizedPrefix = prefix.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    val fileName = "${sanitizedPrefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
+                    val file = java.io.File(imagesDir, fileName)
+                    
+                    java.io.FileOutputStream(file).use { outputStream ->
+                        inputStream?.copyTo(outputStream)
+                    }
+                    inputStream?.close()
+                    file
                 }
 
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val imagesDir = java.io.File(context.filesDir, "images")
-                if (!imagesDir.exists()) imagesDir.mkdirs()
-                
-                // Create a unique file name
-                val extension = when (type) {
-                    "video" -> ".mp4"
-                    "audio" -> ".m4a"
-                    "pdf" -> ".pdf"
-                    "text" -> {
-                        val ext = originalName.substringAfterLast(".", "")
-                        if (ext.isNotEmpty()) ".$ext" else ".txt"
+                val filePath = fileInfo.absolutePath
+
+                // 2. Update state atomically on Main thread
+                if (shouldUpload) {
+                    _uploadingFiles.update { it + filePath }
+                }
+                _attachedImages.update { it + filePath }
+
+                // 3. Start upload if needed
+                if (shouldUpload) {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        try {
+                            val result = s3UploadRepository.uploadFile(fileInfo) { progress ->
+                                _uploadProgress.update { current ->
+                                    current.toMutableMap().apply { put(filePath, progress) }
+                                }
+                            }
+                            
+                            // Finish upload state
+                            _uploadingFiles.update { it - filePath }
+                            _uploadProgress.update { it - filePath }
+                            
+                            if (result.isSuccess) {
+                                val s3Url = result.getOrThrow()
+                                val urlType = when(type) {
+                                    "video" -> "video_url"
+                                    "pdf" -> "pdf_url"
+                                    "audio" -> "audio_url"
+                                    else -> "image_url"
+                                }
+                                val urlString = "url:$urlType:$s3Url"
+                                
+                                _attachedImages.update { current ->
+                                    current.map { if (it == filePath) urlString else it }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            _uploadingFiles.update { it - filePath }
+                            _uploadProgress.update { it - filePath }
+                        }
                     }
-                    else -> ".jpg"
                 }
-                val prefix = when (type) {
-                    "video" -> "vid_"
-                    "audio" -> "aud_"
-                    "pdf" -> "pdf_${originalName}_" // Include original name in the saved path
-                    "text" -> "txt_${originalName}_" // Include original name in the saved path
-                    else -> "img_"
-                }
-                // Sanitize prefix to avoid illegal characters in path (allow Unicode/Chinese)
-                val sanitizedPrefix = prefix.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-                val fileName = "${sanitizedPrefix}${System.currentTimeMillis()}_${java.util.UUID.randomUUID()}$extension"
-                val file = java.io.File(imagesDir, fileName)
-                
-                val outputStream = java.io.FileOutputStream(file)
-                inputStream?.copyTo(outputStream)
-                inputStream?.close()
-                outputStream.close()
-                
-                val currentList = _attachedImages.value.toMutableList()
-                currentList.add(file.absolutePath)
-                _attachedImages.value = currentList
             } catch (e: Exception) {
                 e.printStackTrace()
             }
@@ -203,14 +260,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun removeAttachment(path: String) {
-        val currentList = _attachedImages.value.toMutableList()
-        if (currentList.remove(path)) {
-            _attachedImages.value = currentList
-            // Optionally delete the file if it was just a temp attachment?
-            // But we might want to keep it if it's already saved in a message?
-            // Here we are removing from the *input* attachment list, so we can probably delete it if it's not referenced elsewhere.
-            // But for simplicity, we just remove from list. The file remains.
-        }
+        _attachedImages.update { it - path }
+        _uploadingFiles.update { it - path }
+        _uploadProgress.update { it - path }
     }
     
     private val _toolCallInProgress = MutableStateFlow(false)
@@ -272,7 +324,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 
                 val currentAspectRatio = _selectedAspectRatio.value
                 _inputText.value = ""
-                _attachedImages.value = emptyList()
+                _attachedImages.update { emptyList() }
+                _uploadingFiles.update { emptySet() }
+                _uploadProgress.update { emptyMap() }
                 
                 // CRITICAL: Filter out URL attachments from being sent to the AI backend via imagePaths
                 // The URL info is already included in finalContent as <file_url> tags

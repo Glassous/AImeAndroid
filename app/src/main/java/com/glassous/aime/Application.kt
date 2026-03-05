@@ -35,6 +35,12 @@ class AIMeApplication : Application(), ImageLoaderFactory {
 
     // Tool preferences instance
     val toolPreferences by lazy { com.glassous.aime.data.preferences.ToolPreferences(this) }
+    
+    // S3 preferences instance
+    val s3Preferences by lazy { com.glassous.aime.data.preferences.S3Preferences(this) }
+    
+    // S3 upload repository
+    val s3UploadRepository by lazy { com.glassous.aime.data.repository.S3UploadRepository(this, s3Preferences) }
 
     
 

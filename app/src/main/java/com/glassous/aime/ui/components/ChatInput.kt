@@ -63,6 +63,8 @@ fun ChatInput(
     innerAlpha: Float = 0.9f,
     // 新增：附件预览
     attachedImages: List<String> = emptyList(),
+    uploadProgress: Map<String, Float> = emptyMap(),
+    uploadingFiles: Set<String> = emptySet(),
     onRemoveAttachment: (String) -> Unit = {},
     onImageClick: (String) -> Unit = {}
 ) {
@@ -99,14 +101,17 @@ fun ChatInput(
                         ) {
                             val isUrl = path.startsWith("url:")
                             val urlType = if (isUrl) path.split(":")[1] else ""
-                            val actualPath = if (isUrl) path.substringAfterLast(":") else path
+                            val actualPath = if (isUrl) {
+                                val parts = path.split(":", limit = 3)
+                                if (parts.size == 3) parts[2] else path
+                            } else path
                             
                             val isVideo = actualPath.endsWith(".mp4", ignoreCase = true) || urlType == "video_url"
-                            val isAudio = actualPath.endsWith(".m4a", ignoreCase = true) || actualPath.endsWith(".mp3", ignoreCase = true) || actualPath.endsWith(".wav", ignoreCase = true)
+                            val isAudio = actualPath.endsWith(".m4a", ignoreCase = true) || actualPath.endsWith(".mp3", ignoreCase = true) || actualPath.endsWith(".wav", ignoreCase = true) || urlType == "audio_url"
                             val isPdf = actualPath.endsWith(".pdf", ignoreCase = true) || urlType == "pdf_url"
                             val isText = actualPath.contains("/txt_", ignoreCase = true)
                             
-                            if (isAudio || isPdf || isText || isUrl) {
+                            if (isAudio || isPdf || isText || (isUrl && !isVideo && urlType != "image_url")) {
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
@@ -156,11 +161,11 @@ fun ChatInput(
                                 AsyncImage(
                                     model = if (isVideo) {
                                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                                            .data(path)
+                                            .data(actualPath)
                                             .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
                                             .build()
                                     } else {
-                                        path
+                                        actualPath
                                     },
                                     contentDescription = "预览图片",
                                     modifier = Modifier
@@ -200,6 +205,25 @@ fun ChatInput(
                                     tint = Color.White,
                                     modifier = Modifier.size(12.dp)
                                 )
+                            }
+
+                            // Upload Progress Overlay
+                            if (uploadingFiles.contains(path)) {
+                                val progress = uploadProgress[path] ?: 0f
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black.copy(alpha = 0.5f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        progress = { progress },
+                                        modifier = Modifier.size(32.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    )
+                                }
                             }
                         }
                     }
@@ -265,20 +289,21 @@ fun ChatInput(
             )
             
             AnimatedVisibility(
-                visible = inputText.isNotBlank(),
+                visible = inputText.isNotBlank() || attachedImages.isNotEmpty(),
                 enter = fadeIn() + expandHorizontally(expandFrom = Alignment.End),
                 exit = fadeOut() + shrinkHorizontally(shrinkTowards = Alignment.End)
             ) {
+                val canSend = (inputText.isNotBlank() || attachedImages.isNotEmpty()) && !isLoading && uploadingFiles.isEmpty()
                 if (minimalMode && hideSendButtonBackground) {
                     // 极简模式或隐藏发送按钮背景：只显示图标，无背景
                     IconButton(
                         onClick = {
-                            if (inputText.isNotBlank()) {
+                            if (canSend) {
                                 onSendMessage()
                                 focusManager.clearFocus()
                             }
                         },
-                        enabled = inputText.isNotBlank() && !isLoading,
+                        enabled = canSend,
                         modifier = Modifier.size(buttonSize)
                     ) {
                         if (isLoading) {
@@ -290,7 +315,7 @@ fun ChatInput(
                             Icon(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "发送",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = if (canSend) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
                             )
                         }
                     }
@@ -298,17 +323,19 @@ fun ChatInput(
                     // 正常模式：带背景的按钮
                     FilledIconButton(
                         onClick = {
-                            if (inputText.isNotBlank()) {
+                            if (canSend) {
                                 onSendMessage()
                                 focusManager.clearFocus()
                             }
                         },
-                        enabled = inputText.isNotBlank() && !isLoading,
+                        enabled = canSend,
                         modifier = Modifier.size(buttonSize),
                         shape = inputShape,
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            contentColor = MaterialTheme.colorScheme.onPrimary
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
                         )
                     ) {
                         if (isLoading) {
@@ -321,6 +348,7 @@ fun ChatInput(
                                 imageVector = Icons.AutoMirrored.Filled.Send,
                                 contentDescription = "发送"
                             )
+                        }
                     }
                 }
             }
@@ -328,4 +356,4 @@ fun ChatInput(
     }
 }
 }
-}
+

@@ -19,10 +19,12 @@ ksp = "2.0.21-1.0.28"
 datastore = "1.1.1"
 supabase = "3.1.1"
 ktor = "3.0.3"
+awsSdkKotlin = "1.0.65"
 
 kotlinx-serialization = "1.7.3"
 
 [libraries]
+aws-s3 = { group = "aws.sdk.kotlin", name = "s3", version.ref = "awsSdkKotlin" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

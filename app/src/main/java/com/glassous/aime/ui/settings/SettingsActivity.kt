@@ -49,6 +49,7 @@ import com.glassous.aime.ui.components.FontSizeSettingDialog
 import com.glassous.aime.ui.components.MinimalModeConfigDialog
 import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.components.TransparencySettingDialog
+import com.glassous.aime.ui.components.S3ConfigDialog
 import com.glassous.aime.ui.components.TitleGenerationModelSelectionDialog
 import com.glassous.aime.ui.components.TitleGenerationContextStrategyDialog
 import com.glassous.aime.ui.components.ImportSharedConversationDialog
@@ -179,6 +180,19 @@ fun SettingsContent(
     var showTitleGenModelSelectionDialog by remember { mutableStateOf(false) }
     var showTitleGenContextStrategyDialog by remember { mutableStateOf(false) }
     var titleGenModelName by remember { mutableStateOf("跟随当前模型") }
+    
+    // S3 Config State
+    val s3Enabled by application.s3Preferences.s3Enabled.collectAsState(initial = false)
+    val s3Endpoint by application.s3Preferences.s3Endpoint.collectAsState(initial = "")
+    val s3AccessKey by application.s3Preferences.s3AccessKey.collectAsState(initial = "")
+    val s3SecretKey by application.s3Preferences.s3SecretKey.collectAsState(initial = "")
+    val s3BucketName by application.s3Preferences.s3BucketName.collectAsState(initial = "")
+    
+    val isS3ConfigComplete = remember(s3Endpoint, s3AccessKey, s3SecretKey, s3BucketName) {
+        s3Endpoint.isNotBlank() && s3AccessKey.isNotBlank() && s3SecretKey.isNotBlank() && s3BucketName.isNotBlank()
+    }
+    
+    var showS3ConfigDialog by remember { mutableStateOf(false) }
 
     val contextStrategyLabel = remember(titleGenerationContextStrategy, titleGenerationContextN) {
         when (titleGenerationContextStrategy) {
@@ -756,6 +770,67 @@ fun SettingsContent(
             }
             }
 
+            // --- S3 配置 ---
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+                        Text(
+                            text = "S3 对象存储",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "配置 S3 兼容的对象存储，启用后附件将上传至云端",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Row 1: Enable Switch
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(text = "启用 S3 上传", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    text = if (!isS3ConfigComplete) "请先完成配置" else if (s3Enabled) "已启用" else "已禁用",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = if (!isS3ConfigComplete) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = s3Enabled && isS3ConfigComplete,
+                                onCheckedChange = { 
+                                    scope.launch { 
+                                        application.s3Preferences.setS3Enabled(it) 
+                                    }
+                                },
+                                enabled = isS3ConfigComplete
+                            )
+                        }
+                        
+                        // Row 2: Config Button
+                        OutlinedButton(
+                            onClick = { showS3ConfigDialog = true },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(Icons.Filled.Settings, contentDescription = "配置参数")
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("配置参数")
+                        }
+                    }
+                }
+            }
+
             // --- 数据备份 ---
             item {
             Card(
@@ -1135,6 +1210,13 @@ fun SettingsContent(
             onConfigChange = { themeViewModel.setMinimalModeConfig(it) },
             fullscreenEnabled = minimalModeFullscreen,
             onFullscreenChange = { themeViewModel.setMinimalModeFullscreen(it) }
+        )
+    }
+
+    if (showS3ConfigDialog) {
+        S3ConfigDialog(
+            s3Preferences = application.s3Preferences,
+            onDismiss = { showS3ConfigDialog = false }
         )
     }
 }

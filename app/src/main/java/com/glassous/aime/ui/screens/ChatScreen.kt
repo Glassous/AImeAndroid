@@ -161,6 +161,8 @@ fun ChatScreen(
     // 附件相关状态
     var showAttachmentSelectionSheet by rememberSaveable { mutableStateOf(false) }
     val attachedImages by chatViewModel.attachedImages.collectAsState()
+    val uploadProgress by chatViewModel.uploadProgress.collectAsState()
+    val uploadingFiles by chatViewModel.uploadingFiles.collectAsState()
     
     val imagePickerLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
         contract = androidx.activity.result.contract.ActivityResultContracts.PickMultipleVisualMedia()
@@ -758,19 +760,30 @@ fun ChatScreen(
                             ),
                             overlayAlpha = themePreferences.chatInputInnerAlpha.collectAsState(initial = 0.9f).value,
                             attachedImages = attachedImages,
+                            uploadProgress = uploadProgress,
+                            uploadingFiles = uploadingFiles,
                             onRemoveAttachment = { path -> chatViewModel.removeAttachment(path) },
                             onImageClick = { path -> 
-                                if (path.startsWith("http")) {
-                                    previewImagePath = path
-                                } else if (path.endsWith(".mp4", ignoreCase = true)) {
-                                    previewVideoPath = path
-                                } else if (path.endsWith(".m4a", ignoreCase = true) || path.endsWith(".mp3", ignoreCase = true) || path.endsWith(".wav", ignoreCase = true)) {
+                                val actualPath = if (path.startsWith("url:")) {
+                                    val parts = path.split(":", limit = 3)
+                                    if (parts.size == 3) parts[2] else path
+                                } else path
+                                
+                                if (actualPath.startsWith("http")) {
+                                    previewImagePath = actualPath
+                                } else if (actualPath.endsWith(".mp4", ignoreCase = true)) {
+                                    previewVideoPath = actualPath
+                                } else if (actualPath.endsWith(".m4a", ignoreCase = true) || actualPath.endsWith(".mp3", ignoreCase = true) || actualPath.endsWith(".wav", ignoreCase = true)) {
                                     try {
-                                        val uri = androidx.core.content.FileProvider.getUriForFile(
-                                            context,
-                                            "${context.packageName}.fileprovider",
-                                            java.io.File(path)
-                                        )
+                                        val uri = if (actualPath.startsWith("http")) {
+                                            android.net.Uri.parse(actualPath)
+                                        } else {
+                                            androidx.core.content.FileProvider.getUriForFile(
+                                                context,
+                                                "${context.packageName}.fileprovider",
+                                                java.io.File(actualPath)
+                                            )
+                                        }
                                         val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
                                             setDataAndType(uri, "audio/*")
                                             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -780,7 +793,7 @@ fun ChatScreen(
                                         android.widget.Toast.makeText(context, "无法播放音频", android.widget.Toast.LENGTH_SHORT).show()
                                     }
                                 } else {
-                                    previewImagePath = path 
+                                    previewImagePath = actualPath 
                                 }
                             },
                             // 内嵌按钮配置

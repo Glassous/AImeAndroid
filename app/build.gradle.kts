@@ -98,6 +98,7 @@ dependencies {
     
     // ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.aws.s3)
     
     // Material3 Window Size Class
     implementation(libs.androidx.material3.window.size)

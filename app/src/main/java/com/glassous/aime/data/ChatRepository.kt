@@ -2277,6 +2277,9 @@ class ChatRepository(
                             "pdf_url" -> {
                                 parts.add(OpenAiContentPart(type = "file", imageUrl = OpenAiImageUrl(url = actualUrl)))
                             }
+                            "audio_url" -> {
+                                parts.add(OpenAiContentPart(type = "text", text = "\n[Audio: $actualUrl]"))
+                            }
                         }
                     }
                     return@forEach
