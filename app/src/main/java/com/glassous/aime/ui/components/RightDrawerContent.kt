@@ -124,24 +124,29 @@ fun RightDrawerContent(
             }
 
             // Top Section: Quick Actions
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 24.dp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp)
             ) {
                 QuickActionItem(
                     icon = Icons.Default.ChatBubbleOutline,
                     text = "模型切换",
-                    onClick = onModelClick
+                    onClick = onModelClick,
+                    modifier = Modifier.weight(1f)
                 )
                 QuickActionItem(
                     icon = Icons.Default.AttachFile,
                     text = "附件上传",
-                    onClick = onAttachmentClick
+                    onClick = onAttachmentClick,
+                    modifier = Modifier.weight(1f)
                 )
                 QuickActionItem(
                     icon = Icons.Default.Build,
                     text = "工具调用",
-                    onClick = onToolClick
+                    onClick = onToolClick,
+                    modifier = Modifier.weight(1f)
                 )
             }
 
@@ -171,30 +176,34 @@ fun RightDrawerContent(
 private fun QuickActionItem(
     icon: ImageVector,
     text: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        modifier = Modifier
-            .fillMaxWidth()
+        modifier = modifier
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(24.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(modifier = Modifier.width(16.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
