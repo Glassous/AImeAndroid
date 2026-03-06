@@ -31,6 +31,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uploadingFiles = MutableStateFlow<Set<String>>(emptySet())
     val uploadingFiles: StateFlow<Set<String>> = _uploadingFiles.asStateFlow()
+    private val _uploadErrorEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val uploadErrorEvents: SharedFlow<String> = _uploadErrorEvents.asSharedFlow()
 
     private val _currentConversationId = MutableStateFlow<Long?>(null)
     val currentConversationId: StateFlow<Long?> = _currentConversationId.asStateFlow()
@@ -201,11 +203,17 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                                 _attachedImages.update { current ->
                                     current.map { if (it == filePath) urlString else it }
                                 }
+                            } else {
+                                _attachedImages.update { it - filePath }
+                                val reason = result.exceptionOrNull()?.message ?: "未知错误"
+                                _uploadErrorEvents.tryEmit("附件上传失败：${fileInfo.name}\n$reason")
                             }
                         } catch (e: Exception) {
                             e.printStackTrace()
                             _uploadingFiles.update { it - filePath }
                             _uploadProgress.update { it - filePath }
+                            _attachedImages.update { it - filePath }
+                            _uploadErrorEvents.tryEmit("附件上传失败：${fileInfo.name}\n${e.message ?: "未知错误"}")
                         }
                     }
                 }
@@ -276,6 +284,20 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (content.isBlank() && _attachedImages.value.isEmpty()) return
         
         viewModelScope.launch {
+            if (_uploadingFiles.value.isNotEmpty()) {
+                _uploadErrorEvents.tryEmit("附件仍在上传中，请等待上传完成后再发送")
+                return@launch
+            }
+            val s3Enabled = s3Preferences.s3Enabled.first()
+            if (s3Enabled) {
+                val hasLocalPendingAttachments = _attachedImages.value.any { path ->
+                    !path.startsWith("url:") && !path.contains("/txt_") && !path.contains("\\txt_")
+                }
+                if (hasLocalPendingAttachments) {
+                    _uploadErrorEvents.tryEmit("存在未上传成功的附件，请重新上传后再发送")
+                    return@launch
+                }
+            }
             _isLoading.value = true
             try {
                 val conversationId = _currentConversationId.value ?: run {

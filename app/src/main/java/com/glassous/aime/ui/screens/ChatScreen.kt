@@ -27,8 +27,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -113,6 +115,7 @@ fun ChatScreen(
     themeViewModel: ThemeViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
     val application = context.applicationContext as AIMeApplication
 
     val chatViewModel: ChatViewModel = viewModel()
@@ -349,6 +352,13 @@ fun ChatScreen(
     val rightDrawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(chatViewModel) {
+        chatViewModel.uploadErrorEvents.collect { errorMessage ->
+            clipboardManager.setText(AnnotatedString(errorMessage))
+            snackbarHostState.showSnackbar("上传失败，错误信息已复制到剪贴板")
+        }
+    }
 
     // Track TopAppBar height for auto-scroll logic
     var topBarHeightPx by remember { mutableIntStateOf(0) }

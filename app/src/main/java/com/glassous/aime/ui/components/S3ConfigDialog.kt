@@ -22,20 +22,23 @@ fun S3ConfigDialog(
     val accessKey by s3Preferences.s3AccessKey.collectAsState(initial = "")
     val secretKey by s3Preferences.s3SecretKey.collectAsState(initial = "")
     val bucketName by s3Preferences.s3BucketName.collectAsState(initial = "")
+    val forcePathStyle by s3Preferences.s3ForcePathStyle.collectAsState(initial = false)
 
     var currentEndpoint by remember { mutableStateOf("") }
     var currentRegion by remember { mutableStateOf("") }
     var currentAccessKey by remember { mutableStateOf("") }
     var currentSecretKey by remember { mutableStateOf("") }
     var currentBucketName by remember { mutableStateOf("") }
+    var currentForcePathStyle by remember { mutableStateOf(false) }
 
     // Initialize state when data is loaded
-    LaunchedEffect(endpoint, region, accessKey, secretKey, bucketName) {
+    LaunchedEffect(endpoint, region, accessKey, secretKey, bucketName, forcePathStyle) {
         if (currentEndpoint.isEmpty()) currentEndpoint = endpoint
         if (currentRegion.isEmpty()) currentRegion = region
         if (currentAccessKey.isEmpty()) currentAccessKey = accessKey
         if (currentSecretKey.isEmpty()) currentSecretKey = secretKey
         if (currentBucketName.isEmpty()) currentBucketName = bucketName
+        currentForcePathStyle = forcePathStyle
     }
 
     AlertDialog(
@@ -89,6 +92,25 @@ fun S3ConfigDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Spacer(modifier = Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("强制路径样式 (Path Style)", style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            "AWS S3 建议关闭，私有部署(如MinIO)建议开启",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = currentForcePathStyle,
+                        onCheckedChange = { currentForcePathStyle = it }
+                    )
+                }
             }
         },
         confirmButton = {
@@ -100,6 +122,7 @@ fun S3ConfigDialog(
                         s3Preferences.setS3AccessKey(currentAccessKey.trim())
                         s3Preferences.setS3SecretKey(currentSecretKey.trim())
                         s3Preferences.setS3BucketName(currentBucketName.trim())
+                        s3Preferences.setS3ForcePathStyle(currentForcePathStyle)
                         onDismiss()
                     }
                 }

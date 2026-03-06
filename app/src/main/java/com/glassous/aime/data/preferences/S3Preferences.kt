@@ -21,11 +21,17 @@ class S3Preferences(private val context: Context) {
         private val S3_ACCESS_KEY = stringPreferencesKey("s3_access_key")
         private val S3_SECRET_KEY = stringPreferencesKey("s3_secret_key")
         private val S3_BUCKET_NAME = stringPreferencesKey("s3_bucket_name")
+        private val S3_FORCE_PATH_STYLE = booleanPreferencesKey("s3_force_path_style")
     }
 
     val s3Enabled: Flow<Boolean> = context.s3DataStore.data
         .map { preferences ->
             preferences[S3_ENABLED] ?: false
+        }
+
+    val s3ForcePathStyle: Flow<Boolean> = context.s3DataStore.data
+        .map { preferences ->
+            preferences[S3_FORCE_PATH_STYLE] ?: false
         }
 
     val s3Endpoint: Flow<String> = context.s3DataStore.data
@@ -86,6 +92,12 @@ class S3Preferences(private val context: Context) {
     suspend fun setS3BucketName(bucketName: String) {
         context.s3DataStore.edit { preferences ->
             preferences[S3_BUCKET_NAME] = bucketName
+        }
+    }
+
+    suspend fun setS3ForcePathStyle(forcePathStyle: Boolean) {
+        context.s3DataStore.edit { preferences ->
+            preferences[S3_FORCE_PATH_STYLE] = forcePathStyle
         }
     }
 }
