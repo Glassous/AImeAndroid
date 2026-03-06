@@ -158,6 +158,41 @@ fun ChatInput(
                                         )
                                     }
                                 }
+                            } else if (isVideo && (actualPath.startsWith("http") || actualPath.startsWith("https"))) {
+                                // 远程视频URL：显示默认视频图标，避免VideoFrameDecoder加载失败
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(Color.Black.copy(alpha = 0.8f))
+                                        .clickable { onImageClick(path) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayCircleOutline,
+                                        contentDescription = "Play Video",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                                
+                                // 删除按钮
+                                Box(
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .padding(4.dp)
+                                        .size(16.dp)
+                                        .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                        .clickable { onRemoveAttachment(path) },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Close,
+                                        contentDescription = "删除",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                }
                             } else {
                                 SubcomposeAsyncImage(
                                     model = if (isVideo) {

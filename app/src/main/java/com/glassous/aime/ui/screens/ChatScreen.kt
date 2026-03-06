@@ -887,58 +887,39 @@ fun ChatScreen(
                                                                     if (parts.size == 3) parts[2] else path
                                                                 } else path
 
-                                                            if (actualPath.startsWith("http")) {
-                                                                previewImagePath = actualPath
-                                                            } else if (actualPath.endsWith(
-                                                                    ".mp4",
-                                                                    ignoreCase = true
-                                                                )
-                                                            ) {
+                                                            val isVideo = actualPath.endsWith(".mp4", ignoreCase = true) ||
+                                                                    path.contains(":video_url:") ||
+                                                                    actualPath.contains("youtube.com") ||
+                                                                    actualPath.contains("youtu.be")
+                                                            
+                                                            val isAudio = actualPath.endsWith(".m4a", ignoreCase = true) ||
+                                                                    actualPath.endsWith(".mp3", ignoreCase = true) ||
+                                                                    actualPath.endsWith(".wav", ignoreCase = true) ||
+                                                                    path.contains(":audio_url:")
+
+                                                            if (isVideo) {
                                                                 previewVideoPath = actualPath
-                                                            } else if (actualPath.endsWith(
-                                                                    ".m4a",
-                                                                    ignoreCase = true
-                                                                ) || actualPath.endsWith(
-                                                                    ".mp3",
-                                                                    ignoreCase = true
-                                                                ) || actualPath.endsWith(
-                                                                    ".wav",
-                                                                    ignoreCase = true
-                                                                )
-                                                            ) {
+                                                            } else if (isAudio) {
                                                                 try {
-                                                                    val uri =
-                                                                        if (actualPath.startsWith("http")) {
-                                                                            android.net.Uri.parse(
-                                                                                actualPath
-                                                                            )
-                                                                        } else {
-                                                                            androidx.core.content.FileProvider.getUriForFile(
-                                                                                context,
-                                                                                "${context.packageName}.fileprovider",
-                                                                                java.io.File(
-                                                                                    actualPath
-                                                                                )
-                                                                            )
-                                                                        }
-                                                                    val intent =
-                                                                        android.content.Intent(
-                                                                            android.content.Intent.ACTION_VIEW
-                                                                        ).apply {
-                                                                            setDataAndType(
-                                                                                uri,
-                                                                                "audio/*"
-                                                                            )
-                                                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                                                        }
+                                                                    val uri = if (actualPath.startsWith("http")) {
+                                                                        android.net.Uri.parse(actualPath)
+                                                                    } else {
+                                                                        androidx.core.content.FileProvider.getUriForFile(
+                                                                            context,
+                                                                            "${context.packageName}.fileprovider",
+                                                                            java.io.File(actualPath)
+                                                                        )
+                                                                    }
+                                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                                                        setDataAndType(uri, "audio/*")
+                                                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                                    }
                                                                     context.startActivity(intent)
                                                                 } catch (e: Exception) {
-                                                                    android.widget.Toast.makeText(
-                                                                        context,
-                                                                        "无法播放音频",
-                                                                        android.widget.Toast.LENGTH_SHORT
-                                                                    ).show()
+                                                                    android.widget.Toast.makeText(context, "无法播放音频", android.widget.Toast.LENGTH_SHORT).show()
                                                                 }
+                                                            } else if (actualPath.startsWith("http")) {
+                                                                previewImagePath = actualPath
                                                             } else {
                                                                 previewImagePath = actualPath
                                                             }
