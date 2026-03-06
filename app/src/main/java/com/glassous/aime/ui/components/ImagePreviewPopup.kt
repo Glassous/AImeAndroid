@@ -25,12 +25,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.material3.LoadingIndicator
 import com.glassous.aime.ui.utils.ImageUtils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ImagePreviewPopup(
     imagePath: String,
@@ -133,17 +134,48 @@ fun ImagePreviewPopup(
                         Box(
                             modifier = Modifier
                                 .padding(top = 4.dp)
-                                .wrapContentSize(),
+                                .fillMaxWidth()
+                                .heightIn(min = 200.dp, max = 600.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            AsyncImage(
+                            SubcomposeAsyncImage(
                                 model = imagePath,
                                 contentDescription = "Image Preview",
                                 modifier = Modifier
-                                    .fillMaxWidth(if (imagePath.isNotEmpty()) 1f else 0.9f) // Allow it to expand but not exceed parent
-                                    .heightIn(max = 600.dp) // Constrain height
-                                    .clip(RoundedCornerShape(12.dp)), // Apply rounded corners to image
-                                contentScale = ContentScale.Fit
+                                    .fillMaxWidth()
+                                    .wrapContentHeight()
+                                    .clip(RoundedCornerShape(12.dp)),
+                                contentScale = ContentScale.Fit,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        LoadingIndicator(
+                                            modifier = Modifier.size(48.dp),
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                error = {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "加载失败",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(48.dp)
+                                        )
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            "图片加载失败",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
                             )
                         }
                     }

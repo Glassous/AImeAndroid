@@ -21,6 +21,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -33,12 +34,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun VideoPreviewPopup(
     videoPath: String,
     onDismissRequest: () -> Unit
 ) {
     var visible by remember { mutableStateOf(true) }
+    var isLoading by remember { mutableStateOf(true) }
+    var hasError by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
@@ -119,7 +123,8 @@ fun VideoPreviewPopup(
                     Box(
                         modifier = Modifier
                             .padding(top = 4.dp)
-                            .wrapContentSize()
+                            .fillMaxWidth()
+                            .heightIn(min = 200.dp, max = 600.dp)
                             .clip(RoundedCornerShape(12.dp)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -131,12 +136,15 @@ fun VideoPreviewPopup(
                                     mediaController.setAnchorView(this)
                                     setMediaController(mediaController)
                                     setOnPreparedListener { mp ->
+                                        isLoading = false
                                         mp.start()
                                     }
                                     setOnCompletionListener { 
                                         // Optional: dismiss on completion or just stop
                                     }
                                     setOnErrorListener { _, _, _ ->
+                                        isLoading = false
+                                        hasError = true
                                         false
                                     }
                                 }
@@ -144,7 +152,35 @@ fun VideoPreviewPopup(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .heightIn(max = 600.dp)
+                                .alpha(if (isLoading || hasError) 0f else 1f)
                         )
+
+                        if (isLoading) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(48.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+
+                        if (hasError) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "加载失败",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    "视频加载失败",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                     }
                 }
             }

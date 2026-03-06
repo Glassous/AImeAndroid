@@ -33,7 +33,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.filled.Close
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clip
 
@@ -158,7 +159,7 @@ fun ChatInput(
                                     }
                                 }
                             } else {
-                                AsyncImage(
+                                SubcomposeAsyncImage(
                                     model = if (isVideo) {
                                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                                             .data(actualPath)
@@ -172,7 +173,32 @@ fun ChatInput(
                                         .fillMaxSize()
                                         .clip(RoundedCornerShape(8.dp))
                                         .clickable { onImageClick(path) },
-                                    contentScale = ContentScale.Crop
+                                    contentScale = ContentScale.Crop,
+                                    loading = {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            LoadingIndicator(
+                                                modifier = Modifier.size(24.dp),
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    },
+                                    error = {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .background(MaterialTheme.colorScheme.errorContainer),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "加载失败",
+                                                tint = MaterialTheme.colorScheme.onErrorContainer
+                                            )
+                                        }
+                                    }
                                 )
                                 
                                 if (isVideo) {
