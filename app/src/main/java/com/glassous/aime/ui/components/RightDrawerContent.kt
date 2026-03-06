@@ -36,6 +36,20 @@ import coil.request.ImageRequest
 import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import java.text.SimpleDateFormat
+import java.util.Locale
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -186,58 +200,170 @@ private fun QuickActionItem(
     }
 }
 
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DirectoryItem(
     message: ChatMessage,
     onClick: () -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
+    
     Surface(
-        onClick = onClick,
         shape = MaterialTheme.shapes.small,
         color = if (message.isFromUser) {
             Color.Transparent
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
         },
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = { if (!expanded) onClick() },
+                onLongClick = { expanded = !expanded },
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null
+            )
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
-        ) {
-            if (message.content.isNotBlank()) {
-                Text(
-                    text = message.content.take(50).replace("\n", " "),
-                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+        Column {
+            // Expanded content (Top part: Info card)
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically(expandFrom = Alignment.Top),
+                exit = shrinkVertically(shrinkTowards = Alignment.Top)
+            ) {
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 4.dp)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) { expanded = false } // Click info card to collapse
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Timestamp
+                        Text(
+                            text = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(message.timestamp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        
+                        // Model name (only for assistant messages)
+                        if (!message.isFromUser && !message.modelDisplayName.isNullOrBlank()) {
+                            Text(
+                                text = message.modelDisplayName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
             }
             
-            if (message.imagePaths.isNotEmpty()) {
-                if (message.content.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(6.dp))
-                }
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    message.imagePaths.take(4).forEach { path ->
-                        AttachmentPreview(path)
-                    }
-                    if (message.imagePaths.size > 4) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(MaterialTheme.shapes.extraSmall)
-                                .background(MaterialTheme.colorScheme.surfaceVariant),
-                            contentAlignment = Alignment.Center
-                        ) {
+            // Expanded content (Full message content overlay)
+            Box {
+                if (!expanded) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        if (message.content.isNotBlank()) {
                             Text(
-                                text = "+${message.imagePaths.size - 4}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = message.content.take(50).replace("\n", " "),
+                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
+                        }
+                        
+                        if (message.imagePaths.isNotEmpty()) {
+                            if (message.content.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(6.dp))
+                            }
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                message.imagePaths.take(4).forEach { path ->
+                                    AttachmentPreview(path)
+                                }
+                                if (message.imagePaths.size > 4) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clip(MaterialTheme.shapes.extraSmall)
+                                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = "+${message.imagePaths.size - 4}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } else {
+                     // Expanded Full Content Card
+                     Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh // Slightly distinct background
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 200.dp) // Limit height
+                            .verticalScroll(rememberScrollState())
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null
+                            ) { /* Consume click events to prevent collapse/navigation */ }
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp)
+                        ) {
+                             if (message.content.isNotBlank()) {
+                                MarkdownRenderer(
+                                    markdown = message.content,
+                                    textColor = MaterialTheme.colorScheme.onSurface,
+                                    textSizeSp = 14f,
+                                    onLongClick = {}, // Disable long click in preview
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enableTables = true,
+                                    enableCodeBlocks = true,
+                                    enableLatex = true
+                                )
+                            }
+                            
+                            if (message.imagePaths.isNotEmpty()) {
+                                if (message.content.isNotBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                }
+                                // Show all attachments in expanded mode
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    message.imagePaths.forEach { path ->
+                                        AttachmentPreview(path)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
