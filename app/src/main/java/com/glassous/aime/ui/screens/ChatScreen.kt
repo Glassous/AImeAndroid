@@ -520,17 +520,33 @@ fun ChatScreen(
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     ModalNavigationDrawer(
                         drawerState = rightDrawerState,
-                        gesturesEnabled = false,
+                        gesturesEnabled = rightDrawerState.isOpen, // 只有打开时才开启手势，用于滑动关闭
                         drawerContent = {
                             CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                                 RightDrawerContent(
+                                    conversationTitle = conversations.find { it.id == currentConversationId }?.title ?: "新对话",
                                     messages = currentMessages,
                                     selectedTool = selectedTool,
                                     toolCallInProgress = toolCallInProgress,
                                     currentToolType = currentToolType,
-                                    onModelClick = { modelSelectionViewModel.showBottomSheet() },
-                                    onAttachmentClick = { showAttachmentSelectionSheet = true },
-                                    onToolClick = { toolSelectionViewModel.showBottomSheet() },
+                                    onModelClick = {
+                                        scope.launch {
+                                            rightDrawerState.close()
+                                            modelSelectionViewModel.showBottomSheet()
+                                        }
+                                    },
+                                    onAttachmentClick = {
+                                        scope.launch {
+                                            rightDrawerState.close()
+                                            showAttachmentSelectionSheet = true
+                                        }
+                                    },
+                                    onToolClick = {
+                                        scope.launch {
+                                            rightDrawerState.close()
+                                            toolSelectionViewModel.showBottomSheet()
+                                        }
+                                    },
                                     onAnchorClick = { index ->
                                         scope.launch {
                                             // 使用顶部栏高度作为偏移量，防止消息被遮挡
@@ -545,7 +561,7 @@ fun ChatScreen(
                         CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
                             ModalNavigationDrawer(
                                 drawerState = drawerState,
-                                gesturesEnabled = true,
+                                gesturesEnabled = !rightDrawerState.isOpen, // 右侧栏打开时禁用左侧栏手势
                                 drawerContent = {
                                     NavigationDrawer(
                                         conversations = conversations,

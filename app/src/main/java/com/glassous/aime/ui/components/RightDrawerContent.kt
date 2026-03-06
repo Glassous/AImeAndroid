@@ -1,5 +1,6 @@
 package com.glassous.aime.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,7 +28,11 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.glassous.aime.data.ChatMessage
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
@@ -35,6 +40,7 @@ import com.glassous.aime.data.model.ToolType
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RightDrawerContent(
+    conversationTitle: String,
     messages: List<ChatMessage>,
     selectedTool: Tool? = null,
     toolCallInProgress: Boolean = false,
@@ -60,6 +66,15 @@ fun RightDrawerContent(
                 .windowInsetsPadding(WindowInsets.statusBars)
                 .padding(top = 16.dp)
         ) {
+            // Conversation Title
+            Text(
+                text = if (conversationTitle.isBlank()) "新对话" else conversationTitle,
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(start = 8.dp, bottom = 24.dp)
+            )
+
             // Header: Selected Tool Display
             if (toolCallInProgress || selectedTool != null) {
                 Card(
@@ -125,8 +140,8 @@ fun RightDrawerContent(
                 contentPadding = PaddingValues(bottom = 16.dp + bottomPadding)
             ) {
                 itemsIndexed(messages) { index, message ->
-                    // Only show non-empty messages
-                    if (message.content.isNotBlank()) {
+                    // Show message if it has content OR attachments
+                    if (message.content.isNotBlank() || message.imagePaths.isNotEmpty()) {
                         DirectoryItem(
                             message = message,
                             onClick = { onAnchorClick(index) }
@@ -179,28 +194,102 @@ private fun DirectoryItem(
     Surface(
         onClick = onClick,
         shape = MaterialTheme.shapes.small,
-        color = Color.Transparent,
+        color = if (message.isFromUser) {
+            Color.Transparent
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+        },
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.Top
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Icon(
-                imageVector = if (message.isFromUser) Icons.Default.Person else Icons.Default.AutoAwesome,
+            if (message.content.isNotBlank()) {
+                Text(
+                    text = message.content.take(50).replace("\n", " "),
+                    style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            
+            if (message.imagePaths.isNotEmpty()) {
+                if (message.content.isNotBlank()) {
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    message.imagePaths.take(4).forEach { path ->
+                        AttachmentPreview(path)
+                    }
+                    if (message.imagePaths.size > 4) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(MaterialTheme.shapes.extraSmall)
+                                .background(MaterialTheme.colorScheme.surfaceVariant),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "+${message.imagePaths.size - 4}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentPreview(path: String) {
+    val isImage = path.endsWith(".jpg", true) || path.endsWith(".jpeg", true) || 
+                  path.endsWith(".png", true) || path.endsWith(".webp", true) ||
+                  path.startsWith("content://") // Assume content URIs might be images for now
+    val isVideo = path.endsWith(".mp4", true) || path.endsWith(".mkv", true) || path.endsWith(".webm", true)
+    
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(MaterialTheme.shapes.extraSmall)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (isImage || isVideo) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(path)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
-                modifier = Modifier
-                    .size(16.dp)
-                    .padding(top = 2.dp),
-                tint = if (message.isFromUser) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.tertiary
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
             )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = message.content.take(50).replace("\n", " "),
-                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 14.sp),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                color = MaterialTheme.colorScheme.onSurface
+            if (isVideo) {
+                Icon(
+                    imageVector = Icons.Default.PlayCircle,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.White.copy(alpha = 0.8f)
+                )
+            }
+        } else {
+            val icon = when {
+                path.endsWith(".pdf", true) -> Icons.Default.Description
+                path.endsWith(".txt", true) -> Icons.Default.Article
+                path.contains("audio", true) -> Icons.Default.AudioFile
+                else -> Icons.Default.InsertDriveFile
+            }
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(20.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
