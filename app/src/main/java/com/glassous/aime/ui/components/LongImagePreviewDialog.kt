@@ -69,7 +69,8 @@ fun LongImagePreviewBottomSheet(
     sharedUrl: String? = null,
     onShareLink: () -> Unit = {},
     showLinkButton: Boolean = true,
-    isSingleItemShare: Boolean = false // New parameter to distinguish single item vs conversation
+    isSingleItemShare: Boolean = false, // New parameter to distinguish single item vs conversation
+    title: String? = null
 ) {
     val configuration = LocalConfiguration.current
     val screenHeight = configuration.screenHeightDp.dp
@@ -102,7 +103,8 @@ fun LongImagePreviewBottomSheet(
                 .fillMaxWidth()
                 .heightIn(max = screenHeight * 0.9f),
             isSideSheet = false,
-            isSingleItemShare = isSingleItemShare
+            isSingleItemShare = isSingleItemShare,
+            title = title
         )
     }
 }
@@ -120,7 +122,8 @@ fun LongImagePreviewContent(
     showLinkButton: Boolean,
     modifier: Modifier = Modifier,
     isSideSheet: Boolean = false,
-    isSingleItemShare: Boolean = false // New parameter
+    isSingleItemShare: Boolean = false, // New parameter
+    title: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -187,6 +190,17 @@ fun LongImagePreviewContent(
                                                         }
                                                         .padding(16.dp)
                                                 ) {
+                                                    if (!isSingleItemShare && !title.isNullOrBlank()) {
+                                                        Text(
+                                                            text = title,
+                                                            style = MaterialTheme.typography.titleLarge,
+                                                            color = MaterialTheme.colorScheme.onSurface,
+                                                            modifier = Modifier
+                                                                .padding(horizontal = 16.dp)
+                                                                .padding(top = 8.dp, bottom = 16.dp)
+                                                                .fillMaxWidth()
+                                                        )
+                                                    }
                                                     messages.forEach { msg ->
                                                         MessageBubble(
                                                             message = msg,
@@ -451,14 +465,23 @@ fun LongImagePreviewContent(
 
 suspend fun captureBitmapFromView(view: View): Bitmap? = withContext(Dispatchers.Main) {
     try {
+        // Wait a bit for any pending layout or image loads
+        kotlinx.coroutines.delay(200)
+        
         val widthSpec = View.MeasureSpec.makeMeasureSpec(view.width, View.MeasureSpec.EXACTLY)
         val heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         view.measure(widthSpec, heightSpec)
         
         val width = view.measuredWidth
-        val height = view.measuredHeight
+        var height = view.measuredHeight
         
         if (width <= 0 || height <= 0) return@withContext null
+        
+        // Limit max height to avoid OOM or Canvas limits (e.g. 100,000 pixels is too much)
+        val maxHeight = 20000 
+        if (height > maxHeight) {
+            height = maxHeight
+        }
 
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)

@@ -1562,6 +1562,7 @@ fun ChatScreen(
 
                                     // 长图分享预览弹窗
                                     if (showLongImageDialog) {
+                                        val conversationTitle = conversations.find { it.id == currentConversationId }?.title ?: "对话分享"
                                         com.glassous.aime.ui.components.LongImagePreviewBottomSheet(
                                             messages = currentMessages,
                                             onDismiss = { showLongImageDialog = false },
@@ -1570,7 +1571,8 @@ fun ChatScreen(
                                             replyBubbleEnabled = replyBubbleEnabled,
                                             isSharing = isSharing,
                                             sharedUrl = sharedUrl,
-                                            onShareLink = onShareLinkAction
+                                            onShareLink = onShareLinkAction,
+                                            title = conversationTitle
                                         )
                                     }
 

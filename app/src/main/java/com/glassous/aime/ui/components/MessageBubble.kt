@@ -543,9 +543,17 @@ fun MessageImages(
                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                             .data(localVisualPaths.first())
                             .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                            .let { 
+                                if (isShareMode) it.allowHardware(false) else it
+                            }
                             .build()
                     } else {
-                        localVisualPaths.first()
+                        coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                            .data(localVisualPaths.first())
+                            .let { 
+                                if (isShareMode) it.allowHardware(false) else it
+                            }
+                            .build()
                     },
                     contentDescription = null,
                     modifier = Modifier
@@ -601,9 +609,17 @@ fun MessageImages(
                                   coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                                       .data(path)
                                       .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                      .let { 
+                                          if (isShareMode) it.allowHardware(false) else it
+                                      }
                                       .build()
                               } else {
-                                  path
+                                  coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                      .data(path)
+                                      .let { 
+                                          if (isShareMode) it.allowHardware(false) else it
+                                      }
+                                      .build()
                               },
                               contentDescription = null,
                               modifier = Modifier
@@ -625,9 +641,17 @@ fun MessageImages(
                                   coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
                                       .data(path)
                                       .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                                      .let { 
+                                          if (isShareMode) it.allowHardware(false) else it
+                                      }
                                       .build()
                               } else {
-                                  path
+                                  coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
+                                      .data(path)
+                                      .let { 
+                                          if (isShareMode) it.allowHardware(false) else it
+                                      }
+                                      .build()
                               },
                               contentDescription = null,
                               modifier = Modifier

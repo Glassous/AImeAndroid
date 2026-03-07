@@ -104,9 +104,17 @@ fun MessageImageCard(
                     coil.request.ImageRequest.Builder(LocalContext.current)
                         .data(imagePath)
                         .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                        .let { 
+                            if (isShareMode) it.allowHardware(false) else it
+                        }
                         .build()
                 } else {
-                    imagePath
+                    coil.request.ImageRequest.Builder(LocalContext.current)
+                        .data(imagePath)
+                        .let { 
+                            if (isShareMode) it.allowHardware(false) else it
+                        }
+                        .build()
                 },
                 contentDescription = null,
                 modifier = Modifier
