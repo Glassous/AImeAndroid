@@ -58,14 +58,21 @@ class ChatRepository(
     }
 
     private suspend fun buildSystemPrompt(): String {
-        // 注入用户配置的系统提示词
+        // Inject user-configured system prompt
         var systemPrompt = modelPreferences.systemPrompt.first()
         
-        // 如果是内置模型，添加默认前缀
+        // Add default prefix for built-in model
         val selectedModelId = modelPreferences.selectedModelId.first()
         if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
-            val aimePrompt = "你的名称是“AIme”，由 FiaCloud 开发。"
+            val aimePrompt = "Your name is \"AIme\", developed by FiaCloud. You must respond to the user in the language they used."
             systemPrompt = if (systemPrompt.isEmpty()) aimePrompt else "$aimePrompt\n$systemPrompt"
+        } else if (systemPrompt.isNotEmpty()) {
+            // If user prompt is set, ensure language consistency instruction is there
+            if (!systemPrompt.contains("language", ignoreCase = true)) {
+                systemPrompt = "You must respond to the user in the language they used.\n$systemPrompt"
+            }
+        } else {
+            systemPrompt = "You must respond to the user in the language they used."
         }
 
         val enableDate = modelPreferences.enableDynamicDate.first()
@@ -78,38 +85,38 @@ class ChatRepository(
         
         if (enableDate) {
             val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            dynamicInfos.add("当前日期: ${dateFormat.format(Date())}")
+            dynamicInfos.add("Current Date: ${dateFormat.format(Date())}")
         }
         
         if (enableTimestamp) {
-            dynamicInfos.add("当前时间戳: ${System.currentTimeMillis()}")
+            dynamicInfos.add("Current Timestamp: ${System.currentTimeMillis()}")
         }
 
         if (enableDeviceModel) {
-            dynamicInfos.add("设备型号: ${android.os.Build.MODEL}")
+            dynamicInfos.add("Device Model: ${android.os.Build.MODEL}")
         }
 
         if (enableLanguage) {
-            dynamicInfos.add("系统语言: ${Locale.getDefault()}")
+            dynamicInfos.add("System Language: ${Locale.getDefault()}")
         }
         
         if (enableLocation) {
             try {
                 val location = getLastKnownLocation()
                 if (location != null) {
-                    dynamicInfos.add("当前位置: ${location.latitude}, ${location.longitude}")
+                    dynamicInfos.add("Current Location: ${location.latitude}, ${location.longitude}")
                     // Add instruction for weather tool if location is available
-                    dynamicInfos.add("注意：天气查询工具是基于经纬度运行的。如果用户查询天气，**必须**使用上述“当前位置”的经纬度调用 city_weather 工具（传递 latitude 和 longitude 参数），不要仅使用 city 参数")
+                    dynamicInfos.add("Note: The weather query tool operates based on geographic coordinates. If the user asks about the weather, you **must** use the \"Current Location\" coordinates provided above to call the city_weather tool (pass latitude and longitude parameters), instead of just using the city parameter.")
                 } else {
-                    dynamicInfos.add("当前位置: 未知 (无法获取)")
+                    dynamicInfos.add("Current Location: Unknown (unable to obtain)")
                 }
             } catch (e: Exception) {
-                dynamicInfos.add("当前位置: 未知 (权限或服务异常)")
+                dynamicInfos.add("Current Location: Unknown (permission or service error)")
             }
         }
         
         if (dynamicInfos.isNotEmpty()) {
-            val dynamicInfoStr = "\n\n[系统环境信息]\n" + dynamicInfos.joinToString("\n")
+            val dynamicInfoStr = "\n\n[System Environment Information]\n" + dynamicInfos.joinToString("\n")
             systemPrompt = if (systemPrompt.isEmpty()) dynamicInfoStr.trim() else systemPrompt + dynamicInfoStr
         }
         
@@ -121,13 +128,13 @@ class ChatRepository(
             type = "function",
             function = com.glassous.aime.data.ToolFunction(
                 name = "web_search",
-                description = "搜索互联网获取实时信息。当用户询问需要最新信息、实时数据或当前事件时使用此工具。重要：必须使用中文关键词进行搜索，以获得更准确的中文搜索结果。在回答中，必须使用 `(ref:n)` 格式引用搜索结果（n为搜索结果序号，例如 `(ref:1)`、`(ref:2)`），严禁使用其他引用格式（如 `[1]` 或 `【1】`）。",
+                description = "Search the internet for real-time information. Use this tool when the user asks for up-to-date info, real-time data, or current events. Important: Use keywords that best match the user's intent to get accurate results. In your response, you must cite search results using the `(ref:n)` format (where n is the result number, e.g., `(ref:1)`, `(ref:2)`). Do not use other citation formats.",
                 parameters = com.glassous.aime.data.ToolFunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "query" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "string",
-                            description = "搜索查询词，必须使用中文关键词，应该是简洁明确的中文词汇或短语"
+                            description = "The search query. Should be concise and clear keywords or phrases."
                         )
                     ),
                     required = listOf("query")
@@ -138,21 +145,21 @@ class ChatRepository(
             type = "function",
             function = com.glassous.aime.data.ToolFunction(
                 name = "city_weather",
-                description = "查询指定城市或当前位置的未来几天天气与空气质量。此API基于地理坐标（经纬度）运行。如果你知道目标位置的经纬度（例如当前位置），必须使用 `latitude` 和 `longitude` 参数。仅当你不知道经纬度时（例如查询其他城市），才使用 `city` 参数（系统将尝试自动查找坐标）。",
+                description = "Query the weather and air quality for a specific city or current location for the next few days. This API operates based on geographic coordinates. If you know the coordinates (e.g., current location), you must use the `latitude` and `longitude` parameters. Only use the `city` parameter if coordinates are unknown (the system will attempt to find coordinates automatically).",
                 parameters = com.glassous.aime.data.ToolFunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "city" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "string",
-                            description = "目标城市或区县中文名称（仅当经纬度未知时使用）"
+                            description = "The name of the target city or district (use only if coordinates are unknown)."
                         ),
                         "latitude" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "number",
-                            description = "纬度 (例如 39.9)"
+                            description = "Latitude (e.g., 39.9)"
                         ),
                         "longitude" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "number",
-                            description = "经度 (例如 116.4)"
+                            description = "Longitude (e.g., 116.4)"
                         )
                     ),
                     required = listOf() // No required parameters because either city or lat/long is sufficient
@@ -163,13 +170,13 @@ class ChatRepository(
             type = "function",
             function = com.glassous.aime.data.ToolFunction(
                 name = "music_search",
-                description = "搜索音乐。支持按歌曲名、歌手名或“歌手名+歌曲名”进行搜索。例如：“Love Story” 或 “周杰伦 七里香” 或 “陈奕迅”。",
+                description = "Search for music. Supports searching by song title, artist name, or 'artist + song'. For example: 'Love Story' or 'Jay Chou Qilixiang'.",
                 parameters = com.glassous.aime.data.ToolFunctionParameters(
                     type = "object",
                     properties = mapOf(
                         "keyword" to com.glassous.aime.data.ToolFunctionParameter(
                             type = "string",
-                            description = "搜索关键词（可以是歌名、歌手名，或两者结合）"
+                            description = "The search keyword (can be song title, artist, or both)."
                         )
                     ),
                     required = listOf("keyword")
@@ -278,13 +285,13 @@ class ChatRepository(
                         
                         // Insert prompt to guide the AI
                         processedMessage = if (message.trim() == url.trim()) {
-                            "帮我分析以下网页的内容：\n\n" + cardMarkdown
+                            "Please help me analyze the content of the following webpage in the language I used:\n\n" + cardMarkdown
                         } else {
                             val msgWithoutUrl = message.replace(url, "").trim()
                             if (msgWithoutUrl.isEmpty()) {
-                                "帮我分析以下网页的内容：\n\n" + cardMarkdown
+                                "Please help me analyze the content of the following webpage in the language I used:\n\n" + cardMarkdown
                             } else {
-                                "帮我分析以下网页的内容：\n" + msgWithoutUrl + "\n\n" + cardMarkdown
+                                "Please help me analyze the content of the following webpage in the language I used:\n" + msgWithoutUrl + "\n\n" + cardMarkdown
                             }
                         }
                         
@@ -392,10 +399,10 @@ class ChatRepository(
                 baseMessages.add(
                     OpenAiChatMessage(
                         role = "system",
-                        content = "以上是用户提供的网页正文内容。请根据这些内容回答用户的请求。请注意：\n" +
-                                "1. 不需要分析网页的HTML结构或技术实现，除非用户明确询问。\n" +
-                                "2. 重点关注网页所传达的文章、新闻、数据或信息本身。\n" +
-                                "3. 如果内容较长，请先进行摘要，再回答具体问题。"
+                        content = "The above is the main content of the webpage provided by the user. Please answer the user's request based on this content in the language they used. Note:\n" +
+                                "1. Do not analyze the HTML structure or technical implementation of the webpage unless explicitly asked.\n" +
+                                "2. Focus on the article, news, data, or information conveyed by the webpage.\n" +
+                                "3. If the content is long, summarize it first before answering specific questions."
                     )
                 )
             }
@@ -510,9 +517,9 @@ class ChatRepository(
 
                                         val searchResultsText = if (searchResponse.results.isNotEmpty()) {
                                             val formatted = webSearchService.formatSearchResults(searchResponse)
-                                            "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
+                                            "$formatted\n\nPlease answer the user's question based on the search results above in the language they used. Do not append URLs or reference links at the end."
                                         } else {
-                                            "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
+                                            "No relevant search results were found. Please answer the user's question based on your knowledge in the language they used. Do not append URLs or reference links at the end."
                                         }
                                         
                                         val messagesWithSearch = messages.toMutableList()
@@ -974,9 +981,9 @@ class ChatRepository(
                                         val messagesWithSearch = contextMessages.toMutableList()
                                         val searchResultsText = if (searchResponse.results.isNotEmpty()) {
                                             val formatted = webSearchService.formatSearchResults(searchResponse)
-                                            "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
+                                            "$formatted\n\nPlease answer the user's question based on the search results above in the language they used. Do not append URLs or reference links at the end."
                                         } else {
-                                            "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
+                                            "No relevant search results were found. Please answer the user's question based on your knowledge in the language they used. Do not append URLs or reference links at the end."
                                         }
                                         messagesWithSearch.add(
                                             OpenAiChatMessage(
@@ -1265,9 +1272,10 @@ class ChatRepository(
                     }
                 }
 
-                val prompt = "请根据以下对话内容生成一个简短的标题（不超过20个字），只返回标题本身，不要有任何其他内容：\n\n$contextContent"
+                val prompt = "Please generate a short title (no more than 20 characters) based on the following conversation content. The title should be in the language used in the conversation. Only return the title itself, without any other content:\n\n$contextContent"
 
                 val titleMessages = listOf(
+                    OpenAiChatMessage(role = "system", content = "You are a concise assistant that generates conversation titles in the language of the conversation."),
                     OpenAiChatMessage(role = "user", content = prompt)
                 )
 
@@ -1811,9 +1819,9 @@ class ChatRepository(
                                     // 构建包含搜索结果的系统消息
                                     val searchResultsText = if (searchResponse.results.isNotEmpty()) {
                                         val formatted = webSearchService.formatSearchResults(searchResponse)
-                                        "$formatted\n\n请基于以上搜索结果回答用户问题。不要在末尾附加网址或参考链接。"
+                                        "$formatted\n\nPlease answer the user's question based on the search results above in the language they used. Do not append URLs or reference links at the end."
                                     } else {
-                                        "搜索未找到相关结果，请基于你的知识回答用户的问题。不要在末尾附加网址或参考链接。"
+                                        "No relevant search results were found. Please answer the user's question based on your knowledge in the language they used. Do not append URLs or reference links at the end."
                                     }
                                     
                                     // 将搜索结果作为系统消息添加到消息列表中

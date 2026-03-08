@@ -644,7 +644,8 @@ fun ChatScreen(
                                                         },
                                                         title = {
                                                             Row(
-                                                                verticalAlignment = Alignment.CenterVertically
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                modifier = Modifier.offset(x = (-16).dp)
                                                             ) {
                                                                 // 工具图标：自动/实际工具切换；可隐藏；背景始终显示为 50% 透明
                                                                 if (!(minimalMode && minimalModeConfig.hideToolIcon)) {
@@ -653,13 +654,14 @@ fun ChatScreen(
                                                                             // 工具调用进行中：显示实际调用工具图标并附加旋转指示器（图形化，无文本）
                                                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                                                 Surface(
+                                                                                    onClick = { toolSelectionViewModel.showBottomSheet() },
                                                                                     color = MaterialTheme.colorScheme.background.copy(
                                                                                         alpha = 0.5f
                                                                                     ),
                                                                                     shape = CircleShape,
                                                                                     tonalElevation = 0.dp,
                                                                                     modifier = Modifier.padding(
-                                                                                        end = 8.dp
+                                                                                        end = 4.dp
                                                                                     )
                                                                                 ) {
                                                                                     Icon(
@@ -683,13 +685,14 @@ fun ChatScreen(
 
                                                                         selectedTool != null -> {
                                                                             Surface(
+                                                                                onClick = { toolSelectionViewModel.showBottomSheet() },
                                                                                 color = MaterialTheme.colorScheme.background.copy(
                                                                                     alpha = 0.5f
                                                                                 ),
                                                                                 shape = CircleShape,
                                                                                 tonalElevation = 0.dp,
                                                                                 modifier = Modifier.padding(
-                                                                                    end = 8.dp
+                                                                                    end = 4.dp
                                                                                 )
                                                                             ) {
                                                                                 Icon(
@@ -702,8 +705,6 @@ fun ChatScreen(
                                                                                 )
                                                                             }
                                                                         }
-
-                                                                        else -> {}
                                                                     }
                                                                 }
 
@@ -726,7 +727,7 @@ fun ChatScreen(
                                                                     Text(
                                                                         text = displayModelName,
                                                                         style = MaterialTheme.typography.titleLarge,
-                                                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                                                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp)
                                                                     )
                                                                 }
                                                             }
