@@ -220,6 +220,37 @@ class ChatRepository(
                 )
             }
 
+            // Client-side handling for Ask in English
+            if (selectedTool?.type == ToolType.ASK_IN_ENGLISH) {
+                // Save user message first
+                val userMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = message,
+                    isFromUser = true,
+                    timestamp = Date(),
+                    imagePaths = imagePaths
+                )
+                val userMsgId = chatDao.insertMessage(userMsg)
+                updateConversationAfterMessage(conversationId, message)
+
+                val result = handleAskInEnglish(
+                    conversationId = conversationId,
+                    message = message,
+                    selectedTool = selectedTool,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingUserMessageId = userMsgId
+                )
+                
+                // Return success immediately if handleAskInEnglish succeeded
+                // The issue was returning the result directly which might be failure or success
+                // But more importantly, the flow continues below if we don't return
+                // Wait, the previous code DID return. 
+                // "return handleAskInEnglish(...)"
+                
+                return result
+            }
+
             // Client-side handling for Web Analysis
             if (selectedTool?.type == ToolType.WEB_ANALYSIS && imagePaths.isEmpty()) {
                 // 1. Extract URL
@@ -772,6 +803,26 @@ class ChatRepository(
                     onToolCallStart = onToolCallStart,
                     onToolCallEnd = onToolCallEnd,
                     existingAssistantMessageId = assistantMessageId
+                )
+                return Result.success(Unit)
+            }
+
+            // Client-side handling for Ask in English in Regenerate
+            if (selectedTool?.type == ToolType.ASK_IN_ENGLISH) {
+                // Delete the target message first since handleAskInEnglish creates a new one
+                chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+                
+                // For regenerate, we need to update the PREVIOUS user message with the english tag
+                // So we pass prevUserIndex message id
+                val prevUserMsgId = if (prevUserIndex != -1) history[prevUserIndex].id else null
+
+                handleAskInEnglish(
+                    conversationId = conversationId,
+                    message = userMessage,
+                    selectedTool = selectedTool,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingUserMessageId = prevUserMsgId
                 )
                 return Result.success(Unit)
             }
@@ -1385,6 +1436,24 @@ class ChatRepository(
                 return Result.success(Unit)
             }
 
+            // Client-side handling for Ask in English in Retry
+            if (selectedTool?.type == ToolType.ASK_IN_ENGLISH) {
+                // Delete the failed message first since handleAskInEnglish creates a new one
+                chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+                
+                val prevUserMsgId = if (prevUserIndex != -1) history[prevUserIndex].id else null
+
+                handleAskInEnglish(
+                    conversationId = conversationId,
+                    message = userMessage,
+                    selectedTool = selectedTool,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingUserMessageId = prevUserMsgId
+                )
+                return Result.success(Unit)
+            }
+
             // 删除失败的消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
 
@@ -1556,6 +1625,19 @@ class ChatRepository(
                     aspectRatio = aspectRatio,
                     onToolCallStart = onToolCallStart,
                     onToolCallEnd = onToolCallEnd
+                )
+                return Result.success(Unit)
+            }
+
+            // Client-side handling for Ask in English in Edit
+            if (selectedTool?.type == ToolType.ASK_IN_ENGLISH) {
+                handleAskInEnglish(
+                    conversationId = conversationId,
+                    message = trimmed,
+                    selectedTool = selectedTool,
+                    onToolCallStart = onToolCallStart,
+                    onToolCallEnd = onToolCallEnd,
+                    existingUserMessageId = userMessageId
                 )
                 return Result.success(Unit)
             }
@@ -1998,9 +2080,9 @@ class ChatRepository(
         toolChoice: String? = null,
         onDelta: suspend (String) -> Unit,
         onToolCall: suspend (ToolCall) -> Unit = {}
-    ): String {
+    ): String = withContext(Dispatchers.IO) {
         if (primaryGroup.baseUrl.contains("volces", ignoreCase = true)) {
-            return doubaoService.streamChatCompletions(
+            return@withContext doubaoService.streamChatCompletions(
                 baseUrl = primaryGroup.baseUrl,
                 apiKey = primaryGroup.apiKey,
                 model = primaryModel.modelName,
@@ -2021,7 +2103,7 @@ class ChatRepository(
         val supabaseAnonKey = com.glassous.aime.BuildConfig.SUPABASE_KEY
 
         // 直接调用OpenAI服务，失败时抛出异常
-        return openAiService.streamChatCompletions(
+        return@withContext openAiService.streamChatCompletions(
             baseUrl = primaryGroup.baseUrl,
             apiKey = primaryGroup.apiKey,
             model = primaryModel.modelName,
@@ -2034,6 +2116,224 @@ class ChatRepository(
             onDelta = onDelta,
             onToolCall = onToolCall
         )
+    }
+
+    /**
+     * Handle Ask In English tool
+     */
+    private suspend fun handleAskInEnglish(
+        conversationId: Long,
+        message: String,
+        selectedTool: com.glassous.aime.data.model.Tool,
+        onToolCallStart: ((com.glassous.aime.data.model.ToolType) -> Unit)? = null,
+        onToolCallEnd: (() -> Unit)? = null,
+        existingUserMessageId: Long? = null
+    ): Result<ChatMessage> {
+        onToolCallStart?.invoke(ToolType.ASK_IN_ENGLISH)
+        try {
+            // 1. Get Model Config
+            val selectedModelId = modelPreferences.selectedModelId.first()
+            if (selectedModelId.isNullOrBlank()) {
+                val errorMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = "请先选择模型",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    isError = true
+                )
+                chatDao.insertMessage(errorMsg)
+                return Result.failure(IllegalStateException("No selected model"))
+            }
+
+            val model = if (selectedModelId == BuiltInModels.AIME_MODEL_ID) {
+                BuiltInModels.aimeModel
+            } else {
+                modelConfigRepository.getModelById(selectedModelId)
+            }
+
+            if (model == null) {
+                val errorMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = "所选模型不存在",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    isError = true
+                )
+                chatDao.insertMessage(errorMsg)
+                return Result.failure(IllegalStateException("Model not found"))
+            }
+
+            val group = if (model.groupId == BuiltInModels.AIME_GROUP_ID) {
+                BuiltInModels.aimeGroup
+            } else {
+                modelConfigRepository.getGroupById(model.groupId)
+            }
+
+            if (group == null) {
+                val errorMsg = ChatMessage(
+                    conversationId = conversationId,
+                    content = "模型分组配置缺失",
+                    isFromUser = false,
+                    timestamp = Date(),
+                    isError = true
+                )
+                chatDao.insertMessage(errorMsg)
+                return Result.failure(IllegalStateException("Group not found"))
+            }
+
+            // 2. Assistant Placeholder
+            var assistantMsg = ChatMessage(
+                conversationId = conversationId,
+                content = "正在翻译提问...",
+                isFromUser = false,
+                timestamp = Date(),
+                modelDisplayName = model.modelName
+            )
+            val msgId = chatDao.insertMessage(assistantMsg)
+            assistantMsg = assistantMsg.copy(id = msgId)
+
+            // 3. Step 1: Translate User Input to English & Detect Language
+            val step1Prompt = "Translate the following text to English and identify the source language. Output ONLY a valid JSON object with keys 'english' (the translation) and 'source_lang' (the language name or code). Do not include any markdown formatting or extra text.\n\nText: $message"
+
+            val step1Messages = listOf(
+                OpenAiChatMessage("system", "You are a translation assistant."),
+                OpenAiChatMessage("user", step1Prompt)
+            )
+
+            var step1Output = ""
+            streamWithFallback(group, model, step1Messages, onDelta = {
+                step1Output += it
+            })
+
+            // Filter think tags from Step 1 output
+            step1Output = filterThinkTags(step1Output)
+
+            // Parse JSON
+            var englishInput = ""
+            var sourceLang = "Chinese" // Default
+
+            try {
+                // Simple cleanup
+                val jsonStr = step1Output.trim().removePrefix("```json").removePrefix("```").removeSuffix("```").trim()
+                if (jsonStr.startsWith("{")) {
+                    val gson = Gson()
+                    val map = gson.fromJson(jsonStr, Map::class.java)
+                    englishInput = map["english"] as? String ?: ""
+                    sourceLang = map["source_lang"] as? String ?: "Chinese"
+                } else {
+                    // Not JSON, assume failed
+                    englishInput = step1Output
+                }
+            } catch (e: Exception) {
+                // Fallback parsing
+                englishInput = step1Output // Assume failed to strict JSON
+            }
+
+            if (englishInput.isBlank()) englishInput = message // Fallback
+
+            // Update status
+            chatDao.updateMessage(assistantMsg.copy(content = "正在用英文提问..."))
+            
+            // Insert English translation into user message <english> tag
+            if (existingUserMessageId != null) {
+                val userMsg = chatDao.getMessageById(existingUserMessageId)
+                if (userMsg != null) {
+                    val updatedUserMsg = userMsg.copy(content = userMsg.content + "\n\n<english>\n$englishInput\n</english>")
+                    chatDao.updateMessage(updatedUserMsg)
+                }
+            }
+
+            // 4. Step 2: Ask AI in English
+            val step2Messages = listOf(
+                OpenAiChatMessage("system", "You are a helpful assistant. Please answer the user's question in English."),
+                OpenAiChatMessage("user", englishInput)
+            )
+
+            var englishResponse = ""
+            var lastUpdateTime = 0L
+            streamWithFallback(group, model, step2Messages, onDelta = {
+                englishResponse += it
+                val now = System.currentTimeMillis()
+                if (now - lastUpdateTime >= 100) {
+                    lastUpdateTime = now
+                    // 使用 filterThinkTags 彻底移除思考内容，用户完全看不见
+                    val displayEnglish = filterThinkTags(englishResponse)
+                    chatDao.updateMessage(assistantMsg.copy(content = "正在思考 (English)...\n\n$displayEnglish"))
+                }
+            })
+            // 彻底移除思考内容
+            val cleanEnglishResponse = filterThinkTags(englishResponse)
+            // 更新中间状态时不带“正在思考”
+            chatDao.updateMessage(assistantMsg.copy(content = cleanEnglishResponse))
+
+            // 5. Step 3: Translate Response
+            chatDao.updateMessage(assistantMsg.copy(content = "正在翻译回复..."))
+
+            val step3Prompt = "Translate the following English text to $sourceLang. You MUST preserve the Markdown format (code blocks, tables, bold, etc.) exactly. Do not translate code blocks.\n\nText:\n$cleanEnglishResponse"
+            val step3Messages = listOf(
+                OpenAiChatMessage("system", "You are a translation assistant."),
+                OpenAiChatMessage("user", step3Prompt)
+            )
+
+            var finalResponse = ""
+            lastUpdateTime = 0L
+            streamWithFallback(group, model, step3Messages, onDelta = {
+                finalResponse += it
+                val now = System.currentTimeMillis()
+                if (now - lastUpdateTime >= 100) {
+                    lastUpdateTime = now
+                    // 同样过滤掉翻译过程中可能产生的思考内容
+                    val cleanFinal = filterThinkTags(finalResponse)
+                    val display = cleanFinal + "\n\n<english>\n$cleanEnglishResponse\n</english>"
+                    chatDao.updateMessage(assistantMsg.copy(content = display))
+                }
+            })
+            
+            // 最终存储的内容完全不含思考过程
+            val cleanFinal = filterThinkTags(finalResponse)
+            val finalContent = cleanFinal + "\n\n<english>\n$cleanEnglishResponse\n</english>"
+            chatDao.updateMessage(assistantMsg.copy(content = finalContent))
+
+            // 6. Return the user message
+            val finalUserMsg = if (existingUserMessageId != null) {
+                chatDao.getMessageById(existingUserMessageId) ?: ChatMessage(
+                    id = existingUserMessageId,
+                    conversationId = conversationId,
+                    content = message,
+                    isFromUser = true,
+                    timestamp = Date()
+                )
+            } else {
+                ChatMessage(
+                    conversationId = conversationId,
+                    content = message,
+                    isFromUser = true,
+                    timestamp = Date()
+                )
+            }
+            
+            return Result.success(finalUserMsg)
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            val errorMessage = if (e.message.isNullOrBlank()) {
+                "Error: Initialization failed (${e.javaClass.simpleName}). Please try again."
+            } else {
+                "Error: ${e.message}"
+            }
+            
+            val errorMsg = ChatMessage(
+                conversationId = conversationId,
+                content = errorMessage,
+                isFromUser = false,
+                timestamp = Date(),
+                isError = true
+            )
+            chatDao.insertMessage(errorMsg)
+            return Result.failure(e)
+        } finally {
+            onToolCallEnd?.invoke()
+        }
     }
 
     /**
@@ -2186,9 +2486,12 @@ class ChatRepository(
     }
 
     private fun filterThinkTags(text: String): String {
-        // 使用正则表达式移除 <think>...</think> 标签及其内容
-        return text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
-            .replace(Regex("<think>.*", RegexOption.DOT_MATCHES_ALL), "") // 处理未闭合的标签
+        // 彻底移除 <think>...</think> 标签及其所有内容
+        // 使用 DOT_MATCHES_ALL 确保跨行匹配
+        val fullyCleaned = text.replace(Regex("<think>[\\s\\S]*?</think>", RegexOption.IGNORE_CASE), "")
+            .replace(Regex("<think>[\\s\\S]*", RegexOption.IGNORE_CASE), "") // 处理未闭合的标签
+        
+        return fullyCleaned.trim()
     }
 
     private fun safeExtractKeyword(arguments: String?, default: String = ""): String {

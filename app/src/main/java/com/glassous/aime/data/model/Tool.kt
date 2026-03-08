@@ -41,6 +41,11 @@ enum class ToolType(
         displayName = "图片生成",
         icon = Icons.Default.Image,
         description = "根据描述生成图片（支持通用标准及自定义接口）"
+    ),
+    ASK_IN_ENGLISH(
+        displayName = "英文提问",
+        icon = Icons.Default.AutoAwesome,
+        description = "自动翻译提问与回复"
     );
     
     companion object {

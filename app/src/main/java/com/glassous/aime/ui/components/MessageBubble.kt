@@ -36,6 +36,9 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import com.glassous.aime.ui.utils.AudioPlayerManager
 
 // 供全局提供/获取弹窗时的背景模糊状态
@@ -82,6 +85,23 @@ fun MessageBubble(
     var editText by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val blurState = LocalDialogBlurState.current
+
+    // Detect <english> tag using remember(message.content) for immediate update
+    // We use a more robust regex to handle potential variations and ensure it's removed from display
+    val extractedEnglish = remember(message.content) {
+        val regex = Regex("<english[\\s\\S]*?>([\\s\\S]*?)</english>", RegexOption.IGNORE_CASE)
+        val match = regex.find(message.content)
+        if (match != null) {
+            val content = match.groupValues[1].trim()
+            // Remove the tag and its content from the display string
+            val cleanDisplay = message.content.replace(match.value, "").trim()
+            content to cleanDisplay
+        } else {
+            null to message.content
+        }
+    }
+    val englishContent = extractedEnglish.first
+    val displayContent = extractedEnglish.second
 
     // 弹窗显示时启用背景模糊（任一弹窗打开都模糊），关闭时立即禁用
     LaunchedEffect(showDialog, showEditDialog) {
@@ -140,57 +160,96 @@ fun MessageBubble(
                         val textSizeSp = chatFontSize
 
                         // 【关键修改】增加了对 <think> 标签和 Blockquote Reasoning 格式的检测
+                        // 如果我们在 handleAskInEnglish 中已经过滤了 think 标签，
+                        // 那么 displayContent 就不应该再包含这些标签。
                         val hasTwoPartReply = !message.isFromUser && (
-                                message.content.contains("【前置回复】") ||
-                                        message.content.contains("【第一次回复】") ||
-                                        message.content.contains("<think>") ||
-                                        message.content.contains("<search>") ||
-                                        (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
+                                displayContent.contains("【前置回复】") ||
+                                        displayContent.contains("【第一次回复】") ||
+                                        displayContent.contains("<think>") ||
+                                        displayContent.contains("<search>") ||
+                                        (displayContent.trim().startsWith(">") && displayContent.contains("Thought for", ignoreCase = true))
                                 )
 
                         if (hasTwoPartReply) {
-                            ExpandableReplyBox(
-                            content = message.content,
-                            textColor = textColor,
-                            textSizeSp = textSizeSp,
-                            isStreaming = isStreaming,
-                            onLongClick = { if (!isShareMode) showDialog = true },
-                            onHtmlPreview = onHtmlPreview,
-                            onHtmlPreviewSource = onHtmlPreviewSource,
-                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                            forceExpanded = forceExpandReply,
-                            enableTypewriterEffect = enableTypewriterEffect,
-                            onLinkClick = onLinkClick,
-                            onImageClick = onImageClick,
-                            onVideoClick = { path ->
-                                if (onImageClick != null) onImageClick(path)
-                            },
-                            onUrlPreview = { url ->
-                                if (onLinkClick != null) onLinkClick(url)
-                            },
-                            isShareMode = isShareMode
-                        )
+                            Column {
+                                ExpandableReplyBox(
+                                    content = displayContent,
+                                    textColor = textColor,
+                                    textSizeSp = textSizeSp,
+                                    isStreaming = isStreaming,
+                                    onLongClick = { if (!isShareMode) showDialog = true },
+                                    onHtmlPreview = onHtmlPreview,
+                                    onHtmlPreviewSource = onHtmlPreviewSource,
+                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                    forceExpanded = forceExpandReply,
+                                    enableTypewriterEffect = enableTypewriterEffect,
+                                    onLinkClick = onLinkClick,
+                                    onImageClick = onImageClick,
+                                    onVideoClick = { path ->
+                                        if (onImageClick != null) onImageClick(path)
+                                    },
+                                    onUrlPreview = { url ->
+                                        if (onLinkClick != null) onLinkClick(url)
+                                    },
+                                    isShareMode = isShareMode
+                                )
+                                
+                                // English Response Card for Assistant in Expandable mode
+                                if (englishContent != null && !englishContent.isBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    EnglishReplyCard(
+                                        content = englishContent,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        label = "查看英文回复",
+                                        onHtmlPreview = onHtmlPreview,
+                                        onHtmlPreviewSource = onHtmlPreviewSource,
+                                        useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                        onLinkClick = onLinkClick,
+                                        onImageClick = onImageClick
+                                    )
+                                }
+                            }
                         } else {
-                            StreamingMarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { if (!isShareMode) showDialog = true },
-                                isStreaming = isStreaming,
-                                onHtmlPreview = onHtmlPreview,
-                                onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick,
-                                onImageClick = onImageClick,
-                                onVideoClick = { path ->
-                                    if (onImageClick != null) onImageClick(path)
-                                },
-                                onUrlPreview = { url ->
-                                    if (onLinkClick != null) onLinkClick(url)
-                                },
-                                isShareMode = isShareMode
-                            )
+                            Column {
+                                StreamingMarkdownRenderer(
+                                    markdown = displayContent,
+                                    textColor = textColor,
+                                    textSizeSp = textSizeSp,
+                                    onLongClick = { if (!isShareMode) showDialog = true },
+                                    isStreaming = isStreaming,
+                                    onHtmlPreview = onHtmlPreview,
+                                    onHtmlPreviewSource = onHtmlPreviewSource,
+                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                    enableTypewriterEffect = enableTypewriterEffect,
+                                    onLinkClick = onLinkClick,
+                                    onImageClick = onImageClick,
+                                    onVideoClick = { path ->
+                                        if (onImageClick != null) onImageClick(path)
+                                    },
+                                    onUrlPreview = { url ->
+                                        if (onLinkClick != null) onLinkClick(url)
+                                    },
+                                    isShareMode = isShareMode
+                                )
+                                
+                                // English Response Card for Assistant in normal mode
+                                if (englishContent != null && !englishContent.isBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val cardLabel = if (message.isFromUser) "查看英文提问" else "查看英文回复"
+                                    EnglishReplyCard(
+                                        content = englishContent,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        label = cardLabel,
+                                        onHtmlPreview = onHtmlPreview,
+                                        onHtmlPreviewSource = onHtmlPreviewSource,
+                                        useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                        onLinkClick = onLinkClick,
+                                        onImageClick = onImageClick
+                                    )
+                                }
+                            }
                         }
 
                         // 如果是错误消息且不是用户消息，显示重新发送按钮
@@ -236,60 +295,97 @@ fun MessageBubble(
                     ) {
                         // 【关键修改】同样增加了对 <think> 标签和 Blockquote Reasoning 格式的检测
                         val hasTwoPartReply = !message.isFromUser && (
-                                message.content.contains("【前置回复】") ||
-                                        message.content.contains("【第一次回复】") ||
-                                        message.content.contains("<think>") ||
-                                        message.content.contains("<search>") ||
-                                        (message.content.trim().startsWith(">") && message.content.contains("Thought for", ignoreCase = true))
+                                displayContent.contains("【前置回复】") ||
+                                        displayContent.contains("【第一次回复】") ||
+                                        displayContent.contains("<think>") ||
+                                        displayContent.contains("<search>") ||
+                                        (displayContent.trim().startsWith(">") && displayContent.contains("Thought for", ignoreCase = true))
                                 )
 
                         if (hasTwoPartReply) {
-                            ExpandableReplyBox(
-                                content = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                isStreaming = isStreaming,
-                                onLongClick = { if (!isShareMode) showDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                onHtmlPreview = onHtmlPreview,
-                                onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                forceExpanded = forceExpandReply,
-                                enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick,
-                                onShowSearchResults = onShowSearchResults,
-                                onImageClick = onImageClick,
-                                onVideoClick = { path ->
-                                    if (onImageClick != null) onImageClick(path)
-                                },
-                                onUrlPreview = { url ->
-                                    if (onLinkClick != null) onLinkClick(url)
-                                },
-                                isShareMode = isShareMode
-                            )
+                            Column {
+                                ExpandableReplyBox(
+                                    content = displayContent,
+                                    textColor = textColor,
+                                    textSizeSp = textSizeSp,
+                                    isStreaming = isStreaming,
+                                    onLongClick = { if (!isShareMode) showDialog = true },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    onHtmlPreview = onHtmlPreview,
+                                    onHtmlPreviewSource = onHtmlPreviewSource,
+                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                    forceExpanded = forceExpandReply,
+                                    enableTypewriterEffect = enableTypewriterEffect,
+                                    onLinkClick = onLinkClick,
+                                    onShowSearchResults = onShowSearchResults,
+                                    onImageClick = onImageClick,
+                                    onVideoClick = { path ->
+                                        if (onImageClick != null) onImageClick(path)
+                                    },
+                                    onUrlPreview = { url ->
+                                        if (onLinkClick != null) onLinkClick(url)
+                                    },
+                                    isShareMode = isShareMode
+                                )
+                                
+                                // English Response Card for Assistant in Expandable mode (non-bubble)
+                                if (englishContent != null && !englishContent.isBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    EnglishReplyCard(
+                                        content = englishContent,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        label = "查看英文回复",
+                                        onHtmlPreview = onHtmlPreview,
+                                        onHtmlPreviewSource = onHtmlPreviewSource,
+                                        useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                        onLinkClick = onLinkClick,
+                                        onImageClick = onImageClick
+                                    )
+                                }
+                            }
                         } else {
-                            // 根据是否为AI回复且启用打字机效果来选择渲染组件
-                            StreamingMarkdownRenderer(
-                                markdown = message.content,
-                                textColor = textColor,
-                                textSizeSp = textSizeSp,
-                                onLongClick = { if (!isShareMode) showDialog = true },
-                                isStreaming = isStreaming,
-                                onHtmlPreview = onHtmlPreview,
-                                onHtmlPreviewSource = onHtmlPreviewSource,
-                                useCardStyleForHtmlCode = useCardStyleForHtmlCode,
-                                enableTypewriterEffect = enableTypewriterEffect,
-                                onLinkClick = onLinkClick,
-                                onImageClick = onImageClick,
-                                onVideoClick = { path ->
-                                    // Handle video click
-                                    if (onImageClick != null) onImageClick(path)
-                                },
-                                onUrlPreview = { url ->
-                                    if (onHtmlPreview != null) onHtmlPreview(url)
-                                },
-                                isShareMode = isShareMode
-                            )
+                            Column {
+                                // 根据是否为AI回复且启用打字机效果来选择渲染组件
+                                StreamingMarkdownRenderer(
+                                    markdown = displayContent,
+                                    textColor = textColor,
+                                    textSizeSp = textSizeSp,
+                                    onLongClick = { if (!isShareMode) showDialog = true },
+                                    isStreaming = isStreaming,
+                                    onHtmlPreview = onHtmlPreview,
+                                    onHtmlPreviewSource = onHtmlPreviewSource,
+                                    useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                    enableTypewriterEffect = enableTypewriterEffect,
+                                    onLinkClick = onLinkClick,
+                                    onImageClick = onImageClick,
+                                    onVideoClick = { path ->
+                                        // Handle video click
+                                        if (onImageClick != null) onImageClick(path)
+                                    },
+                                    onUrlPreview = { url ->
+                                        if (onHtmlPreview != null) onHtmlPreview(url)
+                                    },
+                                    isShareMode = isShareMode
+                                )
+
+                                // English Response Card for Assistant in normal mode (non-bubble)
+                                if (englishContent != null && !englishContent.isBlank()) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    val cardLabel = if (message.isFromUser) "查看英文提问" else "查看英文回复"
+                                    EnglishReplyCard(
+                                        content = englishContent,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        label = cardLabel,
+                                        onHtmlPreview = onHtmlPreview,
+                                        onHtmlPreviewSource = onHtmlPreviewSource,
+                                        useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                                        onLinkClick = onLinkClick,
+                                        onImageClick = onImageClick
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -412,6 +508,94 @@ fun MessageBubble(
                         ) {
                             Text("更新")
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EnglishReplyCard(
+    content: String,
+    textColor: androidx.compose.ui.graphics.Color,
+    textSizeSp: Float,
+    label: String = "查看英文回复 (English Response)",
+    onHtmlPreview: ((String) -> Unit)?,
+    onHtmlPreviewSource: ((String) -> Unit)?,
+    useCardStyleForHtmlCode: Boolean,
+    onLinkClick: ((String) -> Unit)?,
+    onImageClick: ((String) -> Unit)?
+) {
+    var showSheet by remember { mutableStateOf(false) }
+
+    Card(
+        onClick = { showSheet = true },
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        ),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Translate,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+        }
+    }
+
+    if (showSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.8f)
+                    .padding(horizontal = 16.dp)
+            ) {
+                Text(
+                    text = if (label.contains("Input")) "英文提问" else "英文回复",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                Box(modifier = Modifier.weight(1f)) {
+                    val scrollState = rememberScrollState()
+                    Column(modifier = Modifier.verticalScroll(scrollState)) {
+                        StreamingMarkdownRenderer(
+                            markdown = content,
+                            textColor = MaterialTheme.colorScheme.onSurface,
+                            textSizeSp = textSizeSp,
+                            onLongClick = {},
+                            isStreaming = false,
+                            onHtmlPreview = onHtmlPreview,
+                            onHtmlPreviewSource = onHtmlPreviewSource,
+                            useCardStyleForHtmlCode = useCardStyleForHtmlCode,
+                            onLinkClick = onLinkClick,
+                            onImageClick = onImageClick,
+                            onVideoClick = { path ->
+                                if (onImageClick != null) onImageClick(path)
+                            },
+                            onUrlPreview = { url ->
+                                if (onLinkClick != null) onLinkClick(url)
+                            }
+                        )
+                        Spacer(modifier = Modifier.height(32.dp))
                     }
                 }
             }
