@@ -56,6 +56,11 @@
             android:label="配置设置"
             android:theme="@style/Theme.AIme" />
         <activity
+            android:name=".ui.settings.DataManagementActivity"
+            android:exported="false"
+            android:label="数据管理"
+            android:theme="@style/Theme.AIme" />
+        <activity
             android:name=".ui.screens.ModelConfigActivity"
             android:exported="false"
             android:label="模型配置"
