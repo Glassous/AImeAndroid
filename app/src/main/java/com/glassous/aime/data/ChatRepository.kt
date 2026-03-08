@@ -2482,7 +2482,11 @@ class ChatRepository(
                 
                 if (collectedImages.isNotEmpty()) {
                     // 如果有收集到文本，则使用文本作为 revisedPrompt 传递给后续逻辑
-                    val finalText = collectedText.toString()
+                    var finalText = collectedText.toString().trim()
+                    // 过滤掉与提示词完全相同或仅有微小差异的文本（例如 OpenRouter 等供应商会把 prompt 返回）
+                    if (finalText.equals(prompt.trim(), ignoreCase = true)) {
+                        finalText = ""
+                    }
                     images = collectedImages.map { ImageData(url = it, revisedPrompt = finalText) }
                     
                     // Explicitly update message here to clear "Generating..." status immediately if we have images
@@ -2518,7 +2522,13 @@ class ChatRepository(
                 }
                 
                 if (localPaths.isNotEmpty()) {
-                    val finalContent = images[0].revisedPrompt ?: ""
+                    var finalContent = images[0].revisedPrompt ?: ""
+                    
+                    // 再次检查，如果是 OpenAI 返回的 revised_prompt 但内容和原始 prompt 一样，则不显示
+                    if (finalContent.trim().equals(prompt.trim(), ignoreCase = true)) {
+                        finalContent = ""
+                    }
+                    
                     // 如果有 revisedPrompt (来自 AI 的回复文本)，使用它；否则留空
                     val finalMsg = assistantMsg!!.copy(
                         content = finalContent, 
