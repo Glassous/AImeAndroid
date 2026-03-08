@@ -66,6 +66,10 @@ import com.glassous.aime.ui.viewmodel.VersionUpdateViewModelFactory
 import com.glassous.aime.ui.viewmodel.UpdateCheckState
 import kotlinx.coroutines.launch
 
+import com.glassous.aime.ui.viewmodel.S3SyncViewModel
+import com.glassous.aime.ui.viewmodel.S3SyncViewModelFactory
+import com.glassous.aime.ui.viewmodel.SyncStatus
+
 class SettingsActivity : ComponentActivity() {
     fun onNavigateToModelConfig() {
         startActivity(Intent(this, ModelConfigActivity::class.java))
@@ -140,11 +144,18 @@ fun SettingsContent(
     val syncViewModel: DataSyncViewModel = viewModel(
         factory = DataSyncViewModelFactory(application)
     )
+    val s3SyncViewModel: S3SyncViewModel = viewModel(
+        factory = S3SyncViewModelFactory(application)
+    )
+    val s3SyncStatus by s3SyncViewModel.syncStatus.collectAsState()
     val versionUpdateViewModel: VersionUpdateViewModel = viewModel(
         factory = VersionUpdateViewModelFactory(GitHubReleaseService(), application.updatePreferences)
     )
     val modelConfigViewModel: ModelConfigViewModel = viewModel(
-        factory = ModelConfigViewModelFactory(application.modelConfigRepository)
+        factory = ModelConfigViewModelFactory(
+            application.modelConfigRepository,
+            application.s3Preferences
+        )
     )
 
     // 主题相关状态
@@ -818,6 +829,52 @@ fun SettingsContent(
                             )
                         }
                         
+                        // S3 Sync Status and Button
+                        if (isS3ConfigComplete) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            when (val status = s3SyncStatus) {
+                                is SyncStatus.Idle -> {
+                                    Button(
+                                        onClick = { s3SyncViewModel.sync() },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        enabled = isS3ConfigComplete
+                                    ) {
+                                        Icon(Icons.Filled.Sync, contentDescription = null)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("立即同步")
+                                    }
+                                }
+                                is SyncStatus.Syncing -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(status.message, style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                is SyncStatus.Success -> {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Text("同步成功", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodyMedium)
+                                        Spacer(Modifier.width(8.dp))
+                                        TextButton(onClick = { s3SyncViewModel.clearStatus() }) {
+                                            Text("确定")
+                                        }
+                                    }
+                                }
+                                is SyncStatus.Error -> {
+                                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("同步失败: ${status.message}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                        Button(onClick = { s3SyncViewModel.sync() }, modifier = Modifier.fillMaxWidth()) {
+                                            Text("重试")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         // Row 2: Config Button
                         OutlinedButton(
                             onClick = { showS3ConfigDialog = true },

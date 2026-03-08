@@ -8,6 +8,7 @@ import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.model.BuiltInModels
 import com.glassous.aime.data.repository.ModelConfigRepository
 import com.glassous.aime.data.preferences.ModelPreferences
+import com.glassous.aime.data.preferences.S3Preferences
  
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -23,7 +24,8 @@ import kotlinx.coroutines.launch
  */
 class ModelSelectionViewModel(
     private val repository: ModelConfigRepository,
-    private val modelPreferences: ModelPreferences
+    private val modelPreferences: ModelPreferences,
+    private val s3Preferences: S3Preferences
 ) : ViewModel() {
     
     // 所有分组
@@ -87,7 +89,13 @@ class ModelSelectionViewModel(
     fun selectModel(model: Model, onSyncResult: ((Boolean, String) -> Unit)? = null) {
         _selectedModel.value = model
         viewModelScope.launch { 
-            modelPreferences.setSelectedModelId(model.id)
+            val currentId = modelPreferences.selectedModelId.first()
+            if (currentId != model.id) {
+                modelPreferences.setSelectedModelId(model.id)
+                // 切换模型时，将模型配置的本地版本号 +1，确保下次同步能检测到变动
+                val currentVersion = s3Preferences.s3ModelsVersion.first()
+                s3Preferences.setS3ModelsVersion(currentVersion + 1)
+            }
         }
         hideBottomSheet()
     }
@@ -112,12 +120,13 @@ data class ModelSelectionUiState(
 // ViewModelFactory
 class ModelSelectionViewModelFactory(
     private val repository: ModelConfigRepository,
-    private val modelPreferences: ModelPreferences
+    private val modelPreferences: ModelPreferences,
+    private val s3Preferences: S3Preferences
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ModelSelectionViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ModelSelectionViewModel(repository, modelPreferences) as T
+            return ModelSelectionViewModel(repository, modelPreferences, s3Preferences) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

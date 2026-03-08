@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +54,11 @@ import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.toSize
+import com.glassous.aime.AIMeApplication
+import com.glassous.aime.ui.viewmodel.S3SyncViewModel
+import com.glassous.aime.ui.viewmodel.S3SyncViewModelFactory
+import com.glassous.aime.ui.viewmodel.SyncStatus
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
 private fun EditTitleDialog(
@@ -239,6 +245,22 @@ fun NavigationDrawer(
                     )
             ) {
 
+                val context = LocalContext.current
+                val application = context.applicationContext as AIMeApplication
+                val s3SyncViewModel: S3SyncViewModel = viewModel(
+                    factory = S3SyncViewModelFactory(application)
+                )
+                val s3SyncStatus by s3SyncViewModel.syncStatus.collectAsState()
+
+                val s3Endpoint by application.s3Preferences.s3Endpoint.collectAsState(initial = "")
+                val s3AccessKey by application.s3Preferences.s3AccessKey.collectAsState(initial = "")
+                val s3SecretKey by application.s3Preferences.s3SecretKey.collectAsState(initial = "")
+                val s3BucketName by application.s3Preferences.s3BucketName.collectAsState(initial = "")
+
+                val isS3ConfigComplete = remember(s3Endpoint, s3AccessKey, s3SecretKey, s3BucketName) {
+                    s3Endpoint.isNotBlank() && s3AccessKey.isNotBlank() && s3SecretKey.isNotBlank() && s3BucketName.isNotBlank()
+                }
+
                 // Header with AIme text and buttons in one row
                 Row(
                     modifier = Modifier
@@ -260,8 +282,39 @@ fun NavigationDrawer(
 
                     // Buttons section: 设置 -> 新建
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        // 0. 同步按钮
+                        if (isS3ConfigComplete) {
+                            when (val status = s3SyncStatus) {
+                                is SyncStatus.Idle, is SyncStatus.Success, is SyncStatus.Error -> {
+                                    IconButton(
+                                        onClick = { s3SyncViewModel.sync() },
+                                        modifier = Modifier.size(40.dp),
+                                        colors = IconButtonDefaults.iconButtonColors(
+                                            contentColor = if (status is SyncStatus.Error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Sync,
+                                            contentDescription = "同步",
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                                is SyncStatus.Syncing -> {
+                                    Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         // 1. 设置按钮
                         IconButton(
                             onClick = onNavigateToSettings,
@@ -294,8 +347,7 @@ fun NavigationDrawer(
                     }
                 }
 
-                // moved declarations above
-                val context = LocalContext.current
+
 
                 // 获取导航栏高度
                 val bottomPadding = windowInsets.asPaddingValues().calculateBottomPadding()

@@ -72,4 +72,10 @@ interface ChatDao {
 
     @Query("SELECT * FROM chat_messages WHERE conversationId = :conversationId ORDER BY timestamp ASC")
     fun getMessagesForConversationIncludingDeleted(conversationId: Long): Flow<List<ChatMessage>>
+
+    @Query("SELECT * FROM conversations WHERE uuid = :uuid LIMIT 1")
+    suspend fun getConversationByUuid(uuid: String): Conversation?
+
+    @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId")
+    suspend fun deleteMessagesByConversationId(conversationId: Long)
 }

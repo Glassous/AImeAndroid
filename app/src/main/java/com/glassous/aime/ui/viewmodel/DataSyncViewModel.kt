@@ -34,6 +34,7 @@ import com.glassous.aime.data.model.ToolSettings
 import com.glassous.aime.data.model.TitleGenerationSettings
 import com.glassous.aime.data.model.ToolType
 import com.glassous.aime.data.preferences.ToolPreferences
+import com.glassous.aime.data.preferences.S3Preferences
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +58,7 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
     private val contextPreferences = app.contextPreferences
     private val updatePreferences = app.updatePreferences
     private val toolPreferences = app.toolPreferences
+    private val s3Preferences = app.s3Preferences
 
     private val gson: Gson = GsonBuilder().create()
 
@@ -325,6 +327,9 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                 // 恢复选中模型
                 if (backup.selectedModelId != null) {
                     modelPreferences.setSelectedModelId(backup.selectedModelId)
+                    // 导入导致模型配置变化，增加版本号
+                    val currentVersion = s3Preferences.s3ModelsVersion.first()
+                    s3Preferences.setS3ModelsVersion(currentVersion + 1)
                 }
 
                 // 恢复应用设置

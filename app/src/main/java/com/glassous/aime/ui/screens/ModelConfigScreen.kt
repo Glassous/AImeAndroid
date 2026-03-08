@@ -69,7 +69,10 @@ fun ModelConfigScreen(
     val context = LocalContext.current
     val application = context.applicationContext as AIMeApplication
     val viewModel: ModelConfigViewModel = viewModel(
-        factory = ModelConfigViewModelFactory(application.modelConfigRepository)
+        factory = ModelConfigViewModelFactory(
+            application.modelConfigRepository,
+            application.s3Preferences
+        )
     )
 
     val uiState by viewModel.uiState.collectAsState()

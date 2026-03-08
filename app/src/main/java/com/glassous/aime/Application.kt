@@ -41,12 +41,27 @@ class AIMeApplication : Application(), ImageLoaderFactory {
     
     // S3 upload repository
     val s3UploadRepository by lazy { com.glassous.aime.data.repository.S3UploadRepository(this, s3Preferences) }
-
     
-
+    val themePreferences by lazy { com.glassous.aime.data.preferences.ThemePreferences(this) }
     val contextPreferences by lazy { com.glassous.aime.data.preferences.ContextPreferences(this) }
     val updatePreferences by lazy { com.glassous.aime.data.preferences.UpdatePreferences(this) }
     val privacyPreferences by lazy { com.glassous.aime.data.preferences.PrivacyPreferences(this) }
+
+    // S3 sync repository
+    val s3SyncRepository by lazy {
+        com.glassous.aime.data.repository.S3SyncRepository(
+            context = this,
+            s3Preferences = s3Preferences,
+            chatDao = database.chatDao(),
+            modelConfigDao = database.modelConfigDao(),
+            modelPreferences = modelPreferences,
+            themePreferences = themePreferences,
+            contextPreferences = contextPreferences,
+            updatePreferences = updatePreferences,
+            toolPreferences = toolPreferences,
+            privacyPreferences = privacyPreferences
+        )
+    }
 
     // Repository instance
     val repository by lazy { 

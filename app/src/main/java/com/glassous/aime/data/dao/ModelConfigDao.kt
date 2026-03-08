@@ -55,4 +55,10 @@ interface ModelConfigDao {
 
     @Query("SELECT * FROM models WHERE groupId = :groupId ORDER BY createdAt DESC")
     fun getModelsByGroupIdIncludingDeleted(groupId: String): Flow<List<Model>>
+
+    @Query("SELECT * FROM models WHERE isDeleted = 0 ORDER BY createdAt DESC")
+    fun getAllModels(): Flow<List<Model>>
+
+    @Query("SELECT * FROM model_groups WHERE isDeleted = 0 ORDER BY createdAt DESC")
+    fun getAllModelGroups(): Flow<List<ModelGroup>>
 }

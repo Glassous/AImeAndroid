@@ -40,7 +40,8 @@ fun AppNavigation() {
     val modelSelectionViewModel: ModelSelectionViewModel = viewModel(
         factory = ModelSelectionViewModelFactory(
             application.modelConfigRepository,
-            application.modelPreferences
+            application.modelPreferences,
+            application.s3Preferences
         )
     )
     

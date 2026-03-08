@@ -3,12 +3,21 @@ package com.glassous.aime.ui.components
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.glassous.aime.AIMeApplication
 import com.glassous.aime.data.preferences.S3Preferences
+import com.glassous.aime.ui.viewmodel.S3SyncViewModel
+import com.glassous.aime.ui.viewmodel.S3SyncViewModelFactory
+import com.glassous.aime.ui.viewmodel.SyncStatus
 import kotlinx.coroutines.launch
 
 @Composable
@@ -23,6 +32,13 @@ fun S3ConfigDialog(
     val secretKey by s3Preferences.s3SecretKey.collectAsState(initial = "")
     val bucketName by s3Preferences.s3BucketName.collectAsState(initial = "")
     val forcePathStyle by s3Preferences.s3ForcePathStyle.collectAsState(initial = false)
+
+    val context = LocalContext.current
+    val application = context.applicationContext as AIMeApplication
+    val syncViewModel: S3SyncViewModel = viewModel(
+        factory = S3SyncViewModelFactory(application)
+    )
+    val syncStatus by syncViewModel.syncStatus.collectAsState()
 
     var currentEndpoint by remember { mutableStateOf("") }
     var currentRegion by remember { mutableStateOf("") }

@@ -10,11 +10,13 @@ import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.repository.FetchStatus
 import com.glassous.aime.data.repository.ModelConfigRepository
+import com.glassous.aime.data.preferences.S3Preferences
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 class ModelConfigViewModel(
-    private val repository: ModelConfigRepository
+    private val repository: ModelConfigRepository,
+    private val s3Preferences: S3Preferences
 ) : ViewModel() {
     
     // Fetch Status
@@ -33,11 +35,18 @@ class ModelConfigViewModel(
     private val _uiState = MutableStateFlow(ModelConfigUiState())
     val uiState = _uiState.asStateFlow()
     
+    // 增加模型配置版本号，确保下次同步能检测到变动
+    private suspend fun incrementModelVersion() {
+        val currentVersion = s3Preferences.s3ModelsVersion.first()
+        s3Preferences.setS3ModelsVersion(currentVersion + 1)
+    }
+
     // 创建新分组
     fun createGroup(name: String, baseUrl: String, apiKey: String, providerUrl: String?) {
         viewModelScope.launch {
             try {
                 repository.createGroup(name, baseUrl, apiKey, providerUrl)
+                incrementModelVersion()
                 _uiState.value = _uiState.value.copy(
                     showCreateGroupDialog = false,
                     isLoading = false
@@ -63,6 +72,7 @@ class ModelConfigViewModel(
                     providerUrl = providerUrl
                 )
                 repository.updateGroup(updatedGroup)
+                incrementModelVersion()
                 _uiState.value = _uiState.value.copy(
                     showEditGroupDialog = false,
                     selectedGroup = null
@@ -85,6 +95,7 @@ class ModelConfigViewModel(
                     remark = remark
                 )
                 repository.updateModel(updatedModel)
+                incrementModelVersion()
                 _uiState.value = _uiState.value.copy(
                     showEditModelDialog = false,
                     selectedModel = null
@@ -100,6 +111,7 @@ class ModelConfigViewModel(
         viewModelScope.launch {
             try {
                 repository.deleteGroup(group)
+                incrementModelVersion()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
@@ -111,6 +123,7 @@ class ModelConfigViewModel(
         viewModelScope.launch {
             try {
                 repository.addModelToGroup(groupId, name, modelName, remark)
+                incrementModelVersion()
                 _uiState.value = _uiState.value.copy(
                     showAddModelDialog = false,
                     selectedGroupId = null
@@ -126,6 +139,7 @@ class ModelConfigViewModel(
         viewModelScope.launch {
             try {
                 repository.deleteModel(model)
+                incrementModelVersion()
             } catch (e: Exception) {
                 _uiState.value = _uiState.value.copy(error = e.message)
             }
@@ -234,12 +248,13 @@ data class ModelConfigUiState(
 
 // ViewModelFactory
 class ModelConfigViewModelFactory(
-    private val repository: ModelConfigRepository
+    private val repository: ModelConfigRepository,
+    private val s3Preferences: S3Preferences
 ) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ModelConfigViewModel::class.java)) {
             @Suppress("UNCHECKED_CAST")
-            return ModelConfigViewModel(repository) as T
+            return ModelConfigViewModel(repository, s3Preferences) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }
