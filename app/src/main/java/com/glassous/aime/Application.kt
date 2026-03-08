@@ -52,6 +52,7 @@ class AIMeApplication : Application(), ImageLoaderFactory {
         com.glassous.aime.data.repository.S3SyncRepository(
             context = this,
             s3Preferences = s3Preferences,
+            s3UploadRepository = s3UploadRepository,
             chatDao = database.chatDao(),
             modelConfigDao = database.modelConfigDao(),
             modelPreferences = modelPreferences,

@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.view.View
 import android.widget.TextView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,7 +38,10 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import coil.compose.AsyncImage
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
 import io.noties.markwon.ext.tables.TablePlugin
@@ -57,7 +61,7 @@ data class MarkdownBlock(
 )
 
 enum class BlockType {
-    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC, FILE_CARD, FILE_URL_CARD
+    TEXT, CODE_BLOCK, MERMAID, TABLE, MUSIC, FILE_CARD, FILE_URL_CARD, IMAGE
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -553,6 +557,21 @@ fun MarkdownRenderer(
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
                 }
+                BlockType.IMAGE -> {
+                    AsyncImage(
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(block.url)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Image",
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                            .clickable { onImageClick?.invoke(block.url ?: "") },
+                        contentScale = androidx.compose.ui.layout.ContentScale.FillWidth
+                    )
+                }
             }
         }
     }
@@ -560,7 +579,7 @@ fun MarkdownRenderer(
 
 fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
-    // Updated pattern to include <music> and <file> tags
+    // Updated pattern to include <music>, <file>, <file_url> and <img> tags
     // Group 1: Code block (full match)
     // Group 2: Code block language
     // Group 3: Code block content
@@ -572,7 +591,9 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
     // Group 9: File URL block (full match)
     // Group 10: Index
     // Group 11: URL
-    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)|(<file name=\"(.*?)\">([\\s\\S]*?)</file>)|(<file_url index=\"(.*?)\" url=\"(.*?)\" />)", Pattern.MULTILINE)
+    // Group 12: Image block (full match)
+    // Group 13: Image source URL
+    val combinedPattern = Pattern.compile("(```(\\w+)?\\n([\\s\\S]*?)```)|(<music>([\\s\\S]*?)</music>)|(<file name=\"(.*?)\">([\\s\\S]*?)</file>)|(<file_url index=\"(.*?)\" url=\"(.*?)\" />)|(<img src=\"(.*?)\" />)", Pattern.MULTILINE)
     val matcher = combinedPattern.matcher(markdown)
 
     var lastEnd = 0
@@ -638,6 +659,11 @@ fun parseMarkdownBlocks(markdown: String): List<MarkdownBlock> {
                 val index = matcher.group(10)?.toIntOrNull() ?: 0
                 val url = matcher.group(11) ?: ""
                 blocks.add(MarkdownBlock(BlockType.FILE_URL_CARD, "", index = index, url = url))
+            }
+            matcher.group(12) != null -> {
+                // It's an Image Block
+                val url = matcher.group(13) ?: ""
+                blocks.add(MarkdownBlock(BlockType.IMAGE, "", url = url))
             }
         }
         

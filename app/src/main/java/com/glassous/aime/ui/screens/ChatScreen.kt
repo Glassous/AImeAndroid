@@ -563,7 +563,8 @@ fun ChatScreen(
                                             listState.animateScrollToItem(index + 1, -topBarHeightPx) 
                                             rightDrawerState.close()
                                         }
-                                    }
+                                    },
+                                    onShowDetails = onNavigateToMessageDetail
                                 )
                             }
                         }

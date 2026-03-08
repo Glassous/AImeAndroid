@@ -53,6 +53,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.toSize
 import com.glassous.aime.AIMeApplication
 import com.glassous.aime.ui.viewmodel.S3SyncViewModel
@@ -247,11 +248,20 @@ fun NavigationDrawer(
             ) {
 
                 val context = LocalContext.current
+                val clipboardManager = LocalClipboardManager.current
                 val application = context.applicationContext as AIMeApplication
                 val s3SyncViewModel: S3SyncViewModel = viewModel(
                     factory = S3SyncViewModelFactory(application)
                 )
                 val s3SyncStatus by s3SyncViewModel.syncStatus.collectAsState()
+
+                // 当同步失败时，自动复制错误信息到剪贴板，且不给出任何提示
+                LaunchedEffect(s3SyncStatus) {
+                    val status = s3SyncStatus
+                    if (status is SyncStatus.Error) {
+                        clipboardManager.setText(AnnotatedString(status.message))
+                    }
+                }
 
                 val s3Endpoint by application.s3Preferences.s3Endpoint.collectAsState(initial = "")
                 val s3AccessKey by application.s3Preferences.s3AccessKey.collectAsState(initial = "")

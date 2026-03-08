@@ -4,6 +4,7 @@ import android.content.Context
 import android.webkit.MimeTypeMap
 import aws.sdk.kotlin.services.s3.S3Client
 import aws.sdk.kotlin.services.s3.model.PutObjectRequest
+import aws.sdk.kotlin.services.s3.model.ObjectCannedAcl
 import aws.sdk.kotlin.runtime.auth.credentials.StaticCredentialsProvider
 import aws.smithy.kotlin.runtime.content.ByteStream
 import aws.smithy.kotlin.runtime.content.toByteStream
@@ -58,13 +59,9 @@ class S3UploadRepository(
             }
 
             val extension = file.extension
-            val nameWithoutExt = file.nameWithoutExtension
-            val dateFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-            val timestamp = dateFormat.format(Date())
-            // Replace : with _ if needed? No, user asked for HH:MM:SS. 
-            // But : is invalid in Windows filenames. S3 keys allow it.
-            // We are generating S3 key, not local file.
-            val objectKey = "${nameWithoutExt}${timestamp}.${extension}"
+            val nameWithoutExt = file.nameWithoutExtension.replace(Regex("[^a-zA-Z0-9]"), "_")
+            // Use a cleaner object key without colons and with a prefix
+            val objectKey = "attachments/${nameWithoutExt}.${extension}"
 
             val mimeType = MimeTypeMap.getSingleton().getMimeTypeFromExtension(extension) ?: "application/octet-stream"
 
@@ -91,23 +88,30 @@ class S3UploadRepository(
                 key = objectKey
                 body = fileFlow.toByteStream(this@coroutineScope, file.length())
                 contentType = mimeType
+                acl = ObjectCannedAcl.PublicRead
             }
 
             client.putObject(request)
             onProgress(1.0f)
 
-            // Construct URL
+            // Construct URL - properly encode the objectKey path components
+            val encodedKey = objectKey.split('/').joinToString("/") { 
+                java.net.URLEncoder.encode(it, "UTF-8").replace("+", "%20") 
+            }
+            
             val cleanEndpoint = normalizedEndpoint.trimEnd('/')
             val url = if (forcePathStyle) {
                 // Path style: endpoint/bucket/key
-                "$cleanEndpoint/$bucketName/$objectKey"
+                "$cleanEndpoint/$bucketName/$encodedKey"
             } else {
                 // Virtual-hosted style: bucket.endpoint/key
-                // Need to extract protocol and host
                 val s3Url = Url.parse(cleanEndpoint)
                 val protocol = s3Url.scheme.protocolName
                 val host = s3Url.host.toString()
-                "$protocol://$bucketName.$host/$objectKey"
+                val portStr = if (s3Url.port != null && s3Url.port != 80 && s3Url.port != 443) ":${s3Url.port}" else ""
+                val path = s3Url.path.toString().trimEnd('/')
+                val fullHost = if (path.isEmpty()) "$host$portStr" else "$host$portStr$path"
+                "$protocol://$bucketName.$fullHost/$encodedKey"
             }
             
             Result.success(url)

@@ -40,6 +40,7 @@ import androidx.compose.ui.draw.clip
 
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
@@ -228,9 +229,10 @@ fun ChatInput(
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Close,
+                                                imageVector = Icons.Default.ErrorOutline,
                                                 contentDescription = "加载失败",
-                                                tint = MaterialTheme.colorScheme.onErrorContainer
+                                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                                modifier = Modifier.size(24.dp)
                                             )
                                         }
                                     }

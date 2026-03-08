@@ -27,6 +27,7 @@ import java.util.Date
 class S3SyncRepository(
     private val context: Context,
     private val s3Preferences: S3Preferences,
+    private val s3UploadRepository: S3UploadRepository,
     private val chatDao: ChatDao,
     private val modelConfigDao: ModelConfigDao,
     private val modelPreferences: ModelPreferences,
@@ -79,7 +80,7 @@ class S3SyncRepository(
             val finalModelsVersion = syncModels(client, bucketName, remoteManifest.modelsVersion)
 
             onProgress("正在同步对话记录...")
-            syncConversations(client, bucketName, remoteManifest, finalSettingsVersion, finalModelsVersion)
+            syncConversations(client, bucketName, remoteManifest, finalSettingsVersion, finalModelsVersion, onProgress)
             
             onProgress("同步完成")
         }
@@ -350,7 +351,8 @@ class S3SyncRepository(
         bucketName: String, 
         remoteManifest: SyncManifest,
         finalSettingsVersion: Long,
-        finalModelsVersion: Long
+        finalModelsVersion: Long,
+        onProgress: (String) -> Unit
     ) {
         // 2. 获取本地对话数据 (包含已标记删除的)
         val localConversations = chatDao.getAllConversationsIncludingDeleted().first()
@@ -399,21 +401,112 @@ class S3SyncRepository(
 
         // 5. 执行上传
         for (c in toUpload) {
-            val messages = chatDao.getMessagesForConversationIncludingDeleted(c.id).first()
-            val backupMessages = messages.map { m ->
-                BackupMessage(
-                    uuid = m.uuid,
-                    content = m.content,
-                    isFromUser = m.isFromUser,
-                    timestamp = m.timestamp.time,
-                    isError = m.isError,
-                    modelDisplayName = m.modelDisplayName,
-                    imagePaths = m.imagePaths,
-                    metadata = m.metadata
-                )
+            val messages = try {
+                chatDao.getMessagesForConversationIncludingDeleted(c.id).first()
+            } catch (e: Exception) {
+                if (e.message?.contains("Row too big", ignoreCase = true) == true) {
+                    onProgress("对话 ${c.title} 数据过大，跳过同步此对话")
+                }
+                e.printStackTrace()
+                continue
             }
             
-            val backupConv = BackupConversation(
+            val backupMessages = mutableListOf<BackupMessage>()
+            
+            for (m in messages) {
+                var updatedContent = m.content
+                val updatedImagePaths = m.imagePaths.toMutableList()
+                var wasModified = false
+
+                // 1. 处理 imagePaths 中的本地图片
+                m.imagePaths.forEachIndexed { index, path ->
+                    if (!path.startsWith("url:") && !path.startsWith("http")) {
+                        val file = File(path)
+                        if (file.exists()) {
+                            try {
+                                val result = s3UploadRepository.uploadFile(file) { }
+                                if (result.isSuccess) {
+                                    val s3Url = result.getOrThrow()
+                                    val imgTag = "\n<img src=\"$s3Url\" />"
+                                    if (!updatedContent.contains(s3Url)) {
+                                        updatedContent += imgTag
+                                    }
+                                    updatedImagePaths[index] = "url:image_url:$s3Url"
+                                    file.delete()
+                                    wasModified = true
+                                }
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
+                }
+
+                // 2. 处理 content 中的 Base64 数据 (如果存在)
+                // 匹配 data:image/xxx;base64,xxxx
+                val base64Regex = Regex("""data:image/[^;]+;base64,[A-Za-z0-9+/=]+""")
+                val matches = base64Regex.findAll(updatedContent).toList()
+                
+                for (match in matches) {
+                    val base64Data = match.value
+                    try {
+                        // 将 Base64 转为临时文件上传
+                        val parts = base64Data.split(",")
+                        if (parts.size == 2) {
+                            val header = parts[0]
+                            val data = parts[1]
+                            val extension = header.substringAfter("image/").substringBefore(";")
+                            val bytes = android.util.Base64.decode(data, android.util.Base64.DEFAULT)
+                            
+                            val tempFile = File.createTempFile("sync_b64_", ".$extension", context.cacheDir)
+                            tempFile.writeBytes(bytes)
+                            
+                            val result = s3UploadRepository.uploadFile(tempFile) { }
+                            if (result.isSuccess) {
+                                val s3Url = result.getOrThrow()
+                                // 替换 content 中的 base64 为 img 标签
+                                updatedContent = updatedContent.replace(base64Data, "<img src=\"$s3Url\" />")
+                                wasModified = true
+                            }
+                            tempFile.delete()
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                val finalMsg = if (wasModified) {
+                    val updatedMsg = m.copy(content = updatedContent, imagePaths = updatedImagePaths)
+                    chatDao.updateMessage(updatedMsg)
+                    updatedMsg
+                } else {
+                    m
+                }
+
+                backupMessages.add(
+                     BackupMessage(
+                         uuid = finalMsg.uuid,
+                         content = finalMsg.content,
+                         isFromUser = finalMsg.isFromUser,
+                         timestamp = finalMsg.timestamp.time,
+                         isError = finalMsg.isError,
+                         modelDisplayName = finalMsg.modelDisplayName,
+                         imagePaths = finalMsg.imagePaths,
+                         metadata = finalMsg.metadata
+                     )
+                 )
+             }
+             
+             // 如果对话中的消息被修改（如图片转为 S3 链接），更新对话的 lastMessage 以保持 UI 一致
+             val lastMsg = backupMessages.lastOrNull()
+             if (lastMsg != null) {
+                 val conversation = chatDao.getConversation(c.id)
+                 if (conversation != null && conversation.lastMessage != lastMsg.content) {
+                     chatDao.updateConversation(conversation.copy(lastMessage = lastMsg.content))
+                 }
+             }
+             
+             val backupConv = BackupConversation(
                 title = c.title,
                 uuid = c.uuid,
                 lastMessage = c.lastMessage,
