@@ -78,7 +78,15 @@ data class ChatCompletionsRequest(
     val messages: List<OpenAiChatMessage>,
     val stream: Boolean = true,
     val tools: List<Tool>? = null,
-    @SerializedName("tool_choice") val toolChoice: String? = null
+    @SerializedName("tool_choice") val toolChoice: String? = null,
+    // OpenRouter image generation fields
+    val modalities: List<String>? = null,
+    @SerializedName("image_config") val imageConfig: ImageConfig? = null
+)
+
+data class ImageConfig(
+    @SerializedName("aspect_ratio") val aspectRatio: String? = null,
+    @SerializedName("image_size") val imageSize: String? = null
 )
 
 // Streaming chunk models (delta)
@@ -87,7 +95,18 @@ data class ChatCompletionsChunkChoiceDelta(
     @SerializedName("reasoning", alternate = ["reasoning_content"]) val reasoning: String?,
     @SerializedName("role") val role: String? = null,
     @SerializedName("tool_calls") val toolCalls: List<ToolCall>? = null,
-    @SerializedName("function_call") val functionCall: FunctionCall? = null
+    @SerializedName("function_call") val functionCall: FunctionCall? = null,
+    // OpenRouter image response field
+    @SerializedName("images") val images: List<DeltaImage>? = null
+)
+
+data class DeltaImage(
+    val type: String?,
+    @SerializedName("image_url") val imageUrl: DeltaImageUrl?
+)
+
+data class DeltaImageUrl(
+    val url: String?
 )
 
 // Tool call definition for streaming responses
@@ -121,11 +140,12 @@ data class ChatCompletionsChunk(
 
 // Image Generation models
 data class ImageGenerationRequest(
-    val prompt: String,
+    val prompt: String? = null,
     val model: String? = null,
     val n: Int? = 1,
     val size: String? = "1024x1024",
-    @SerializedName("response_format") val responseFormat: String? = "url"
+    @SerializedName("response_format") val responseFormat: String? = "url",
+    val messages: List<OpenAiChatMessage>? = null
 )
 
 data class ImageGenerationResponse(
@@ -183,7 +203,11 @@ class OpenAiService(
         proxyUrl: String? = null,
         supabaseAnonKey: String? = null,
         onDelta: suspend (String) -> Unit,
-        onToolCall: suspend (ToolCall) -> Unit = {}
+        onToolCall: suspend (ToolCall) -> Unit = {},
+        // Added for OpenRouter image generation
+        modalities: List<String>? = null,
+        imageConfig: ImageConfig? = null,
+        onImageDelta: suspend (String) -> Unit = {}
     ): String {
         val gson = Gson()
         val requestPayload = ChatCompletionsRequest(
@@ -191,7 +215,9 @@ class OpenAiService(
             messages = messages, 
             stream = true,
             tools = tools,
-            toolChoice = toolChoice
+            toolChoice = toolChoice,
+            modalities = modalities,
+            imageConfig = imageConfig
         )
         
         val body = object : okhttp3.RequestBody() {
@@ -339,6 +365,18 @@ class OpenAiService(
                                 finalText.append(content)
                                 onDelta(content)
                             }
+                            
+                            // Handle image delta (OpenRouter)
+                            val images = delta?.images
+                            if (!images.isNullOrEmpty()) {
+                                images.forEach { img ->
+                                    val url = img.imageUrl?.url
+                                    if (!url.isNullOrEmpty()) {
+                                        onImageDelta(url)
+                                    }
+                                }
+                            }
+                            
                             // Accumulate tool_calls deltas
                             val toolCalls = delta?.toolCalls
                             if (!toolCalls.isNullOrEmpty()) {
@@ -407,21 +445,14 @@ class OpenAiService(
         prompt: String,
         model: String? = null,
         size: String? = "1024x1024",
+        messages: List<OpenAiChatMessage>? = null,
         useCloudProxy: Boolean = false,
         proxyUrl: String? = null
     ): List<ImageData> {
         val gson = Gson()
-        val json = gson.toJson(ImageGenerationRequest(
-            prompt = prompt,
-            model = model,
-            size = size
-        ))
-        val body = json.toRequestBody("application/json".toMediaType())
-
         val endpoint = baseUrl.trim()
 
         val requestBuilder = Request.Builder()
-            .post(body)
 
         if (useCloudProxy && !proxyUrl.isNullOrBlank()) {
             requestBuilder.url(proxyUrl)
@@ -432,8 +463,6 @@ class OpenAiService(
                 .addHeader("Authorization", "Bearer $apiKey")
         }
 
-        val request = requestBuilder.build()
-        
         // 使用更长的超时时间（生图通常较慢）
         val imageClient = client.newBuilder()
             .connectTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
@@ -441,14 +470,47 @@ class OpenAiService(
             .readTimeout(120, java.util.concurrent.TimeUnit.SECONDS)
             .build()
 
-        val response = withContext(Dispatchers.IO) { imageClient.newCall(request).execute() }
-        if (!response.isSuccessful) {
-            val raw = response.body?.string()
-            response.close()
-            throw IOException("Image generation failed: ${response.code} ${response.message} - $raw")
+        // 策略1：优先尝试标准模式（只发送 prompt，不发送 messages）
+        val json1 = gson.toJson(ImageGenerationRequest(
+            prompt = prompt,
+            model = model,
+            size = size,
+            messages = null // 显式置空
+        ))
+        val body1 = json1.toRequestBody("application/json".toMediaType())
+        val request1 = requestBuilder.post(body1).build()
+
+        var response = withContext(Dispatchers.IO) { imageClient.newCall(request1).execute() }
+        var respBody = response.body?.string() ?: ""
+
+        // 如果标准模式失败，且提供了 messages，且错误提示可能需要 messages，则尝试 URL 模式
+        if (!response.isSuccessful && messages != null && response.code == 400) {
+            val errorMsg = respBody.lowercase()
+            // 如果错误信息包含 "messages" 相关的提示，或者是 Sourceful V2 的特征错误，则重试
+            if (errorMsg.contains("messages") || errorMsg.contains("sourceful")) {
+                response.close()
+                
+                // 策略2：尝试 URL 模式（只发送 messages，不发送 prompt）
+                // 注意：prompt 必须设为 null 以避免 "Cannot have both" 错误
+                val json2 = gson.toJson(ImageGenerationRequest(
+                    prompt = null,
+                    model = model,
+                    size = size,
+                    messages = messages
+                ))
+                val body2 = json2.toRequestBody("application/json".toMediaType())
+                val request2 = requestBuilder.post(body2).build()
+                
+                response = withContext(Dispatchers.IO) { imageClient.newCall(request2).execute() }
+                respBody = response.body?.string() ?: ""
+            }
         }
 
-        val respBody = response.body?.string() ?: ""
+        if (!response.isSuccessful) {
+            response.close()
+            throw IOException("Image generation failed: ${response.code} ${response.message} - $respBody")
+        }
+
         response.close()
 
         // 1. 尝试解析 OpenAI 标准格式
@@ -462,13 +524,20 @@ class OpenAiService(
                 val dataList = parsed?.data
                 if (dataList is List<*>) {
                     // 转回 ImageData 列表
-                    return dataList.map { 
+                    val list = dataList.mapNotNull { 
                         val item = it as? Map<*, *>
-                        ImageData(
-                            url = item?.get("url") as? String,
-                            revisedPrompt = item?.get("revised_prompt") as? String
-                        )
+                        val url = item?.get("url") as? String
+                        // 兼容某些服务商可能直接在 data 列表里放字符串 URL
+                        val urlStr = if (url == null && it is String) it else url
+                        
+                        if (urlStr != null) {
+                            ImageData(
+                                url = urlStr,
+                                revisedPrompt = item?.get("revised_prompt") as? String
+                            )
+                        } else null
                     }
+                    if (list.isNotEmpty()) return list
                 }
             }
             
@@ -479,11 +548,31 @@ class OpenAiService(
                 return urls.map { ImageData(url = it) }
             }
             
+            // 3. 兼容 SiliconFlow 等直接返回 { "images": [ { "url": "..." } ] } 的情况
+            if (rawMap["images"] is List<*>) {
+                val images = rawMap["images"] as List<*>
+                val list = images.mapNotNull {
+                    val item = it as? Map<*, *>
+                    val url = item?.get("url") as? String
+                    if (url != null) ImageData(url = url) else null
+                }
+                if (list.isNotEmpty()) return list
+            }
+            
+            // 4. 兼容直接返回 { "data": [ "url1", "url2" ] } 的情况 (字符串数组)
+            if (rawMap["data"] is List<*>) {
+                val dataList = rawMap["data"] as List<*>
+                if (dataList.isNotEmpty() && dataList[0] is String) {
+                    return dataList.map { ImageData(url = it as String) }
+                }
+            }
+
+            // 如果都解析失败，抛出包含原始响应的异常以便调试
+            throw IOException("Unknown image response format: $respBody")
+            
         } catch (e: Exception) {
             // 解析失败，记录原始数据以便排查
             throw IOException("Failed to parse image response: ${e.message}. Raw body: $respBody")
         }
-
-        return emptyList()
     }
 }

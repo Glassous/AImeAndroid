@@ -2438,24 +2438,90 @@ class ChatRepository(
             val useCloudProxy = modelPreferences.useCloudProxy.first()
             val proxyUrl = com.glassous.aime.BuildConfig.ALIYUN_FC_PROXY_URL
 
-            val images = openAiService.generateImage(
-                baseUrl = baseUrl,
-                apiKey = apiKey,
-                prompt = prompt,
-                model = modelName,
-                size = size,
-                useCloudProxy = useCloudProxy,
-                proxyUrl = proxyUrl
-            )
+            // Sourceful V2 等供应商要求 messages 参数
+            val messages = listOf(OpenAiChatMessage(role = "user", content = prompt))
+
+            // 优先尝试使用 Chat Completion 流式接口（适配 OpenRouter 等新协议，且避免 Base64 OOM）
+            var images: List<ImageData> = emptyList()
+            try {
+                // 仅当配置了 OpenRouter 相关的模型或者明确需要流式处理时尝试
+                // 这里我们做个简单的判断：如果 baseUrl 包含 openrouter.ai 或者用户选择了特定模型
+                // 为了通用性，我们可以先尝试流式，如果失败（如 404）再回退到 generateImage
+                // 但考虑到 generateImage 已经被 heavily modified to support retries, maybe we try generateImage first?
+                // No, the user explicitly asked to "adapt streaming response" because of OOM.
+                // So we should try the streaming chat completion approach first.
+                
+                val collectedImages = mutableListOf<String>()
+                val collectedText = StringBuilder()
+                
+                withContext(Dispatchers.IO) {
+                    openAiService.streamChatCompletions(
+                        baseUrl = baseUrl,
+                        apiKey = apiKey,
+                        model = modelName,
+                        messages = messages,
+                        useCloudProxy = useCloudProxy,
+                        proxyUrl = proxyUrl,
+                        modalities = listOf("image", "text"),
+                        imageConfig = com.glassous.aime.data.ImageConfig(
+                            aspectRatio = aspectRatio,
+                            imageSize = if (aspectRatio == "1:1") "1024x1024" else null // Simple mapping
+                        ),
+                        onDelta = { text ->
+                            // 收集文本内容
+                            collectedText.append(text)
+                        },
+                        onImageDelta = { url ->
+                            collectedImages.add(url)
+                            // Update UI to show progress (optional, but good for UX)
+                            // But since we are collecting, maybe we wait until finish to update message
+                            // However, we MUST ensure the message is updated when finished.
+                        }
+                    )
+                }
+                
+                if (collectedImages.isNotEmpty()) {
+                    // 如果有收集到文本，则使用文本作为 revisedPrompt 传递给后续逻辑
+                    val finalText = collectedText.toString()
+                    images = collectedImages.map { ImageData(url = it, revisedPrompt = finalText) }
+                    
+                    // Explicitly update message here to clear "Generating..." status immediately if we have images
+                    // This is handled below in "if (images.isNotEmpty())", but doing it early or ensuring flow continues is key.
+                }
+            } catch (e: Exception) {
+                // 如果流式请求失败（例如不支持 chat/completions 接口），则回退到旧的 generateImage
+                // Log error but continue
+                e.printStackTrace()
+            }
+
+            // 如果流式没拿到图片，尝试旧的 generateImage 接口
+            if (images.isEmpty()) {
+                images = withContext(Dispatchers.IO) {
+                    openAiService.generateImage(
+                        baseUrl = baseUrl,
+                        apiKey = apiKey,
+                        prompt = prompt,
+                        model = modelName,
+                        size = size,
+                        messages = messages,
+                        useCloudProxy = useCloudProxy,
+                        proxyUrl = proxyUrl
+                    )
+                }
+            }
 
             if (images.isNotEmpty()) {
-                val localPaths = images.mapNotNull { imageData ->
-                    imageData.url?.let { downloadAndSaveImage(it) } ?: imageData.url
+                val localPaths = withContext(Dispatchers.IO) {
+                    images.mapNotNull { imageData ->
+                        imageData.url?.let { downloadAndSaveImage(it) } ?: imageData.url
+                    }
                 }
                 
                 if (localPaths.isNotEmpty()) {
+                    val finalContent = images[0].revisedPrompt ?: ""
+                    // 如果有 revisedPrompt (来自 AI 的回复文本)，使用它；否则留空
                     val finalMsg = assistantMsg!!.copy(
-                        content = images[0].revisedPrompt ?: "",
+                        content = finalContent, 
                         imagePaths = localPaths,
                         isError = false
                     )
