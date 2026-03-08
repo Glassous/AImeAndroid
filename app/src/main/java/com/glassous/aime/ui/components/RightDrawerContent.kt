@@ -65,6 +65,7 @@ fun RightDrawerContent(
     onAttachmentClick: () -> Unit,
     onToolClick: () -> Unit,
     onAnchorClick: (Int) -> Unit,
+    onShowDetails: (Long) -> Unit,
     modifier: Modifier = Modifier
 ) {
     ModalDrawerSheet(
@@ -166,7 +167,8 @@ fun RightDrawerContent(
                     if (message.content.isNotBlank() || message.imagePaths.isNotEmpty()) {
                         DirectoryItem(
                             message = message,
-                            onClick = { onAnchorClick(index) }
+                            onClick = { onAnchorClick(index) },
+                            onShowDetails = { onShowDetails(message.id) }
                         )
                     }
                 }
@@ -217,7 +219,8 @@ private fun QuickActionItem(
 @Composable
 private fun DirectoryItem(
     message: ChatMessage,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onShowDetails: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
@@ -286,13 +289,35 @@ private fun DirectoryItem(
                             }
                         }
                         
-                        // New Row for Copy button
+                        // New Row for Copy and Detail buttons
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(top = 4.dp),
-                            horizontalArrangement = Arrangement.End
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
+                            TextButton(
+                                onClick = onShowDetails,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = "Show details",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "详情",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                            
+                            Spacer(modifier = Modifier.width(4.dp))
+
                             TextButton(
                                 onClick = { 
                                     clipboardManager.setText(AnnotatedString(message.content))
