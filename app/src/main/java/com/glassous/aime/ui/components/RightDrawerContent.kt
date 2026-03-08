@@ -71,6 +71,7 @@ fun RightDrawerContent(
             .fillMaxHeight(),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
         drawerContentColor = MaterialTheme.colorScheme.onSurface,
+        drawerTonalElevation = 0.dp,
         windowInsets = WindowInsets(0, 0, 0, 0)
     ) {
         Column(
@@ -245,6 +246,7 @@ private fun DirectoryItem(
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainer
                     ),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp)
@@ -333,6 +335,7 @@ private fun DirectoryItem(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh // Slightly distinct background
                         ),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 200.dp) // Limit height

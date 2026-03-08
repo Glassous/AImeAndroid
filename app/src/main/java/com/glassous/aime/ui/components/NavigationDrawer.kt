@@ -218,6 +218,7 @@ fun NavigationDrawer(
         modifier = modifier.width(360.dp).fillMaxHeight(),
         drawerContainerColor = MaterialTheme.colorScheme.surface,
         drawerContentColor = MaterialTheme.colorScheme.onSurface,
+        drawerTonalElevation = 0.dp,
         // 将 ModalDrawerSheet 的 windowInsets 设为 0，我们自己在内部控制 Padding，
         // 这样可以确保背景色延伸到底部，而内容通过 Padding 避开小白条
         windowInsets = WindowInsets(0, 0, 0, 0)
@@ -556,7 +557,7 @@ private fun ConversationItem(
     var itemBounds by remember { mutableStateOf<Rect?>(null) }
     val interactionSource = remember { MutableInteractionSource() }
 
-    Card(
+    Surface(
         modifier = modifier
             .fillMaxWidth()
             .onGloballyPositioned { coordinates ->
@@ -574,17 +575,14 @@ private fun ConversationItem(
                     }
                 }
             ),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
+        color = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surface
+        },
         shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = if (isSelected) 2.dp else 0.dp
-        )
+        tonalElevation = 0.dp,
+        shadowElevation = 0.dp
     ) {
         Row(
             modifier = Modifier
