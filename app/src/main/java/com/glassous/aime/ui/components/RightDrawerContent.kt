@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -218,6 +220,7 @@ private fun DirectoryItem(
     onClick: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    val clipboardManager = LocalClipboardManager.current
     
     Surface(
         shape = MaterialTheme.shapes.small,
@@ -255,28 +258,61 @@ private fun DirectoryItem(
                             indication = null
                         ) { expanded = false } // Click info card to collapse
                 ) {
-                    Row(
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(8.dp)
                     ) {
-                        // Timestamp
-                        Text(
-                            text = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(message.timestamp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        
-                        // Model name (only for assistant messages)
-                        if (!message.isFromUser && !message.modelDisplayName.isNullOrBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Timestamp
                             Text(
-                                text = message.modelDisplayName,
+                                text = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(message.timestamp),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            
+                            // Model name (only for assistant messages)
+                            if (!message.isFromUser && !message.modelDisplayName.isNullOrBlank()) {
+                                Text(
+                                    text = message.modelDisplayName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                )
+                            }
+                        }
+                        
+                        // New Row for Copy button
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = { 
+                                    clipboardManager.setText(AnnotatedString(message.content))
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ContentCopy,
+                                    contentDescription = "Copy content",
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "复制内容",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }
