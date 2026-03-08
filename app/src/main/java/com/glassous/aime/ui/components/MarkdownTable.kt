@@ -2,6 +2,12 @@ package com.glassous.aime.ui.components
 
 import android.widget.TextView
 import android.widget.Toast
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.style.ClickableSpan
+import android.text.style.URLSpan
+import android.view.View
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -90,7 +96,9 @@ fun MarkdownTable(
     textColor: Color,
     textSizeSp: Float,
     modifier: Modifier = Modifier,
-    isShareMode: Boolean = false // New parameter to indicate share mode
+    isShareMode: Boolean = false, // New parameter to indicate share mode
+    onCitationClick: ((String) -> Unit)? = null,
+    onLinkClick: ((String) -> Unit)? = null
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     var showShareSheet by remember { mutableStateOf(false) }
@@ -247,14 +255,16 @@ fun MarkdownTable(
                         ) {
                             tableData.headers.forEachIndexed { index, header ->
                                 Cell(
-                                    text = header,
-                                    isHeader = true,
-                                    textColor = textColor,
-                                    textSizeSp = textSizeSp,
-                                    markwon = markwon,
-                                    modifier = Modifier.width(columnWidth), // Use calculated width
-                                    onClick = { if (!isShareMode) isExpanded = !isExpanded }
-                                )
+                                        text = header,
+                                        isHeader = true,
+                                        textColor = textColor,
+                                        textSizeSp = textSizeSp,
+                                        markwon = markwon,
+                                        onCitationClick = onCitationClick,
+                                        onLinkClick = onLinkClick,
+                                        modifier = Modifier.width(columnWidth), // Use calculated width
+                                        onClick = { if (!isShareMode) isExpanded = !isExpanded }
+                                    )
                                 if (index < tableData.headers.size - 1) {
                                     VerticalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                 }
@@ -288,6 +298,8 @@ fun MarkdownTable(
                                         textColor = textColor,
                                         textSizeSp = textSizeSp,
                                         markwon = markwon,
+                                        onCitationClick = onCitationClick,
+                                        onLinkClick = onLinkClick,
                                         modifier = Modifier.width(columnWidth), // Use calculated width
                                         onClick = { if (!isShareMode) isExpanded = !isExpanded }
                                     )
@@ -408,6 +420,8 @@ private fun Cell(
     textColor: Color,
     textSizeSp: Float,
     markwon: Markwon,
+    onCitationClick: ((String) -> Unit)? = null,
+    onLinkClick: ((String) -> Unit)? = null,
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
@@ -426,18 +440,75 @@ private fun Cell(
                     )
                     setTextColor(textColor.toArgb())
                     textSize = textSizeSp
+                    setLinkTextColor(textColor.toArgb())
+                    movementMethod = android.text.method.LinkMovementMethod.getInstance()
                     setOnClickListener { onClick() }
                 }
             },
             update = { tv ->
                 tv.setTextColor(textColor.toArgb())
                 tv.textSize = textSizeSp
+                tv.setLinkTextColor(textColor.toArgb())
                 tv.setOnClickListener { onClick() }
                 
                 // Use markwon to render markdown/latex
                 // Preprocess text to ensure consistent behavior with main renderer (e.g. latex $ -> $$, sup/sub)
                 val processedText = preprocessText(text, true)
-                markwon.setMarkdown(tv, processedText)
+                var spanned: CharSequence = markwon.toMarkdown(processedText)
+
+                // Handle citation tags ^n
+                if (spanned is Spanned) {
+                    val builder = SpannableStringBuilder(spanned)
+                    val urlSpans = builder.getSpans(0, builder.length, URLSpan::class.java)
+                    var hasModifications = false
+                    
+                    for (span in urlSpans) {
+                        val url = span.url
+                        val start = builder.getSpanStart(span)
+                        val end = builder.getSpanEnd(span)
+                        val flags = builder.getSpanFlags(span)
+                        
+                        if (url.startsWith("citation:")) {
+                            val id = url.removePrefix("citation:")
+                            builder.removeSpan(span)
+                            
+                            // Add click event
+                            builder.setSpan(object : ClickableSpan() {
+                                override fun onClick(widget: View) {
+                                    onCitationClick?.invoke(id)
+                                }
+                                override fun updateDrawState(ds: TextPaint) {
+                                    ds.isUnderlineText = false
+                                    ds.color = textColor.toArgb()
+                                }
+                            }, start, end, flags)
+                            
+                            // Add appearance style (small card)
+                            builder.setSpan(CitationAppearanceSpan(id, textColor.toArgb(), textSizeSp), start, end, flags)
+                            hasModifications = true
+                        } else if (onLinkClick != null) {
+                            // Handle normal link clicks
+                            builder.removeSpan(span)
+                            
+                            builder.setSpan(object : ClickableSpan() {
+                                override fun onClick(widget: View) {
+                                    onLinkClick.invoke(url)
+                                }
+                                override fun updateDrawState(ds: TextPaint) {
+                                    ds.isUnderlineText = true
+                                    ds.color = textColor.toArgb()
+                                }
+                            }, start, end, flags)
+                            hasModifications = true
+                        }
+                    }
+                    
+                    if (hasModifications) {
+                        spanned = builder
+                    }
+                }
+
+                tv.text = spanned
 
                 // 修复表格内部分宽度失效问题：显式启用换行并设置最大宽度
                 // 此功能原本是为代码块禁用换行设计的，但表格需要换行

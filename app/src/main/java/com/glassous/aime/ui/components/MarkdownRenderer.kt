@@ -515,7 +515,9 @@ fun MarkdownRenderer(
                         textColor = textColor,
                         textSizeSp = textSizeSp,
                         modifier = Modifier.padding(vertical = 8.dp),
-                        isShareMode = isShareMode
+                        isShareMode = isShareMode,
+                        onCitationClick = onCitationClick,
+                        onLinkClick = onLinkClick
                     )
                 }
                 BlockType.MUSIC -> {
