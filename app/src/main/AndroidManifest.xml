@@ -46,6 +46,16 @@
             android:label="设置"
             android:theme="@style/Theme.AIme" />
         <activity
+            android:name=".ui.settings.ThemeSettingsActivity"
+            android:exported="false"
+            android:label="主题设置"
+            android:theme="@style/Theme.AIme" />
+        <activity
+            android:name=".ui.settings.ConfigSettingsActivity"
+            android:exported="false"
+            android:label="配置设置"
+            android:theme="@style/Theme.AIme" />
+        <activity
             android:name=".ui.screens.ModelConfigActivity"
             android:exported="false"
             android:label="模型配置"
