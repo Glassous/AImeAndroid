@@ -1,5 +1,10 @@
 package com.glassous.aime.ui.screens
 
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable

@@ -41,8 +41,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.filled.PlayCircleOutline
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -71,6 +75,19 @@ fun ChatInput(
     onImageClick: (String) -> Unit = {}
 ) {
     val focusManager = LocalFocusManager.current
+    
+    // 输入框展开状态
+    var isExpanded by rememberSaveable { mutableStateOf(false) }
+    // 动画控制输入框高度 (卷帘门效果)
+    val animatedMinHeight by animateDpAsState(
+        targetValue = if (isExpanded) 400.dp else 56.dp,
+        label = "MinHeight"
+    )
+    val animatedMaxHeight by animateDpAsState(
+        targetValue = if (isExpanded) 400.dp else 120.dp,
+        label = "MaxHeight"
+    )
+
     // 固定发送按钮高度为输入框初始高度（硬编码）
     val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
@@ -315,10 +332,13 @@ fun ChatInput(
             ) {
                 OutlinedTextField(
                 value = inputText,
-                onValueChange = onInputChange,
+                onValueChange = { 
+                    onInputChange(it)
+                    if (it.isEmpty()) isExpanded = false
+                },
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = 120.dp)
+                    .heightIn(min = animatedMinHeight, max = animatedMaxHeight)
                     .animateContentSize(),
                 placeholder = {
                     // 仅在开启极简模式且配置为隐藏时才隐藏占位符
@@ -342,7 +362,19 @@ fun ChatInput(
                         horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (showScrollToBottomButton) {
+                        if (inputText.isNotEmpty()) {
+                            IconButton(
+                                onClick = { isExpanded = !isExpanded },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                    contentDescription = if (isExpanded) "缩小输入框" else "放大输入框",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        } else if (showScrollToBottomButton) {
                             IconButton(
                                 onClick = onScrollToBottomClick,
                                 modifier = Modifier.size(32.dp)
