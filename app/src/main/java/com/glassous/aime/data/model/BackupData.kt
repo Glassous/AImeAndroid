@@ -105,7 +105,8 @@ data class BackupConversation(
     @SerializedName("messageCount") val messageCount: Int,
     @SerializedName("messages") val messages: List<BackupMessage>,
     @SerializedName("isDeleted") val isDeleted: Boolean = false,
-    @SerializedName("deletedAt") val deletedAt: Long? = null
+    @SerializedName("deletedAt") val deletedAt: Long? = null,
+    @SerializedName("version") val version: Long = 1L
 )
 
 data class BackupMessage(

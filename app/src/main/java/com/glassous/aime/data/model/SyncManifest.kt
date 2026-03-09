@@ -17,5 +17,6 @@ data class ConversationMeta(
     @SerializedName("lastMessageTime") val lastMessageTime: Long,
     @SerializedName("messageCount") val messageCount: Int,
     @SerializedName("isDeleted") val isDeleted: Boolean = false,
-    @SerializedName("deletedAt") val deletedAt: Long? = null
+    @SerializedName("deletedAt") val deletedAt: Long? = null,
+    @SerializedName("version") val version: Long = 1L
 )

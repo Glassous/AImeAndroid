@@ -868,6 +868,7 @@ class ChatRepository(
 
             // 删除目标消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+            chatDao.incrementConversationVersion(conversationId)
 
             // 插入新的助手消息占位，用于流式输出
             val newAssistantMessage = ChatMessage(
@@ -1127,7 +1128,7 @@ class ChatRepository(
         if (conversation != null) {
             val updatedConversation = conversation.copy(title = newTitle)
             chatDao.updateConversation(updatedConversation)
-            
+            chatDao.incrementConversationVersion(conversationId)
         }
     }
 
@@ -1355,6 +1356,7 @@ class ChatRepository(
                 messageCount = messageCount
             )
             chatDao.updateConversation(updatedConversation)
+            chatDao.incrementConversationVersion(conversationId)
         }
     }
 
@@ -1368,6 +1370,7 @@ class ChatRepository(
             messageCount = messageCount
         )
         chatDao.updateConversation(updated)
+        chatDao.incrementConversationVersion(conversationId)
     }
 
     suspend fun hasValidMessages(conversationId: Long): Boolean {
@@ -1380,6 +1383,7 @@ class ChatRepository(
             val now = java.util.Date()
             chatDao.markMessagesDeletedForConversation(conversationId, now)
             chatDao.markConversationDeleted(conversationId, now)
+            chatDao.incrementConversationVersion(conversationId)
         }
     }
 
@@ -1391,6 +1395,7 @@ class ChatRepository(
     // Added: update message content
     suspend fun updateMessage(message: ChatMessage) {
         chatDao.updateMessage(message)
+        chatDao.incrementConversationVersion(message.conversationId)
     }
 
     // Added: retry failed assistant message
@@ -1464,6 +1469,7 @@ class ChatRepository(
 
             // 删除失败的消息及其后的所有消息
             chatDao.deleteMessagesAfter(conversationId, target.timestamp)
+            chatDao.incrementConversationVersion(conversationId)
 
             // 解析模型配置
             val selectedModelId = modelPreferences.selectedModelId.first()
@@ -1623,6 +1629,7 @@ class ChatRepository(
 
             // 删除其后的所有消息
             chatDao.deleteMessagesAfterExclusive(conversationId, target.timestamp)
+            chatDao.incrementConversationVersion(conversationId)
 
             // Client-side handling for Image Generation in Edit
             if (selectedTool?.type == ToolType.IMAGE_GENERATION) {

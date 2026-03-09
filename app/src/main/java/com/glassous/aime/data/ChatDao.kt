@@ -89,4 +89,7 @@ interface ChatDao {
 
     @Query("DELETE FROM chat_messages WHERE id IN (:ids)")
     suspend fun deleteMessagesByIds(ids: List<Long>)
+
+    @Query("UPDATE conversations SET version = version + 1 WHERE id = :conversationId")
+    suspend fun incrementConversationVersion(conversationId: Long)
 }

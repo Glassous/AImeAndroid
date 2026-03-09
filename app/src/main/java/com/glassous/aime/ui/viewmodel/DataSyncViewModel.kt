@@ -194,7 +194,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                             messageCount = c.messageCount,
                             messages = backupMessages,
                             isDeleted = c.isDeleted,
-                            deletedAt = c.deletedAt?.time
+                            deletedAt = c.deletedAt?.time,
+                            version = c.version
                         )
                     )
                 }
@@ -433,7 +434,8 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                             lastMessageTime = Date(bc.lastMessageTime),
                             messageCount = bc.messages.size,
                             isDeleted = bc.isDeleted,
-                            deletedAt = bc.deletedAt?.let { Date(it) }
+                            deletedAt = bc.deletedAt?.let { Date(it) },
+                            version = bc.version
                         )
                     )
                     // 插入消息

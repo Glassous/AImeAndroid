@@ -32,5 +32,6 @@ data class Conversation(
     val lastMessageTime: Date = Date(),
     val messageCount: Int = 0,
     val isDeleted: Boolean = false,
-    val deletedAt: Date? = null
+    val deletedAt: Date? = null,
+    val version: Long = 1L
 )

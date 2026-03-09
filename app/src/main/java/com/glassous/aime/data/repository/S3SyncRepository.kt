@@ -361,7 +361,8 @@ class S3SyncRepository(
             lastMessageTime = it.lastMessageTime.time,
             messageCount = it.messageCount,
             isDeleted = it.isDeleted,
-            deletedAt = it.deletedAt?.time
+            deletedAt = it.deletedAt?.time,
+            version = it.version
         ) }
 
         val toUpload = mutableListOf<Conversation>()
@@ -374,11 +375,16 @@ class S3SyncRepository(
                 // 本地独有 -> 上传
                 toUpload.add(local)
             } else {
-                // 两边都有 -> 比对时间戳 (最后修改时间或删除时间)
-                val localTime = maxOf(local.lastMessageTime.time, local.deletedAt?.time ?: 0L)
-                val remoteTime = maxOf(remoteMeta.lastMessageTime, remoteMeta.deletedAt ?: 0L)
-                if (localTime > remoteTime) {
+                // 两边都有 -> 改用 version 比对
+                if (local.version > remoteMeta.version) {
                     toUpload.add(local)
+                } else if (local.version == remoteMeta.version) {
+                     // Fallback: compare timestamps
+                    val localTime = maxOf(local.lastMessageTime.time, local.deletedAt?.time ?: 0L)
+                    val remoteTime = maxOf(remoteMeta.lastMessageTime, remoteMeta.deletedAt ?: 0L)
+                    if (localTime > remoteTime) {
+                        toUpload.add(local)
+                    }
                 }
             }
         }
@@ -390,11 +396,16 @@ class S3SyncRepository(
                 // 云端独有 -> 下载
                 toDownload.add(uuid)
             } else {
-                // 两边都有 -> 比对时间戳
-                val localTime = maxOf(localMeta.lastMessageTime, localMeta.deletedAt ?: 0L)
-                val remoteTime = maxOf(remoteMeta.lastMessageTime, remoteMeta.deletedAt ?: 0L)
-                if (remoteTime > localTime) {
+                // 两边都有 -> 改用 version 比对
+                if (remoteMeta.version > localMeta.version) {
                     toDownload.add(uuid)
+                } else if (remoteMeta.version == localMeta.version) {
+                    // Fallback
+                    val localTime = maxOf(localMeta.lastMessageTime, localMeta.deletedAt ?: 0L)
+                    val remoteTime = maxOf(remoteMeta.lastMessageTime, remoteMeta.deletedAt ?: 0L)
+                    if (remoteTime > localTime) {
+                        toDownload.add(uuid)
+                    }
                 }
             }
         }
@@ -515,7 +526,8 @@ class S3SyncRepository(
                 messageCount = c.messageCount,
                 messages = backupMessages,
                 isDeleted = c.isDeleted,
-                deletedAt = c.deletedAt?.time
+                deletedAt = c.deletedAt?.time,
+                version = c.version
             )
             
             val json = gson.toJson(backupConv)
@@ -538,7 +550,8 @@ class S3SyncRepository(
                     lastMessageTime = Date(remoteConv.lastMessageTime),
                     messageCount = remoteConv.messageCount,
                     isDeleted = remoteConv.isDeleted,
-                    deletedAt = remoteConv.deletedAt?.let { Date(it) }
+                    deletedAt = remoteConv.deletedAt?.let { Date(it) },
+                    version = remoteConv.version
                 )
                 val newId = chatDao.insertConversation(newConv)
                 
@@ -566,7 +579,8 @@ class S3SyncRepository(
                     lastMessageTime = Date(remoteConv.lastMessageTime),
                     messageCount = remoteConv.messageCount,
                     isDeleted = remoteConv.isDeleted,
-                    deletedAt = remoteConv.deletedAt?.let { Date(it) }
+                    deletedAt = remoteConv.deletedAt?.let { Date(it) },
+                    version = remoteConv.version
                 )
                 chatDao.updateConversation(updatedConv)
                 
@@ -598,7 +612,8 @@ class S3SyncRepository(
                 lastMessageTime = it.lastMessageTime.time,
                 messageCount = it.messageCount,
                 isDeleted = it.isDeleted,
-                deletedAt = it.deletedAt?.time
+                deletedAt = it.deletedAt?.time,
+                version = it.version
             ) 
         }
         val finalManifest = SyncManifest(
