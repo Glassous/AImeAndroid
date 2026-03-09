@@ -192,13 +192,13 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                             
                             if (result.isSuccess) {
                                 val s3Url = result.getOrThrow()
-                                val urlType = when(type) {
-                                    "video" -> "video_url"
-                                    "pdf" -> "pdf_url"
-                                    "audio" -> "audio_url"
-                                    else -> "image_url"
+                                val urlString = when(type) {
+                                    "video" -> "url:video_url:$s3Url"
+                                    "pdf" -> "url:pdf_url:$s3Url"
+                                    "audio" -> "url:audio_url:$s3Url"
+                                    // 修复：对于图片，直接使用 S3 URL，不再添加 url:image_url: 前缀
+                                    else -> s3Url
                                 }
-                                val urlString = "url:$urlType:$s3Url"
                                 
                                 _attachedImages.update { current ->
                                     current.map { if (it == filePath) urlString else it }
@@ -254,7 +254,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         if (type != null) {
             val currentList = _attachedImages.value.toMutableList()
             // Use a prefix to distinguish URL attachments from local paths
-            currentList.add("url:${type}:${trimmedUrl}")
+            // 修复：对于图片 URL，直接使用，不加前缀
+            if (type == "image_url") {
+                currentList.add(trimmedUrl)
+            } else {
+                currentList.add("url:${type}:${trimmedUrl}")
+            }
             _attachedImages.value = currentList
         } else {
             // Show toast or error? For now just ignore as requested "格式不支持则无法加入待定区域"
@@ -290,8 +295,9 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
             }
             val s3Enabled = s3Preferences.s3Enabled.first()
             if (s3Enabled) {
+                // 修复：确保 S3 URL (http/https) 也被视为已上传
                 val hasLocalPendingAttachments = _attachedImages.value.any { path ->
-                    !path.startsWith("url:") && !path.contains("/txt_") && !path.contains("\\txt_")
+                    !path.startsWith("url:") && !path.startsWith("http") && !path.contains("/txt_") && !path.contains("\\txt_")
                 }
                 if (hasLocalPendingAttachments) {
                     _uploadErrorEvents.tryEmit("存在未上传成功的附件，请重新上传后再发送")
@@ -316,9 +322,12 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
                 
-                val imagesToSend = _attachedImages.value.filter { !it.contains("/txt_") && !it.startsWith("url:") }.toList()
+                // 修复：正确区分本地图片和 S3 URL
+                val imagesToSend = _attachedImages.value.filter { 
+                    !it.contains("/txt_") && !it.startsWith("url:") && !it.startsWith("http") 
+                }.toList()
                 val textFiles = _attachedImages.value.filter { it.contains("/txt_") }
-                val urlFiles = _attachedImages.value.filter { it.startsWith("url:") }
+                val urlFiles = _attachedImages.value.filter { it.startsWith("url:") || it.startsWith("http") }
                 
                 var finalContent = content
                 textFiles.forEach { path ->
@@ -337,9 +346,14 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
 
                 urlFiles.forEachIndexed { index, path ->
                     // url:type:actual_url
-                    val urlParts = path.split(":", limit = 3)
-                    if (urlParts.size == 3) {
-                        val actualUrl = urlParts[2]
+                    var actualUrl = path
+                    if (path.startsWith("url:")) {
+                        val urlParts = path.split(":", limit = 3)
+                        if (urlParts.size == 3) {
+                            actualUrl = urlParts[2]
+                        }
+                    }
+                    if (actualUrl.isNotBlank()) {
                         finalContent += "\n\n<file_url index=\"${index + 1}\" url=\"$actualUrl\" />"
                     }
                 }

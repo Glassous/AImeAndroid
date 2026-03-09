@@ -431,7 +431,8 @@ class S3SyncRepository(
                                     if (!updatedContent.contains(s3Url)) {
                                         updatedContent += imgTag
                                     }
-                                    updatedImagePaths[index] = "url:image_url:$s3Url"
+                                    // 修复：直接使用 S3 URL，不再添加干扰前缀
+                                    updatedImagePaths[index] = s3Url
                                     file.delete()
                                     wasModified = true
                                 }

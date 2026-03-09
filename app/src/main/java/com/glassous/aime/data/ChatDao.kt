@@ -76,6 +76,17 @@ interface ChatDao {
     @Query("SELECT * FROM conversations WHERE uuid = :uuid LIMIT 1")
     suspend fun getConversationByUuid(uuid: String): Conversation?
 
+    @Query("""
+        SELECT m.* FROM chat_messages m 
+        INNER JOIN conversations c ON m.conversationId = c.id 
+        WHERE m.isFromUser = 0 AND m.isDeleted = 0 AND c.isDeleted = 0 
+        ORDER BY m.timestamp DESC
+    """)
+    fun getAllAssistantMessages(): Flow<List<ChatMessage>>
+
     @Query("DELETE FROM chat_messages WHERE conversationId = :conversationId")
     suspend fun deleteMessagesByConversationId(conversationId: Long)
+
+    @Query("DELETE FROM chat_messages WHERE id IN (:ids)")
+    suspend fun deleteMessagesByIds(ids: List<Long>)
 }
