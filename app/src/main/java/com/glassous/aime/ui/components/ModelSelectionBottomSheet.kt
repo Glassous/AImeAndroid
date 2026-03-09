@@ -126,12 +126,12 @@ fun ModelSelectionContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .padding(top = 8.dp, start = 16.dp, end = 16.dp)
     ) {
         // 标题栏
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -155,8 +155,7 @@ fun ModelSelectionContent(
                     // 显示"选择模型"标题
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp),
+                            .fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -173,8 +172,7 @@ fun ModelSelectionContent(
                                 text = model.name,
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(end = 16.dp)
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
@@ -186,7 +184,6 @@ fun ModelSelectionContent(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f, fill = false)
-                    .padding(horizontal = 16.dp)
             ) {
                 AnimatedContent(
                     targetState = uiState.selectedGroup,
@@ -238,9 +235,6 @@ fun ModelSelectionContent(
                     }
                 }
             }
-            
-            // 底部间距
-            Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -359,8 +353,7 @@ private fun GroupList(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(bottom = 16.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // 内置AIme模型
         item {
@@ -445,8 +438,7 @@ private fun ModelList(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 16.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(models) { model ->
                 ModelItem(
