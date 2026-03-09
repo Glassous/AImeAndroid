@@ -21,6 +21,7 @@ import com.glassous.aime.data.model.ValidationResult
 import com.glassous.aime.data.model.BackupData
 import com.glassous.aime.data.model.BackupConversation
 import com.glassous.aime.data.model.BackupMessage
+import com.glassous.aime.data.model.S3Settings
 import com.glassous.aime.data.preferences.ModelPreferences
 import com.glassous.aime.data.preferences.ThemePreferences
 import com.glassous.aime.data.preferences.ContextPreferences
@@ -146,12 +147,22 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     titleGeneration = titleGenerationSettings
                 )
 
-                val conversations = chatDao.getAllConversations().first()
+                val s3Settings = S3Settings(
+                    endpoint = s3Preferences.s3Endpoint.first(),
+                    region = s3Preferences.s3Region.first(),
+                    accessKey = s3Preferences.s3AccessKey.first(),
+                    secretKey = s3Preferences.s3SecretKey.first(),
+                    bucketName = s3Preferences.s3BucketName.first(),
+                    forcePathStyle = s3Preferences.s3ForcePathStyle.first(),
+                    enabled = s3Preferences.s3Enabled.first()
+                )
+
+                val conversations = chatDao.getAllConversationsIncludingDeleted().first()
                 val backupConversations = mutableListOf<BackupConversation>()
                 val imagesToZip = mutableSetOf<String>()
 
                 for (c in conversations) {
-                    val msgs = chatDao.getMessagesForConversation(c.id).first()
+                    val msgs = chatDao.getMessagesForConversationIncludingDeleted(c.id).first()
                     val backupMessages = msgs.map { m ->
                         val relativeImagePaths = m.imagePaths.mapNotNull { absolutePath ->
                             val file = java.io.File(absolutePath)
@@ -162,34 +173,41 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                         }
 
                         BackupMessage(
+                            uuid = m.uuid,
                             content = m.content,
                             isFromUser = m.isFromUser,
                             timestamp = m.timestamp.time,
                             isError = m.isError,
                             modelDisplayName = m.modelDisplayName,
                             imagePaths = relativeImagePaths.ifEmpty { null },
-                            metadata = m.metadata
+                            metadata = m.metadata,
+                            isDeleted = m.isDeleted,
+                            deletedAt = m.deletedAt?.time
                         )
                     }
                     backupConversations.add(
                         BackupConversation(
                             title = c.title,
+                            uuid = c.uuid,
                             lastMessage = c.lastMessage,
                             lastMessageTime = c.lastMessageTime.time,
                             messageCount = c.messageCount,
-                            messages = backupMessages
+                            messages = backupMessages,
+                            isDeleted = c.isDeleted,
+                            deletedAt = c.deletedAt?.time
                         )
                     )
                 }
 
                 val backup = BackupData(
-                    version = 2, // Incremented version
+                    version = 3, // Incremented version for new fields
                     exportedAt = System.currentTimeMillis(),
                     modelGroups = groups,
                     models = models,
                     selectedModelId = selectedModelId,
                     conversations = backupConversations,
-                    appSettings = appSettings
+                    appSettings = appSettings,
+                    s3Preferences = s3Settings
                 )
 
                 // Create temp zip file
@@ -394,14 +412,28 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                     }
                 }
 
+                // 恢复 S3 设置 (仅限本地备份恢复)
+                backup.s3Preferences?.let { s3 ->
+                    s3.endpoint?.let { s3Preferences.setS3Endpoint(it) }
+                    s3.region?.let { s3Preferences.setS3Region(it) }
+                    s3.accessKey?.let { s3Preferences.setS3AccessKey(it) }
+                    s3.secretKey?.let { s3Preferences.setS3SecretKey(it) }
+                    s3.bucketName?.let { s3Preferences.setS3BucketName(it) }
+                    s3.forcePathStyle?.let { s3Preferences.setS3ForcePathStyle(it) }
+                    s3.enabled?.let { s3Preferences.setS3Enabled(it) }
+                }
+
                 // 导入会话与消息
                 backup.conversations.forEach { bc ->
                     val newConversationId = chatDao.insertConversation(
                         Conversation(
                             title = bc.title,
+                            uuid = bc.uuid ?: java.util.UUID.randomUUID().toString(),
                             lastMessage = bc.lastMessage,
                             lastMessageTime = Date(bc.lastMessageTime),
-                            messageCount = bc.messages.size
+                            messageCount = bc.messages.size,
+                            isDeleted = bc.isDeleted,
+                            deletedAt = bc.deletedAt?.let { Date(it) }
                         )
                     )
                     // 插入消息
@@ -415,13 +447,16 @@ class DataSyncViewModel(application: Application) : AndroidViewModel(application
                         chatDao.insertMessage(
                             ChatMessage(
                                 conversationId = newConversationId,
+                                uuid = bm.uuid ?: java.util.UUID.randomUUID().toString(),
                                 content = bm.content,
                                 isFromUser = bm.isFromUser,
                                 timestamp = Date(bm.timestamp),
                                 isError = bm.isError ?: false,
                                 modelDisplayName = bm.modelDisplayName,
                                 imagePaths = restoredImagePaths,
-                                metadata = bm.metadata
+                                metadata = bm.metadata,
+                                isDeleted = bm.isDeleted,
+                                deletedAt = bm.deletedAt?.let { Date(it) }
                             )
                         )
                     }

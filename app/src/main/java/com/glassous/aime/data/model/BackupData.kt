@@ -12,7 +12,18 @@ data class BackupData(
     @SerializedName("models") val models: List<Model>,
     @SerializedName("selectedModelId") val selectedModelId: String?,
     @SerializedName("conversations") val conversations: List<BackupConversation>,
-    @SerializedName("appSettings") val appSettings: AppSettings? = null
+    @SerializedName("appSettings") val appSettings: AppSettings? = null,
+    @SerializedName("s3Preferences") val s3Preferences: S3Settings? = null
+)
+
+data class S3Settings(
+    @SerializedName("endpoint") val endpoint: String? = null,
+    @SerializedName("region") val region: String? = null,
+    @SerializedName("accessKey") val accessKey: String? = null,
+    @SerializedName("secretKey") val secretKey: String? = null,
+    @SerializedName("bucketName") val bucketName: String? = null,
+    @SerializedName("forcePathStyle") val forcePathStyle: Boolean? = null,
+    @SerializedName("enabled") val enabled: Boolean? = null
 )
 
 data class AppSettings(
@@ -105,5 +116,7 @@ data class BackupMessage(
     @SerializedName("isError") val isError: Boolean?,
     @SerializedName("modelDisplayName") val modelDisplayName: String? = null,
     @SerializedName("imagePaths") val imagePaths: List<String>? = null,
-    @SerializedName("metadata") val metadata: String? = null
+    @SerializedName("metadata") val metadata: String? = null,
+    @SerializedName("isDeleted") val isDeleted: Boolean = false,
+    @SerializedName("deletedAt") val deletedAt: Long? = null
 )
