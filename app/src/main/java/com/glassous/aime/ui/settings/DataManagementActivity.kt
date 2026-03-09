@@ -539,7 +539,7 @@ fun DataManagementContent() {
                 }
 
                 // --- 失效图片清理 ---
-                if (failedImagesMap.isNotEmpty()) {
+                if (idsToDelete.isNotEmpty()) {
                     item(span = StaggeredGridItemSpan.FullLine) {
                         Card(
                             modifier = Modifier.fillMaxWidth(),
