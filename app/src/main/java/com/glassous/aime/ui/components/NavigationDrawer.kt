@@ -62,7 +62,7 @@ import com.glassous.aime.ui.viewmodel.SyncStatus
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 @Composable
-private fun EditTitleDialog(
+fun EditTitleDialog(
     initialTitle: String,
     isGenerating: Boolean,
     onConfirm: (String) -> Unit,

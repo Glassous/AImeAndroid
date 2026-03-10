@@ -110,6 +110,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.filled.DragHandle
 
 import com.glassous.aime.ui.components.RightDrawerContent
+import com.glassous.aime.ui.components.EditTitleDialog
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
@@ -133,6 +134,16 @@ fun ChatScreen(
     )
     val focusManager = LocalFocusManager.current
     val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
+    val s3Enabled by application.s3Preferences.s3Enabled.collectAsState(initial = false)
+    
+    // Check if S3 config is complete
+    val s3Endpoint by application.s3Preferences.s3Endpoint.collectAsState(initial = "")
+    val s3AccessKey by application.s3Preferences.s3AccessKey.collectAsState(initial = "")
+    val s3SecretKey by application.s3Preferences.s3SecretKey.collectAsState(initial = "")
+    val s3BucketName by application.s3Preferences.s3BucketName.collectAsState(initial = "")
+    val isS3ConfigComplete = remember(s3Endpoint, s3AccessKey, s3SecretKey, s3BucketName) {
+        s3Endpoint.isNotBlank() && s3AccessKey.isNotBlank() && s3SecretKey.isNotBlank() && s3BucketName.isNotBlank()
+    }
 
     val conversations by chatViewModel.conversations.collectAsState()
     val currentMessages by chatViewModel.currentMessages.collectAsState()
@@ -184,6 +195,11 @@ fun ChatScreen(
 
     // 附件相关状态
     var showAttachmentSelectionSheet by rememberSaveable { mutableStateOf(false) }
+    
+    // 标题编辑相关状态
+    var showEditTitleDialog by remember { mutableStateOf(false) }
+    var currentEditingTitle by remember { mutableStateOf("") }
+    
     val attachedImages by chatViewModel.attachedImages.collectAsState()
     val uploadProgress by chatViewModel.uploadProgress.collectAsState()
     val uploadingFiles by chatViewModel.uploadingFiles.collectAsState()
@@ -576,7 +592,40 @@ fun ChatScreen(
                                             rightDrawerState.close()
                                         }
                                     },
-                                    onShowDetails = onNavigateToMessageDetail
+                                    onShowDetails = onNavigateToMessageDetail,
+                                    useCloudProxy = useCloudProxy,
+                                    onUseCloudProxyChange = {
+                                        scope.launch {
+                                            application.modelPreferences.setUseCloudProxy(it)
+                                        }
+                                    },
+                                    s3Enabled = s3Enabled,
+                                    onS3EnabledChange = {
+                                        scope.launch {
+                                            application.s3Preferences.setS3Enabled(it)
+                                        }
+                                    },
+                                    isS3ConfigComplete = isS3ConfigComplete,
+                                    onShareClick = {
+                                        scope.launch {
+                                            rightDrawerState.close()
+                                            showLongImageDialog = true
+                                        }
+                                    },
+                                    onImportSharedConversation = { url ->
+                                        chatViewModel.importSharedConversation(url) { success, message ->
+                                            scope.launch {
+                                                snackbarHostState.showSnackbar(message)
+                                            }
+                                        }
+                                    },
+                                    onEditTitleClick = {
+                                        val conv = conversations.find { it.id == currentConversationId }
+                                        if (conv != null) {
+                                            currentEditingTitle = conv.title
+                                            showEditTitleDialog = true
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -1655,6 +1704,27 @@ fun ChatScreen(
                 }
             }
         }
+    }
+    if (showEditTitleDialog) {
+        EditTitleDialog(
+            initialTitle = currentEditingTitle,
+            isGenerating = false,
+            onConfirm = { newTitle ->
+                if (currentConversationId != null) {
+                    chatViewModel.updateConversationTitle(currentConversationId!!, newTitle)
+                }
+                showEditTitleDialog = false
+            },
+            onCancel = { showEditTitleDialog = false },
+            onGenerateTitle = {
+                if (currentConversationId != null) {
+                    chatViewModel.generateConversationTitle(
+                        currentConversationId!!,
+                        { generatedTitle -> currentEditingTitle = generatedTitle }
+                    )
+                }
+            }
+        )
     }
 }
 
