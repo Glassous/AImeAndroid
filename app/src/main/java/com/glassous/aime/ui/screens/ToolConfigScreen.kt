@@ -93,6 +93,20 @@ fun ToolConfigScreen(
     val openaiImageGenModelName by application.toolPreferences.openaiImageGenModelName.collectAsState(initial = "")
     val openaiImageGenBaseUrl by application.toolPreferences.openaiImageGenBaseUrl.collectAsState(initial = "")
     
+    // Local states for text fields to prevent cursor jumping
+    var tavilyApiKeyLocal by remember { mutableStateOf(tavilyApiKey) }
+    LaunchedEffect(tavilyApiKey) { tavilyApiKeyLocal = tavilyApiKey }
+
+    var imageGenBaseUrlLocal by remember { mutableStateOf(imageGenBaseUrl) }
+    var imageGenApiKeyLocal by remember { mutableStateOf(imageGenApiKey) }
+    var imageGenModelLocal by remember { mutableStateOf(imageGenModel) }
+    var imageGenModelNameLocal by remember { mutableStateOf(imageGenModelName) }
+
+    LaunchedEffect(imageGenBaseUrl) { imageGenBaseUrlLocal = imageGenBaseUrl }
+    LaunchedEffect(imageGenApiKey) { imageGenApiKeyLocal = imageGenApiKey }
+    LaunchedEffect(imageGenModel) { imageGenModelLocal = imageGenModel }
+    LaunchedEffect(imageGenModelName) { imageGenModelNameLocal = imageGenModelName }
+
     // 沉浸式UI设置
     val view = LocalView.current
     LaunchedEffect(Unit) {
@@ -264,8 +278,9 @@ fun ToolConfigScreen(
                                 Column {
                                     Spacer(modifier = Modifier.height(8.dp))
                                     OutlinedTextField(
-                                        value = tavilyApiKey,
+                                        value = tavilyApiKeyLocal,
                                         onValueChange = { 
+                                            tavilyApiKeyLocal = it
                                             scope.launch { application.toolPreferences.setTavilyApiKey(it) } 
                                         },
                                         label = { Text("Tavily API Key") },
@@ -403,8 +418,9 @@ fun ToolConfigScreen(
                     } else if (toolType == ToolType.IMAGE_GENERATION) {
                         Column(modifier = Modifier.padding(top = 8.dp)) {
                             OutlinedTextField(
-                                value = imageGenBaseUrl,
+                                value = imageGenBaseUrlLocal,
                                 onValueChange = { 
+                                    imageGenBaseUrlLocal = it
                                     scope.launch { application.toolPreferences.setImageGenBaseUrl(it) } 
                                 },
                                 label = { Text("Endpoint URL") },
@@ -414,8 +430,9 @@ fun ToolConfigScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedTextField(
-                                value = imageGenApiKey,
+                                value = imageGenApiKeyLocal,
                                 onValueChange = { 
+                                    imageGenApiKeyLocal = it
                                     scope.launch { application.toolPreferences.setImageGenApiKey(it) } 
                                 },
                                 label = { Text("API Key") },
@@ -424,8 +441,9 @@ fun ToolConfigScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedTextField(
-                                value = imageGenModel,
+                                value = imageGenModelLocal,
                                 onValueChange = { 
+                                    imageGenModelLocal = it
                                     scope.launch { application.toolPreferences.setImageGenModel(it) } 
                                 },
                                 label = { Text("Model 字段") },
@@ -434,8 +452,9 @@ fun ToolConfigScreen(
                             )
                             Spacer(modifier = Modifier.height(8.dp))
                             OutlinedTextField(
-                                value = imageGenModelName,
+                                value = imageGenModelNameLocal,
                                 onValueChange = { 
+                                    imageGenModelNameLocal = it
                                     scope.launch { application.toolPreferences.setImageGenModelName(it) } 
                                 },
                                 label = { Text("Model 外显名称") },
