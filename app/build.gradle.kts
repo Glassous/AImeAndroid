@@ -53,6 +53,9 @@ android {
 
         val yunzhiApiToken = envProps.getProperty("YUNZHI_API_TOKEN", "")
         buildConfigField("String", "YUNZHI_API_TOKEN", "\"$yunzhiApiToken\"")
+
+        val web3formsAccessKey = envProps.getProperty("WEB3FORMS_ACCESS_KEY", "")
+        buildConfigField("String", "WEB3FORMS_ACCESS_KEY", "\"$web3formsAccessKey\"")
     }
 
     buildTypes {

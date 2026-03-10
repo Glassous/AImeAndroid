@@ -33,6 +33,7 @@ import com.glassous.aime.BuildConfig
 import com.glassous.aime.R
 import com.glassous.aime.data.GitHubReleaseService
 import com.glassous.aime.data.preferences.ThemePreferences
+import com.glassous.aime.ui.components.FeedbackDialog
 import com.glassous.aime.ui.components.ImportSharedConversationDialog
 import com.glassous.aime.ui.components.PrivacyPolicyDialog
 import com.glassous.aime.ui.theme.AImeTheme
@@ -99,6 +100,7 @@ fun SettingsContent(
     // Dialog States
     var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
     var showImportSharedDialog by remember { mutableStateOf(false) }
+    var showFeedbackDialog by remember { mutableStateOf(false) }
     
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -534,6 +536,25 @@ fun SettingsContent(
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showFeedbackDialog = true }
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "意见反馈",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = Icons.Filled.ChevronRight,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -559,6 +580,13 @@ fun SettingsContent(
             onImport = { input, callback ->
                 syncViewModel.importSharedConversation(input, callback)
             }
+        )
+    }
+
+    if (showFeedbackDialog) {
+        FeedbackDialog(
+            onDismiss = { showFeedbackDialog = false },
+            snackbarHostState = snackbarHostState
         )
     }
 }

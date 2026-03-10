@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">AIme</string>
     <string name="settings">设置</string>
+    <string name="feedback">意见反馈</string>
+    <string name="feedback_desc">感谢您对 AIme 的支持，欢迎向我们提供反馈或建议</string>
+    <string name="feedback_name">您的称呼（可选）</string>
+    <string name="feedback_email">您的邮箱（可选）</string>
+    <string name="feedback_message">反馈内容</string>
+    <string name="feedback_submit">提交反馈</string>
+    <string name="feedback_submitting">提交中...</string>
+    <string name="feedback_success">反馈提交成功，感谢您的支持！</string>
+    <string name="feedback_error">提交失败，请重试</string>
+    <string name="feedback_empty_message">请输入反馈内容</string>
     <string name="preview_long_text_dostoevsky">他走在街上，脚步声在石板上敲出沉闷的回音。空气像一层旧尘，黏在皮肤上，也压在心头。城市在傍晚的雾气中变得模糊，街灯的光像是从梦中泄出的碎片。人群的喧嚣似乎离他很远，他的心中却有一种无法言说的震动。
         “一切都只是思想的幻影，”他想，“正义与罪恶，勇气与懦弱，不过是人心的一场博弈。”他试图说服自己相信这一点，但那微弱的自我辩护却像是被风吹散的尘埃。每一个念头在他脑中都变得沉重，如同石块，在无声的良知之水上缓缓下沉。
         他记得曾经坚信，人可以为了崇高的目的越过某些界限。那时，他觉得世界是可以被思想重新塑造的，只要意志足够坚定。然而，当那界限真正被跨越的那一刻，他发现，真正崩塌的不是外在的秩序，而是内心的平衡。那种裂开的声音，如同冰面下的暗流，带着一种不容忽视的力量，将一切平静都拖入深渊。
