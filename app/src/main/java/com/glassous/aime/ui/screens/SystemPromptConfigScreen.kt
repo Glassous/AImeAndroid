@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextRange
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.glassous.aime.AIMeApplication
+import com.glassous.aime.utils.LocationUtils
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -45,6 +47,10 @@ fun SystemPromptConfigScreen(
     var currentPrompt by remember { mutableStateOf(TextFieldValue("")) }
     var showUnsavedDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
+    
+    // 本地状态，用于地理位置测试
+    var locationTestResult by remember { mutableStateOf("") }
+    var isLocationLoading by remember { mutableStateOf(false) }
     
     // 当读取到保存的提示词时，更新本地状态
     LaunchedEffect(savedSystemPrompt) {
@@ -236,6 +242,72 @@ fun SystemPromptConfigScreen(
                         { Icon(Icons.Filled.Check, contentDescription = null, modifier = Modifier.size(16.dp)) }
                     } else null
                 )
+            }
+            
+            // 地理位置测试区域
+            if (savedEnableLocation) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = "位置解析测试",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            
+                            Button(
+                                onClick = {
+                                    scope.launch {
+                                        isLocationLoading = true
+                                        // 获取设备真实最后已知位置
+                                        val location = LocationUtils.getLastKnownLocation(context)
+                                        if (location != null) {
+                                            locationTestResult = LocationUtils.getAddressFromLocation(context, location.latitude, location.longitude)
+                                        } else {
+                                            locationTestResult = "无法获取当前设备位置，请确保已开启 GPS 并授予权限"
+                                        }
+                                        isLocationLoading = false
+                                    }
+                                },
+                                enabled = !isLocationLoading,
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                if (isLocationLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(16.dp),
+                                        strokeWidth = 2.dp,
+                                        color = MaterialTheme.colorScheme.onPrimary
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("解析中...", style = MaterialTheme.typography.labelMedium)
+                                } else {
+                                    Text("测试位置解析", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                        }
+                        
+                        if (locationTestResult.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "解析结果：$locationTestResult",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
             
             Spacer(modifier = Modifier.height(16.dp))

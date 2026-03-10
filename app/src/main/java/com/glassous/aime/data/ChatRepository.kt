@@ -15,6 +15,7 @@ import com.glassous.aime.data.preferences.ContextPreferences
 import com.glassous.aime.data.model.BuiltInModels
 import com.glassous.aime.data.model.Tool
 import com.glassous.aime.data.model.ToolType
+import com.glassous.aime.utils.LocationUtils
  
 import com.google.gson.Gson
 import java.util.Date
@@ -102,9 +103,10 @@ class ChatRepository(
         
         if (enableLocation) {
             try {
-                val location = getLastKnownLocation()
+                val location = LocationUtils.getLastKnownLocation(context)
                 if (location != null) {
-                    dynamicInfos.add("Current Location: ${location.latitude}, ${location.longitude}")
+                    val address = LocationUtils.getAddressFromLocation(context, location.latitude, location.longitude)
+                    dynamicInfos.add("Current Location: $address (Coordinates: ${location.latitude}, ${location.longitude})")
                     // Add instruction for weather tool if location is available
                     dynamicInfos.add("Note: The weather query tool operates based on geographic coordinates. If the user asks about the weather, you **must** use the \"Current Location\" coordinates provided above to call the city_weather tool (pass latitude and longitude parameters), instead of just using the city parameter.")
                 } else {
@@ -2700,26 +2702,6 @@ class ChatRepository(
         regexQuoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
         regexUnquoted.find(raw)?.groupValues?.getOrNull(1)?.trim()?.takeIf { it.isNotBlank() }?.let { return it }
         return raw
-    }
-
-    @SuppressLint("MissingPermission")
-    private suspend fun getLastKnownLocation(): Location? {
-        return withContext(Dispatchers.Main) {
-            try {
-                val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-                val providers = locationManager.getProviders(true)
-                var bestLocation: Location? = null
-                for (provider in providers) {
-                    val l = locationManager.getLastKnownLocation(provider) ?: continue
-                    if (bestLocation == null || l.accuracy < bestLocation.accuracy) {
-                        bestLocation = l
-                    }
-                }
-                bestLocation
-            } catch (e: Exception) {
-                null
-            }
-        }
     }
 
     private fun getErrorMessage(e: Exception): String {
