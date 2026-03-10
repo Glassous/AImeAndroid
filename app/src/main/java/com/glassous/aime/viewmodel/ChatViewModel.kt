@@ -540,6 +540,18 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun optimizePrompt(input: String, task: String, onResult: (String) -> Unit, onComplete: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                repository.optimizePrompt(input, task, onResult)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                onComplete?.invoke()
+            }
+        }
+    }
+
     fun isSharedConversationUrl(input: String): Boolean {
         // 简单判断是否包含 BuildConfig.SHARE_BASE_URL 且包含 UUID
         // UUID regex: 8-4-4-4-12 hex digits

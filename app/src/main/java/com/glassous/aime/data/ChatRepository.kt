@@ -1324,6 +1324,100 @@ class ChatRepository(
         }
     }
 
+    suspend fun optimizePrompt(input: String, task: String, onResult: (String) -> Unit) {
+        withContext(Dispatchers.IO) {
+            try {
+                // 1. Determine which model ID to use
+                val titleGenModelId = modelPreferences.titleGenerationModelId.first()
+                var targetModelId = titleGenModelId
+
+                // If specific model set, check if exists
+                if (!targetModelId.isNullOrBlank()) {
+                     val model = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                         BuiltInModels.aimeModel
+                     } else {
+                         modelConfigRepository.getModelById(targetModelId)
+                     }
+                     if (model == null) {
+                         targetModelId = null // Fallback to default
+                     }
+                }
+
+                // If null (either not set or deleted), use selected model
+                if (targetModelId == null) {
+                    targetModelId = modelPreferences.selectedModelId.first()
+                }
+
+                if (targetModelId.isNullOrBlank()) {
+                    return@withContext
+                }
+                
+                val model = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                    BuiltInModels.aimeModel
+                } else {
+                    modelConfigRepository.getModelById(targetModelId)
+                }
+                if (model == null) {
+                    return@withContext
+                }
+                
+                val group = if (targetModelId == BuiltInModels.AIME_MODEL_ID) {
+                    BuiltInModels.aimeGroup
+                } else {
+                    modelConfigRepository.getGroupById(model.groupId)
+                }
+                if (group == null) {
+                    return@withContext
+                }
+
+                val systemPrompt = if (task == "optimize") {
+                    "You are a prompt engineering expert. Please optimize the user's prompt to make it clearer and more effective for an AI model. Ensure the optimized prompt is in the same language as the original prompt. Output ONLY the optimized prompt without any explanations, notes, or conversational fillers."
+                } else {
+                    "You are a professional translator. Translate the user's text directly into English. Output ONLY the translated text. Do not include any explanations, notes, conversational fillers, or quotes around the translation. Strictly no extra content."
+                }
+
+                val messages = listOf(
+                    OpenAiChatMessage(role = "system", content = systemPrompt),
+                    OpenAiChatMessage(role = "user", content = input)
+                )
+
+                val resultBuilder = StringBuilder()
+                
+                if (group.baseUrl.contains("volces", ignoreCase = true)) {
+                    doubaoService.streamChatCompletions(
+                        baseUrl = group.baseUrl,
+                        apiKey = group.apiKey,
+                        model = model.modelName,
+                        messages = messages,
+                        tools = null,
+                        toolChoice = null,
+                        onDelta = { delta ->
+                            resultBuilder.append(delta)
+                            val filtered = filterThinkTags(resultBuilder.toString())
+                            onResult(filtered.trim())
+                        }
+                    )
+                } else {
+                    openAiService.streamChatCompletions(
+                        baseUrl = group.baseUrl,
+                        apiKey = group.apiKey,
+                        model = model.modelName,
+                        messages = messages,
+                        tools = null,
+                        toolChoice = null,
+                        onDelta = { delta ->
+                            resultBuilder.append(delta)
+                            val filtered = filterThinkTags(resultBuilder.toString())
+                            onResult(filtered.trim())
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     suspend fun tryAutoGenerateTitle(conversationId: Long) {
         val autoGen = modelPreferences.titleGenerationAutoGenerate.first()
         if (!autoGen) return

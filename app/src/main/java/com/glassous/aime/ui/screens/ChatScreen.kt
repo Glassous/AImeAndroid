@@ -20,7 +20,9 @@ import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Sync
-
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Undo
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.*
@@ -1632,7 +1634,8 @@ fun ChatScreen(
                                                 }
                                                 showExpandedInput = false
                                             },
-                                            isLoading = isLoading
+                                            isLoading = isLoading,
+                                            onOptimizePrompt = chatViewModel::optimizePrompt
                                         )
                                     }
 
@@ -1662,9 +1665,12 @@ private fun ExpandedInputBottomSheet(
     onInputChange: (String) -> Unit,
     onDismissRequest: () -> Unit,
     onSendMessage: () -> Unit,
-    isLoading: Boolean
+    isLoading: Boolean,
+    onOptimizePrompt: (String, String, (String) -> Unit, (() -> Unit)?) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var isOptimizing by remember { mutableStateOf(false) }
+    var originalInput by remember { mutableStateOf<String?>(null) }
     
     ModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -1694,29 +1700,81 @@ private fun ExpandedInputBottomSheet(
                     Icon(Icons.Filled.Close, contentDescription = "关闭")
                 }
                 
-                val canSend = inputText.isNotBlank() && !isLoading
-                FilledIconButton(
-                    onClick = onSendMessage,
-                    enabled = canSend,
-                    modifier = Modifier.size(40.dp),
-                    colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary,
-                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
-                        disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
-                    )
-                ) {
-                    if (isLoading) {
-                        LoadingIndicator(
-                            modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // 撤销按钮
+                    if (originalInput != null && !isOptimizing) {
+                        IconButton(onClick = {
+                            originalInput?.let { onInputChange(it) }
+                            originalInput = null
+                        }) {
+                            Icon(Icons.Filled.Undo, contentDescription = "撤销")
+                        }
+                    }
+
+                    // 提示词优化按钮
+                    IconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                originalInput = inputText
+                                isOptimizing = true
+                                onInputChange("")
+                                onOptimizePrompt(inputText, "optimize", { result ->
+                                    onInputChange(result)
+                                }, {
+                                    isOptimizing = false
+                                })
+                            }
+                        },
+                        enabled = !isOptimizing && inputText.isNotBlank() && !isLoading
+                    ) {
+                        Icon(Icons.Filled.AutoFixHigh, contentDescription = "优化提示词")
+                    }
+
+                    // 翻译按钮
+                    IconButton(
+                        onClick = {
+                            if (inputText.isNotBlank()) {
+                                originalInput = inputText
+                                isOptimizing = true
+                                onInputChange("")
+                                onOptimizePrompt(inputText, "translate", { result ->
+                                    onInputChange(result)
+                                }, {
+                                    isOptimizing = false
+                                })
+                            }
+                        },
+                        enabled = !isOptimizing && inputText.isNotBlank() && !isLoading
+                    ) {
+                        Icon(Icons.Filled.Translate, contentDescription = "翻译为英文")
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    val canSend = inputText.isNotBlank() && !isLoading && !isOptimizing
+                    FilledIconButton(
+                        onClick = onSendMessage,
+                        enabled = canSend,
+                        modifier = Modifier.size(40.dp),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary,
+                            disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
                         )
-                    } else {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Send,
-                            contentDescription = "发送",
-                            modifier = Modifier.size(20.dp)
-                        )
+                    ) {
+                        if (isLoading || isOptimizing) {
+                            LoadingIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.Send,
+                                contentDescription = "发送",
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -1726,7 +1784,8 @@ private fun ExpandedInputBottomSheet(
             // 文本编辑区
             OutlinedTextField(
                 value = inputText,
-                onValueChange = onInputChange,
+                onValueChange = { if (!isOptimizing) onInputChange(it) },
+                readOnly = isOptimizing,
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),

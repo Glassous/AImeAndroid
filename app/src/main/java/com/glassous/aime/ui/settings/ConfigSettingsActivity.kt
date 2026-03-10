@@ -325,12 +325,12 @@ fun ConfigSettingsContent(
                     ) {
                         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
                             Text(
-                                text = "标题生成设置",
+                                text = "提示词优化与标题生成设置",
                                 style = MaterialTheme.typography.titleMedium,
                                 modifier = Modifier.padding(bottom = 8.dp)
                             )
                             Text(
-                                text = "配置生成对话标题时的模型和上下文策略",
+                                text = "配置提示词优化、翻译以及生成对话标题时的模型和上下文策略",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
