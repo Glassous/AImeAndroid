@@ -1671,14 +1671,16 @@ private fun ExpandedInputBottomSheet(
         sheetState = sheetState,
         dragHandle = null,
         containerColor = MaterialTheme.colorScheme.surface,
-        tonalElevation = 0.dp
+        tonalElevation = 0.dp,
+        contentWindowInsets = { WindowInsets(0, 0, 0, 0) }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.85f)
                 .imePadding()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
+                .padding(top = 16.dp)
         ) {
             // 顶部功能区
             Row(
