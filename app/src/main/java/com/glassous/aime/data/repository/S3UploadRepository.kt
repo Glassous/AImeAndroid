@@ -91,7 +91,9 @@ class S3UploadRepository(
                 acl = ObjectCannedAcl.PublicRead
             }
 
-            client.putObject(request)
+            client.use { s3Client ->
+                s3Client.putObject(request)
+            }
             onProgress(1.0f)
 
             // Construct URL - properly encode the objectKey path components

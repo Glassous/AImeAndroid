@@ -426,12 +426,15 @@ class S3SyncRepository(
             
             for (m in messages) {
                 var updatedContent = m.content
-                val updatedImagePaths = m.imagePaths.toMutableList()
+                // 使用新的列表来存储保留的图片路径（未同步的或同步失败的）
+                val remainingImagePaths = mutableListOf<String>()
                 var wasModified = false
 
-                // 1. 处理 imagePaths 中的本地图片
-                m.imagePaths.forEachIndexed { index, path ->
+                // 1. 处理 imagePaths 中的图片
+                // 遍历所有图片路径，将本地图片上传，将 S3 图片移入正文
+                m.imagePaths.forEach { path ->
                     if (!path.startsWith("url:") && !path.startsWith("http")) {
+                        // 本地图片
                         val file = File(path)
                         if (file.exists()) {
                             try {
@@ -442,14 +445,34 @@ class S3SyncRepository(
                                     if (!updatedContent.contains(s3Url)) {
                                         updatedContent += imgTag
                                     }
-                                    // 修复：直接使用 S3 URL，不再添加干扰前缀
-                                    updatedImagePaths[index] = s3Url
-                                    file.delete()
+                                    // 上传成功后，图片已进入正文，不再保留在 imagePaths 中
+                                    // 尝试删除本地文件
+                                    try { file.delete() } catch (e: Exception) { e.printStackTrace() }
                                     wasModified = true
+                                } else {
+                                    // 上传失败，保留原路径
+                                    remainingImagePaths.add(path)
                                 }
                             } catch (e: Exception) {
                                 e.printStackTrace()
+                                remainingImagePaths.add(path)
                             }
+                        } else {
+                            // 文件不存在，可能已被删除，不保留
+                            wasModified = true
+                        }
+                    } else {
+                        // 已经是 URL (S3 或其他网络图片)
+                        // 如果它已经在正文中，就不需要保留在 imagePaths 中（避免重复显示）
+                        // 如果不在正文中，将其移入正文，并从 imagePaths 移除
+                        val cleanUrl = path.removePrefix("url:")
+                        if (!updatedContent.contains(cleanUrl)) {
+                            updatedContent += "\n<img src=\"$cleanUrl\" />"
+                            wasModified = true
+                        }
+                        // S3 图片均移入正文，不再保留在 imagePaths 中
+                        if (m.imagePaths.contains(path)) {
+                            wasModified = true
                         }
                     }
                 }
@@ -488,7 +511,8 @@ class S3SyncRepository(
                 }
 
                 val finalMsg = if (wasModified) {
-                    val updatedMsg = m.copy(content = updatedContent, imagePaths = updatedImagePaths)
+                    // 使用更新后的内容和剩余的图片路径（通常为空，除非有上传失败的本地图片）
+                    val updatedMsg = m.copy(content = updatedContent, imagePaths = remainingImagePaths)
                     chatDao.updateMessage(updatedMsg)
                     updatedMsg
                 } else {
