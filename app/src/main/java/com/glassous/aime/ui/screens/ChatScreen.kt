@@ -95,6 +95,7 @@ import com.glassous.aime.ui.components.SearchResult
 import androidx.compose.material.icons.filled.Close
 
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -109,6 +110,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import com.glassous.aime.ui.components.RightDrawerContent
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontWeight
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -378,6 +380,9 @@ fun ChatScreen(
     }
     // 背景模糊共享状态（弹窗显示期间启用）
     val dialogBlurState = remember { mutableStateOf(false) }
+
+    // 输入框展开状态
+    var showExpandedInput by remember { mutableStateOf(false) }
 
     // 检查是否需要显示回到底部按钮
     val showScrollToBottomButton by remember(listState) {
@@ -944,6 +949,7 @@ fun ChatScreen(
                                                                 }
                                                             }
                                                         },
+                                                        onExpandClick = { showExpandedInput = true },
                                                         innerAlpha = chatInputInnerAlpha
                                                     )
                                                 }
@@ -1608,6 +1614,28 @@ fun ChatScreen(
                                         )
                                     }
 
+                                    // 输入框展开BottomSheet
+                                    if (showExpandedInput) {
+                                        ExpandedInputBottomSheet(
+                                            inputText = inputText,
+                                            onInputChange = chatViewModel::updateInputText,
+                                            onDismissRequest = { showExpandedInput = false },
+                                            onSendMessage = {
+                                                val trimmedInput = inputText.trim()
+                                                if (chatViewModel.isSharedConversationUrl(trimmedInput)) {
+                                                    chatViewModel.importSharedConversation(trimmedInput) { success, message ->
+                                                        scope.launch { snackbarHostState.showSnackbar(message) }
+                                                    }
+                                                    chatViewModel.updateInputText("")
+                                                } else {
+                                                    chatViewModel.sendMessage(trimmedInput, selectedTool)
+                                                }
+                                                showExpandedInput = false
+                                            },
+                                            isLoading = isLoading
+                                        )
+                                    }
+
                                     Box(modifier = Modifier.fillMaxSize()) {
                                         SnackbarHost(
                                             hostState = snackbarHostState,
@@ -1623,6 +1651,98 @@ fun ChatScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ExpandedInputBottomSheet(
+    inputText: String,
+    onInputChange: (String) -> Unit,
+    onDismissRequest: () -> Unit,
+    onSendMessage: () -> Unit,
+    isLoading: Boolean
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    
+    ModalBottomSheet(
+        onDismissRequest = onDismissRequest,
+        sheetState = sheetState,
+        dragHandle = null,
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.85f)
+                .imePadding()
+                .padding(16.dp)
+        ) {
+            // 顶部功能区
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onDismissRequest) {
+                    Icon(Icons.Filled.Close, contentDescription = "关闭")
+                }
+                
+                val canSend = inputText.isNotBlank() && !isLoading
+                FilledIconButton(
+                    onClick = onSendMessage,
+                    enabled = canSend,
+                    modifier = Modifier.size(40.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        disabledContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                        disabledContentColor = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.5f)
+                    )
+                ) {
+                    if (isLoading) {
+                        LoadingIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Send,
+                            contentDescription = "发送",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 文本编辑区
+            OutlinedTextField(
+                value = inputText,
+                onValueChange = onInputChange,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = Color.Transparent,
+                    unfocusedBorderColor = Color.Transparent,
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent
+                ),
+                placeholder = { 
+                    Text(
+                        "输入消息...",
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = 18.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    ) 
+                }
+            )
         }
     }
 }

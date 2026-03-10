@@ -63,6 +63,7 @@ fun ChatInput(
     placeholderText: String? = null, // 新增参数：自定义占位符文本
     showScrollToBottomButton: Boolean = false,
     onScrollToBottomClick: () -> Unit = {},
+    onExpandClick: () -> Unit = {}, // 新增参数：点击放大按钮回调
     modifier: Modifier = Modifier,
     overlayAlpha: Float = 0.5f,
     // 新增：输入框内部背景透明度（默认与当前实现一致）
@@ -77,17 +78,9 @@ fun ChatInput(
     val focusManager = LocalFocusManager.current
     
     // 输入框展开状态
-    var isExpanded by rememberSaveable { mutableStateOf(false) }
-    // 动画控制输入框高度 (卷帘门效果)
-    val animatedMinHeight by animateDpAsState(
-        targetValue = if (isExpanded) 400.dp else 56.dp,
-        label = "MinHeight"
-    )
-    val animatedMaxHeight by animateDpAsState(
-        targetValue = if (isExpanded) 400.dp else 120.dp,
-        label = "MaxHeight"
-    )
-
+    // 检查是否需要显示回到底部按钮
+    // 移除了内部展开状态与动画控制
+    
     // 固定发送按钮高度为输入框初始高度（硬编码）
     val buttonSize = 56.dp
     val inputShape = RoundedCornerShape(24.dp)
@@ -332,13 +325,10 @@ fun ChatInput(
             ) {
                 OutlinedTextField(
                 value = inputText,
-                onValueChange = { 
-                    onInputChange(it)
-                    if (it.isEmpty()) isExpanded = false
-                },
+                onValueChange = onInputChange,
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(min = animatedMinHeight, max = animatedMaxHeight)
+                    .heightIn(max = 120.dp)
                     .animateContentSize(),
                 placeholder = {
                     // 仅在开启极简模式且配置为隐藏时才隐藏占位符
@@ -364,12 +354,12 @@ fun ChatInput(
                     ) {
                         if (inputText.isNotEmpty()) {
                             IconButton(
-                                onClick = { isExpanded = !isExpanded },
+                                onClick = onExpandClick,
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = if (isExpanded) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                                    contentDescription = if (isExpanded) "缩小输入框" else "放大输入框",
+                                    imageVector = Icons.Filled.Fullscreen,
+                                    contentDescription = "放大输入框",
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(20.dp)
                                 )
