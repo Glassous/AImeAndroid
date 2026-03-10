@@ -47,8 +47,11 @@ object AudioPlayerManager {
         stop()
 
         try {
-            val file = File(path)
-            if (!file.exists()) return
+            val isUrl = path.startsWith("http://") || path.startsWith("https://")
+            if (!isUrl) {
+                val file = File(path)
+                if (!file.exists()) return
+            }
 
             mediaPlayer = MediaPlayer().apply {
                 setDataSource(path)

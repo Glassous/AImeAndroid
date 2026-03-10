@@ -2737,11 +2737,8 @@ class ChatRepository(
 
     private fun toOpenAiMessage(message: ChatMessage): OpenAiChatMessage {
         // Filter out <file_url> tags from content if present to avoid tag leak to AI
-        val filteredContent = if (message.content.contains("<file_url")) {
-            message.content.replace(Regex("<file_url.*?>"), "").trim()
-        } else {
-            message.content
-        }
+        // Use a more robust regex that handles newlines and multiple tags
+        val filteredContent = message.content.replace(Regex("\n*<file_url.*?>\n*", RegexOption.DOT_MATCHES_ALL), "").trim()
 
         val content: Any = if (message.imagePaths.isNotEmpty()) {
             val parts = mutableListOf<OpenAiContentPart>()
@@ -2763,12 +2760,30 @@ class ChatRepository(
                                 parts.add(OpenAiContentPart(type = "video_url", videoUrl = OpenAiVideoUrl(url = actualUrl)))
                             }
                             "pdf_url" -> {
-                                parts.add(OpenAiContentPart(type = "file", imageUrl = OpenAiImageUrl(url = actualUrl)))
+                                parts.add(OpenAiContentPart(type = "file_url", fileUrl = OpenAiFileUrl(url = actualUrl)))
                             }
                             "audio_url" -> {
-                                parts.add(OpenAiContentPart(type = "text", text = "\n[Audio: $actualUrl]"))
+                                // For generic URLs that aren't images/videos, we can also try file_url 
+                                // if the provider supports it, or keep as text description.
+                                // Let's try file_url for audio as well if it's a direct URL.
+                                parts.add(OpenAiContentPart(type = "file_url", fileUrl = OpenAiFileUrl(url = actualUrl)))
                             }
                         }
+                    }
+                    return@forEach
+                }
+
+                if (path.startsWith("http")) {
+                    // Direct image/file URL
+                    val type = when {
+                        path.lowercase().endsWith(".pdf") -> "file_url"
+                        path.lowercase().endsWith(".mp4") || path.lowercase().endsWith(".mov") || path.lowercase().endsWith(".webm") -> "video_url"
+                        else -> "image_url"
+                    }
+                    when (type) {
+                        "video_url" -> parts.add(OpenAiContentPart(type = "video_url", videoUrl = OpenAiVideoUrl(url = path)))
+                        "file_url" -> parts.add(OpenAiContentPart(type = "file_url", fileUrl = OpenAiFileUrl(url = path)))
+                        else -> parts.add(OpenAiContentPart(type = "image_url", imageUrl = OpenAiImageUrl(url = path)))
                     }
                     return@forEach
                 }
@@ -2867,7 +2882,7 @@ class ChatRepository(
                     }
                 }
             }
-            if (parts.isEmpty()) message.content else parts
+            if (parts.isEmpty()) filteredContent else parts
         } else {
             message.content
         }

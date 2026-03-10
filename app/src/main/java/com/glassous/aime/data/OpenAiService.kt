@@ -23,6 +23,7 @@ data class OpenAiContentPart(
     @SerializedName("image_url") val imageUrl: OpenAiImageUrl? = null,
     @SerializedName("input_audio") val inputAudio: OpenAiInputAudio? = null,
     @SerializedName("video_url") val videoUrl: OpenAiVideoUrl? = null,
+    @SerializedName("file_url") val fileUrl: OpenAiFileUrl? = null,
     val file: OpenAiFile? = null
 )
 
@@ -32,6 +33,10 @@ data class OpenAiFile(
 )
 
 data class OpenAiVideoUrl(
+    val url: String
+)
+
+data class OpenAiFileUrl(
     val url: String
 )
 

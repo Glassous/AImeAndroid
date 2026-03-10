@@ -613,7 +613,24 @@ fun MessageImages(
     isShareMode: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-    val imagePaths = message.imagePaths
+    
+    // Filter out url attachments that are already handled by <file_url> tags in the markdown
+    val fileUrlsInContent = remember(message.content) {
+        Regex("<file_url.*?url=\"(.*?)\".*?>").findAll(message.content)
+            .map { it.groupValues[1] }
+            .toSet()
+    }
+    
+    val imagePaths = remember(message.imagePaths, fileUrlsInContent) {
+        message.imagePaths.filter { path ->
+            val actualUrl = if (path.startsWith("url:")) {
+                val parts = path.split(":", limit = 3)
+                if (parts.size == 3) parts[2] else path
+            } else path
+            actualUrl !in fileUrlsInContent
+        }
+    }
+    
     val isImageGen = message.metadata?.startsWith("aspect_ratio:") == true
     val aspectRatioStr = message.metadata?.substringAfter("aspect_ratio:", "1:1") ?: "1:1"
     val aspectRatio = when (aspectRatioStr) {
@@ -653,9 +670,6 @@ fun MessageImages(
     val pdfPaths = imagePaths.filter { it.endsWith(".pdf", ignoreCase = true) }
     val visualPaths = imagePaths - audioPaths.toSet() - pdfPaths.toSet()
 
-    // Filter out url attachments as they are now handled by <file_url> tags in the markdown
-    val localVisualPaths = visualPaths.filter { !it.startsWith("url:") }
-
     // Render Audio Files
     if (audioPaths.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -666,7 +680,7 @@ fun MessageImages(
                 )
             }
         }
-        if (pdfPaths.isNotEmpty() || localVisualPaths.isNotEmpty()) {
+        if (pdfPaths.isNotEmpty() || visualPaths.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
@@ -697,14 +711,14 @@ fun MessageImages(
                 )
             }
         }
-        if (localVisualPaths.isNotEmpty()) {
+        if (visualPaths.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
 
-    if (localVisualPaths.isEmpty()) return
+    if (visualPaths.isEmpty()) return
     
-    val imageCount = localVisualPaths.size
+    val imageCount = visualPaths.size
     
     // Only use MessageImageCard for AI messages (replies)
     val useImageCard = !message.isFromUser && !message.isError && !isStreaming
@@ -712,7 +726,7 @@ fun MessageImages(
     if (imageCount == 1) {
         if (useImageCard) {
             MessageImageCard(
-                imagePath = localVisualPaths.first(),
+                imagePath = visualPaths.first(),
                 isShareMode = isShareMode,
                 message = message,
                 onImageClick = onImageClick
@@ -723,9 +737,9 @@ fun MessageImages(
                 contentAlignment = Alignment.CenterStart
             ) {
                 AsyncImage(
-                    model = if (localVisualPaths.first().endsWith(".mp4", ignoreCase = true)) {
+                    model = if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(localVisualPaths.first())
+                            .data(visualPaths.first())
                             .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
                             .let { 
                                 if (isShareMode) it.allowHardware(false) else it
@@ -733,7 +747,7 @@ fun MessageImages(
                             .build()
                     } else {
                         coil.request.ImageRequest.Builder(androidx.compose.ui.platform.LocalContext.current)
-                            .data(localVisualPaths.first())
+                            .data(visualPaths.first())
                             .let { 
                                 if (isShareMode) it.allowHardware(false) else it
                             }
@@ -744,11 +758,11 @@ fun MessageImages(
                         .wrapContentWidth()
                         .heightIn(max = 400.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .clickable { onImageClick?.invoke(localVisualPaths.first()) },
+                        .clickable { onImageClick?.invoke(visualPaths.first()) },
                     contentScale = ContentScale.Inside
                 )
                 
-                if (localVisualPaths.first().endsWith(".mp4", ignoreCase = true)) {
+                if (visualPaths.first().endsWith(".mp4", ignoreCase = true)) {
                     androidx.compose.material3.Icon(
                         imageVector = Icons.Default.PlayCircleOutline,
                         contentDescription = "Play Video",
@@ -766,7 +780,7 @@ fun MessageImages(
         // For multiple images, if it's from AI, maybe use a list of cards or keep the grid
         if (useImageCard) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                localVisualPaths.forEach { path ->
+                visualPaths.forEach { path ->
                     MessageImageCard(
                         imagePath = path,
                         isShareMode = isShareMode,
@@ -780,8 +794,8 @@ fun MessageImages(
                  modifier = Modifier.fillMaxWidth(), 
                  horizontalArrangement = Arrangement.Start
              ) {
-                  val leftImages = localVisualPaths.filterIndexed { index, _ -> index % 2 == 0 }
-                  val rightImages = localVisualPaths.filterIndexed { index, _ -> index % 2 != 0 }
+                  val leftImages = visualPaths.filterIndexed { index, _ -> index % 2 == 0 }
+                  val rightImages = visualPaths.filterIndexed { index, _ -> index % 2 != 0 }
                   
                   Column(
                       modifier = Modifier.weight(1f, fill = false).widthIn(max = 150.dp), 

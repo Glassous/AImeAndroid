@@ -14,6 +14,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.view.View
 import android.widget.TextView
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -38,9 +39,15 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.PlayCircleOutline
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.ui.Alignment
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
+import com.glassous.aime.ui.utils.AudioPlayerManager
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import io.noties.markwon.Markwon
 import io.noties.markwon.ext.latex.JLatexMathPlugin
@@ -166,69 +173,232 @@ fun MarkdownFileUrlCard(
     val isVideo = url.lowercase().let {
         it.endsWith(".mp4") || it.endsWith(".mpeg") || it.endsWith(".mov") || it.endsWith(".webm")
     }
+    val isAudio = url.lowercase().let {
+        it.endsWith(".m4a") || it.endsWith(".mp3") || it.endsWith(".wav")
+    }
     val isYouTube = url.contains("youtube.com/watch", ignoreCase = true) || url.contains("youtu.be/", ignoreCase = true)
     val isPdf = url.lowercase().endsWith(".pdf")
 
-    Card(
-        onClick = {
-            when {
-                isImage -> onImageClick?.invoke(url)
-                isVideo -> onVideoClick?.invoke(url)
-                isYouTube -> onUrlPreview?.invoke(url)
-                isPdf -> { /* Do nothing for PDF as requested */ }
-                else -> onUrlPreview?.invoke(url)
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ),
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
+    // Number tag component
+    val numberTag = @Composable {
+        Surface(
+            color = Color.Black.copy(alpha = 0.5f),
+            shape = androidx.compose.foundation.shape.RoundedCornerShape(bottomEnd = 8.dp),
+            modifier = Modifier.size(24.dp)
         ) {
-            Surface(
-                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                shape = androidx.compose.foundation.shape.CircleShape,
-                modifier = Modifier.size(28.dp)
+            Box(contentAlignment = Alignment.Center) {
+                Text(
+                    text = index.toString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+
+    when {
+        isImage -> {
+            Box(
+                modifier = modifier
+                    .wrapContentWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .clickable { onImageClick?.invoke(url) }
             ) {
-                Box(contentAlignment = Alignment.Center) {
+                AsyncImage(
+                    model = url,
+                    contentDescription = "Image attachment",
+                    modifier = Modifier
+                        .wrapContentWidth()
+                        .heightIn(max = 400.dp),
+                    contentScale = ContentScale.Inside
+                )
+                numberTag()
+            }
+        }
+        isVideo || isYouTube -> {
+            Box(
+                modifier = modifier
+                    .wrapContentWidth()
+                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                    .clickable { 
+                        if (isYouTube) onUrlPreview?.invoke(url) 
+                        else onVideoClick?.invoke(url) 
+                    }
+            ) {
+                if (isYouTube) {
+                    val videoId = if (url.contains("v=")) url.substringAfter("v=").substringBefore("&") 
+                                 else url.substringAfterLast("/")
+                    AsyncImage(
+                        model = "https://img.youtube.com/vi/$videoId/0.jpg",
+                        contentDescription = "YouTube Thumbnail",
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .heightIn(max = 400.dp),
+                        contentScale = ContentScale.Inside
+                    )
+                } else {
+                    AsyncImage(
+                        model = coil.request.ImageRequest.Builder(LocalContext.current)
+                            .data(url)
+                            .decoderFactory(coil.decode.VideoFrameDecoder.Factory())
+                            .build(),
+                        contentDescription = "Video Thumbnail",
+                        modifier = Modifier
+                            .wrapContentWidth()
+                            .heightIn(max = 400.dp),
+                        contentScale = ContentScale.Inside
+                    )
+                }
+                
+                Icon(
+                    imageVector = if (isYouTube) Icons.Default.Subscriptions else Icons.Default.PlayCircleOutline,
+                    contentDescription = "Play",
+                    tint = if (isYouTube) Color(0xFFFF0000) else Color.White,
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(48.dp)
+                        .background(Color.Black.copy(alpha = 0.3f), androidx.compose.foundation.shape.CircleShape)
+                        .padding(8.dp)
+                )
+                numberTag()
+            }
+        }
+        isAudio -> {
+            Card(
+                modifier = modifier.width(200.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)
+            ) {
+                Box {
+                    val currentPath by AudioPlayerManager.currentPath.collectAsState()
+                    val isPlaying by AudioPlayerManager.isPlaying.collectAsState()
+                    val progress by AudioPlayerManager.progress.collectAsState()
+                    val duration by AudioPlayerManager.duration.collectAsState()
+                    
+                    val isCurrent = currentPath == url
+                    val showPause = isCurrent && isPlaying
+                    val currentProgress = if (isCurrent) progress else 0f
+
+                    Row(
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(androidx.compose.foundation.shape.CircleShape)
+                                .background(MaterialTheme.colorScheme.primary)
+                                .clickable { AudioPlayerManager.play(url) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (showPause) "Pause" else "Play",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.width(12.dp))
+                        
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(24.dp)
+                                .pointerInput(isCurrent, duration) {
+                                    detectTapGestures { offset ->
+                                        if (isCurrent && duration > 0) {
+                                            val relative = offset.x / size.width
+                                            val position = (relative * duration).toLong()
+                                            AudioPlayerManager.seekTo(position)
+                                        } else if (!isCurrent) {
+                                            AudioPlayerManager.play(url)
+                                        }
+                                    }
+                                },
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            LinearProgressIndicator(
+                                progress = { currentProgress },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(4.dp)
+                                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f)
+                            )
+                        }
+                    }
+                    // Audio card number tag (optional, placing it at the very beginning)
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.3f),
+                        shape = androidx.compose.foundation.shape.RoundedCornerShape(bottomEnd = 8.dp),
+                        modifier = Modifier.size(16.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = index.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = Color.White,
+                                fontSize = 8.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        else -> {
+            Card(
+                modifier = modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                ),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                        .fillMaxWidth()
+                        .clickable { onUrlPreview?.invoke(url) },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = index.toString(),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Icon(
+                        imageVector = if (isPdf) Icons.Default.PictureAsPdf else Icons.Default.Link,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = index.toString(),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        text = url,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textColor,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
                 }
             }
-            
-            Spacer(modifier = Modifier.width(12.dp))
-            
-            Icon(
-                imageVector = when {
-                    isYouTube -> Icons.Default.Subscriptions
-                    isImage -> Icons.Default.Image
-                    isVideo -> Icons.Default.PlayCircleOutline
-                    isPdf -> Icons.Default.PictureAsPdf
-                    else -> Icons.Default.Link
-                },
-                contentDescription = null,
-                tint = if (isYouTube) Color(0xFFFF0000) else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(20.dp)
-            )
-            
-            Spacer(modifier = Modifier.width(8.dp))
-            
-            Text(
-                text = url,
-                style = MaterialTheme.typography.bodySmall,
-                color = textColor,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
-            )
         }
     }
 }
