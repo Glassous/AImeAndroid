@@ -64,10 +64,10 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         // 支持显示刘海屏区域
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-        }
+        // if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        //     window.attributes.layoutInDisplayCutoutMode =
+        //         WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        // }
 
         // 1. 在 onCreate 早期初始化 ViewModel
         val themeViewModel = ViewModelProvider(this)[ThemeViewModel::class.java]
@@ -80,6 +80,39 @@ class MainActivity : ComponentActivity() {
         // 这避免了 "闪烁" 问题（先显示 Material You 颜色，然后突然变黑白）
         splashScreen.setKeepOnScreenCondition {
             !themeViewModel.isReady.value || privacyViewModel.uiState.value is PrivacyUiState.Loading
+        }
+
+        // 3. 自定义退出动画
+        splashScreen.setOnExitAnimationListener { splashScreenViewProvider ->
+            val slideUp = android.animation.ObjectAnimator.ofFloat(
+                splashScreenViewProvider.view,
+                View.ALPHA,
+                1f,
+                0f
+            )
+            slideUp.duration = 800L
+
+            // Icon 动画
+            val iconView = splashScreenViewProvider.iconView
+            val scaleX = android.animation.ObjectAnimator.ofFloat(iconView, View.SCALE_X, 1f, 0.6f)
+            val scaleY = android.animation.ObjectAnimator.ofFloat(iconView, View.SCALE_Y, 1f, 0.6f)
+            val rotation = android.animation.ObjectAnimator.ofFloat(iconView, View.ROTATION, 0f, 360f)
+            
+            val iconAnimatorSet = android.animation.AnimatorSet()
+            iconAnimatorSet.playTogether(scaleX, scaleY, rotation)
+            iconAnimatorSet.interpolator = android.view.animation.OvershootInterpolator()
+            iconAnimatorSet.duration = 800L
+
+            val animatorSet = android.animation.AnimatorSet()
+            animatorSet.playTogether(slideUp, iconAnimatorSet)
+            
+            animatorSet.addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    splashScreenViewProvider.remove()
+                }
+            })
+            
+            animatorSet.start()
         }
 
         setContent {

@@ -1,5 +1,9 @@
 package com.glassous.aime.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import com.glassous.aime.R
+
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.filled.Check
@@ -1216,13 +1220,18 @@ fun ChatScreen(
                                                                     horizontalAlignment = Alignment.CenterHorizontally,
                                                                     verticalArrangement = Arrangement.Center
                                                                 ) {
-                                                                    Text(
-                                                                        text = greeting,
-                                                                        style = MaterialTheme.typography.headlineMedium.copy(
-                                                                            fontSize = 18.sp
-                                                                        ),
-                                                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                                    )
+                                                                    // 内部 Column 强制左对齐，用于容纳问候语
+                                                                    Column(
+                                                                        horizontalAlignment = Alignment.Start
+                                                                    ) {
+                                                                        Text(
+                                                                            text = greeting,
+                                                                            style = MaterialTheme.typography.headlineMedium.copy(
+                                                                                fontSize = 18.sp
+                                                                            ),
+                                                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                                        )
+                                                                    }
                                                                 }
                                                             }
                                                         }
