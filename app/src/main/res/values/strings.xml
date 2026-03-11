@@ -4,7 +4,7 @@
     <string name="feedback">意见反馈</string>
     <string name="feedback_desc">感谢您对 AIme 的支持，欢迎向我们提供反馈或建议</string>
     <string name="feedback_name">您的称呼（可选）</string>
-    <string name="feedback_email">您的邮箱（可选）</string>
+    <string name="feedback_contact">联系方式（可选，如邮箱、手机号等）</string>
     <string name="feedback_message">反馈内容</string>
     <string name="feedback_submit">提交反馈</string>
     <string name="feedback_submitting">提交中...</string>

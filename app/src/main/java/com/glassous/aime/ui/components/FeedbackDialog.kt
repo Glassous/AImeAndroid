@@ -30,7 +30,7 @@ fun FeedbackDialog(
 ) {
     val context = LocalContext.current
     var name by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
+    var contact by remember { mutableStateOf("") }
     var message by remember { mutableStateOf("") }
     var isSubmitting by remember { mutableStateOf(false) }
     var isSuccess by remember { mutableStateOf(false) }
@@ -67,9 +67,9 @@ fun FeedbackDialog(
                 )
 
                 OutlinedTextField(
-                    value = email,
-                    onValueChange = { email = it },
-                    label = { Text(stringResource(R.string.feedback_email)) },
+                    value = contact,
+                    onValueChange = { contact = it },
+                    label = { Text(stringResource(R.string.feedback_contact)) },
                     modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                     enabled = !isSubmitting && !isSuccess,
                     singleLine = true
@@ -102,7 +102,7 @@ fun FeedbackDialog(
                                 val json = JSONObject().apply {
                                     put("access_key", BuildConfig.WEB3FORMS_ACCESS_KEY)
                                     put("name", name.ifBlank { "Anonymous AIme User" })
-                                    put("email", email.ifBlank { "no-email@aime.app" })
+                                    put("contact_info", contact.ifBlank { "not provided" })
                                     put("message", message)
                                     put("subject", "AIme Feedback - ${BuildConfig.VERSION_NAME}")
                                     put("from_name", "AIme App")
