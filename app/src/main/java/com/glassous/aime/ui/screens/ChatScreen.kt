@@ -118,6 +118,7 @@ import com.glassous.aime.ui.components.EditTitleDialog
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.isSystemInDarkTheme
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -139,6 +140,14 @@ fun ChatScreen(
     val focusManager = LocalFocusManager.current
     val useCloudProxy by application.modelPreferences.useCloudProxy.collectAsState(initial = false)
     val s3Enabled by application.s3Preferences.s3Enabled.collectAsState(initial = false)
+    
+    // 获取当前主题状态
+    val selectedTheme by themeViewModel.selectedTheme.collectAsState()
+    val darkTheme = when (selectedTheme) {
+        ThemePreferences.THEME_LIGHT -> false
+        ThemePreferences.THEME_DARK -> true
+        else -> isSystemInDarkTheme() // THEME_SYSTEM
+    }
     
     // Check if S3 config is complete
     val s3Endpoint by application.s3Preferences.s3Endpoint.collectAsState(initial = "")
@@ -327,6 +336,15 @@ fun ChatScreen(
     // 获取当前Activity和View用于全屏控制
     val view = LocalView.current
     val activity = view.context as? Activity
+
+    // 设置状态栏图标颜色（浅色模式使用深色图标，深色模式使用浅色图标）
+    SideEffect {
+        activity?.let { act ->
+            val window = act.window
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller?.isAppearanceLightStatusBars = !darkTheme
+        }
+    }
 
     // 聊天页面全屏显示控制
     DisposableEffect(chatFullscreen, minimalMode, minimalModeFullscreen) {

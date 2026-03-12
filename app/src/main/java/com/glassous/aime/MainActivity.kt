@@ -180,6 +180,13 @@ class MainActivity : ComponentActivity() {
                 darkTheme = darkTheme,
                 isMonochrome = monochromeTheme
             ) {
+                // 设置状态栏和导航栏图标颜色（浅色模式使用深色图标，深色模式使用浅色图标）
+                androidx.compose.runtime.SideEffect {
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller?.isAppearanceLightStatusBars = !darkTheme
+                    controller?.isAppearanceLightNavigationBars = !darkTheme
+                }
+                
                 // 根据极简模式与全屏显示设置动态隐藏系统UI
                 LaunchedEffect(minimalMode, minimalModeFullscreen) {
                     val controller = WindowCompat.getInsetsController(window, window.decorView)
