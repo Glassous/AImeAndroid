@@ -4,6 +4,9 @@ import com.glassous.aime.data.dao.ModelConfigDao
 import com.glassous.aime.data.model.Model
 import com.glassous.aime.data.model.ModelGroup
 import com.glassous.aime.data.model.ModelConfigInfo
+import com.glassous.aime.data.model.RemoteModelConfig
+import com.glassous.aime.data.model.RemoteModelGroup
+import com.glassous.aime.data.model.RemoteModel
  
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -19,23 +22,6 @@ import kotlinx.coroutines.withContext
 import java.io.IOException
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-
-data class RemoteModelConfig(
-    val groups: List<RemoteModelGroup>
-)
-
-data class RemoteModelGroup(
-    val name: String,
-    val baseUrl: String,
-    val providerUrl: String?,
-    val models: List<RemoteModel>
-)
-
-data class RemoteModel(
-    val name: String,
-    val modelName: String,
-    val remark: String?
-)
 
 sealed class FetchStatus {
     object Idle : FetchStatus()

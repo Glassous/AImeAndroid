@@ -12,30 +12,37 @@
 # Data Models (Gson)
 -keep class com.glassous.aime.data.model.** { *; }
 
-# Explicitly kept classes for Gson usage
+# Keep all classes that are used with Gson
+-keepclassmembers class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+-keepattributes Signature
+-keepattributes *Annotation*
+-keepattributes EnclosingMethod
 
-# SupabaseAuthService
+# Explicitly kept classes for Gson usage in com.glassous.aime.data package
 -keep class com.glassous.aime.data.AccountSession { *; }
 -keep class com.glassous.aime.data.RpcAccountResponse { *; }
 -keep class com.glassous.aime.data.RpcQuestionResponse { *; }
 -keep class com.glassous.aime.data.SupabaseAuthService$RpcSyncResponse { *; }
-
-# AutoToolSelector
 -keep class com.glassous.aime.data.AutoToolSelectionResult { *; }
-
-# WebSearchService
 -keep class com.glassous.aime.data.SearchResult { *; }
 -keep class com.glassous.aime.data.WebSearchResponse { *; }
 -keep class com.glassous.aime.data.PearApiResponse { *; }
 -keep class com.glassous.aime.data.PearApiSearchResult { *; }
-
-# OpenAiService & DoubaoArkService
 -keep class com.glassous.aime.data.OpenAiChatMessage { *; }
+-keep class com.glassous.aime.data.OpenAiContentPart { *; }
+-keep class com.glassous.aime.data.OpenAiFile { *; }
+-keep class com.glassous.aime.data.OpenAiVideoUrl { *; }
+-keep class com.glassous.aime.data.OpenAiFileUrl { *; }
+-keep class com.glassous.aime.data.OpenAiInputAudio { *; }
+-keep class com.glassous.aime.data.OpenAiImageUrl { *; }
 -keep class com.glassous.aime.data.ToolFunctionParameter { *; }
 -keep class com.glassous.aime.data.ToolFunctionParameters { *; }
 -keep class com.glassous.aime.data.ToolFunction { *; }
 -keep class com.glassous.aime.data.Tool { *; }
 -keep class com.glassous.aime.data.ChatCompletionsRequest { *; }
+-keep class com.glassous.aime.data.ImageConfig { *; }
 -keep class com.glassous.aime.data.ChatCompletionsChunkChoiceDelta { *; }
 -keep class com.glassous.aime.data.ToolCall { *; }
 -keep class com.glassous.aime.data.ToolCallFunction { *; }
@@ -44,37 +51,24 @@
 -keep class com.glassous.aime.data.ChatCompletionsChunk { *; }
 -keep class com.glassous.aime.data.OpenAiError { *; }
 -keep class com.glassous.aime.data.OpenAiErrorResponse { *; }
-
-# HighSpeedTicketService
 -keep class com.glassous.aime.data.TicketSeatInfo { *; }
 -keep class com.glassous.aime.data.HighSpeedTrainItem { *; }
 -keep class com.glassous.aime.data.HighSpeedTicketPayload { *; }
-
-# LotteryService
 -keep class com.glassous.aime.data.LotteryApiResponse { *; }
 -keep class com.glassous.aime.data.LotteryItem { *; }
 -keep class com.glassous.aime.data.LotteryResult { *; }
-
-# StockService
 -keep class com.glassous.aime.data.StockDailyItem { *; }
 -keep class com.glassous.aime.data.StockApiResponse { *; }
 -keep class com.glassous.aime.data.StockQueryResult { *; }
-
-# WeatherService
 -keep class com.glassous.aime.data.WeatherDaily { *; }
 -keep class com.glassous.aime.data.WeatherQueryResult { *; }
-# Inner classes in WeatherService are private, but we should keep them if used by Gson
 -keep class com.glassous.aime.data.WeatherService$GeocodingResult { *; }
 -keep class com.glassous.aime.data.WeatherService$GeocodeItem { *; }
 -keep class com.glassous.aime.data.WeatherService$ForecastResp { *; }
 -keep class com.glassous.aime.data.WeatherService$ForecastDaily { *; }
 -keep class com.glassous.aime.data.WeatherService$AirQualityResp { *; }
 -keep class com.glassous.aime.data.WeatherService$AirQualityHourly { *; }
-
-# General rule for any class used with Gson that might have been missed
--keepclassmembers,allowobfuscation class * {
-    @com.google.gson.annotations.SerializedName <fields>;
-}
+-keep class com.glassous.aime.data.TavilySearchResult { *; }
 
 # Keep Jsoup
 -keep class org.jsoup.** { *; }

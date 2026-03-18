@@ -8,49 +8,49 @@ import com.google.gson.Gson
  * 支持导入 AImeBackup.json 格式的数据
  */
 data class CompatibleBackupData(
-    val success: Boolean,
-    val data: CompatibleBackupContent,
-    val filename: String? = null
+    @SerializedName("success") val success: Boolean,
+    @SerializedName("data") val data: CompatibleBackupContent,
+    @SerializedName("filename") val filename: String? = null
 )
 
 data class CompatibleBackupContent(
-    val conversations: List<CompatibleConversation>,
-    val exportedAt: Long,
-    val modelGroups: List<CompatibleModelGroup>,
-    val models: List<CompatibleModel>,
-    val selectedModelId: String?,
-    val version: Int
+    @SerializedName("conversations") val conversations: List<CompatibleConversation>,
+    @SerializedName("exportedAt") val exportedAt: Long,
+    @SerializedName("modelGroups") val modelGroups: List<CompatibleModelGroup>,
+    @SerializedName("models") val models: List<CompatibleModel>,
+    @SerializedName("selectedModelId") val selectedModelId: String?,
+    @SerializedName("version") val version: Int
 )
 
 data class CompatibleConversation(
-    val title: String,
-    val messages: List<CompatibleMessage>,
-    val messageCount: Int,
-    val lastMessage: String,
-    val lastMessageTime: Long
+    @SerializedName("title") val title: String,
+    @SerializedName("messages") val messages: List<CompatibleMessage>,
+    @SerializedName("messageCount") val messageCount: Int,
+    @SerializedName("lastMessage") val lastMessage: String,
+    @SerializedName("lastMessageTime") val lastMessageTime: Long
 )
 
 data class CompatibleMessage(
-    val content: String,
-    val isError: Boolean,
-    val isFromUser: Boolean,
-    val timestamp: Long
+    @SerializedName("content") val content: String,
+    @SerializedName("isError") val isError: Boolean,
+    @SerializedName("isFromUser") val isFromUser: Boolean,
+    @SerializedName("timestamp") val timestamp: Long
 )
 
 data class CompatibleModelGroup(
-    val apiKey: String,
-    val baseUrl: String,
-    val createdAt: Long,
-    val id: String,
-    val name: String
+    @SerializedName("apiKey") val apiKey: String,
+    @SerializedName("baseUrl") val baseUrl: String,
+    @SerializedName("createdAt") val createdAt: Long,
+    @SerializedName("id") val id: String,
+    @SerializedName("name") val name: String
 )
 
 data class CompatibleModel(
-    val createdAt: Long,
-    val groupId: String,
-    val id: String,
-    val modelName: String,
-    val name: String
+    @SerializedName("createdAt") val createdAt: Long,
+    @SerializedName("groupId") val groupId: String,
+    @SerializedName("id") val id: String,
+    @SerializedName("modelName") val modelName: String,
+    @SerializedName("name") val name: String
 )
 
 /**
